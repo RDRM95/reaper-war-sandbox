@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 type Diagnostics = {
   seed:number;time:number;shipCount:number;liveShips:number;
   ships:Array<{id:string;side:string;position:{x:number;y:number;z:number}}>;
-  view:{camera:number[];quaternion:number[];drawCalls:number;triangles:number;quality:string}|null;
+  frameMsAverage:number;frameMsP95:number;fps:number;simCpuMs:number;
+  view:{camera:number[];quaternion:number[];drawCalls:number;triangles:number;renderCpuMs:number;gpuFrameMs:number|null;quality:string}|null;
 };
 
 async function snapshot(page:import('@playwright/test').Page):Promise<Diagnostics>{
@@ -36,6 +37,11 @@ test('fixed sol battle uses identical ships and camera at low and cinematic fide
   expect(ultra.view?.quaternion).toEqual(low.view?.quaternion);
   expect(ultra.view?.quality).toBe('ultra');
   expect(low.view?.quality).toBe('low');
+  console.log('REAPER_GRAPHICS_METRICS '+JSON.stringify({
+    environment:'GitHub Actions Ubuntu Chromium SwiftShader, not RTX 5090',
+    low:{fps:low.fps,frameMsAverage:low.frameMsAverage,frameMsP95:low.frameMsP95,drawCalls:low.view?.drawCalls,triangles:low.view?.triangles,renderCpuMs:low.view?.renderCpuMs,gpuFrameMs:low.view?.gpuFrameMs},
+    ultra:{fps:ultra.fps,frameMsAverage:ultra.frameMsAverage,frameMsP95:ultra.frameMsP95,drawCalls:ultra.view?.drawCalls,triangles:ultra.view?.triangles,renderCpuMs:ultra.view?.renderCpuMs,gpuFrameMs:ultra.view?.gpuFrameMs}
+  }));
   expect((ultra.view?.drawCalls??0)).toBeGreaterThan(0);
 });
 
