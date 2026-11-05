@@ -40,7 +40,8 @@ export interface GraphicsSettings {
   lod?: boolean;
 }
 
-const MAX_FAR_POINTS = 2048;
+// Shared GPU point buffer for formations beyond detailed mesh range.
+const MAX_FAR_POINTS = 16384;
 
 export class BattleView {
   readonly renderer: THREE.WebGLRenderer;
