@@ -43,9 +43,10 @@ export class FleetMap2D {
     c.fillStyle='#030916';c.fillRect(0,0,w,h);
     for(const p of this.stars){c.fillStyle=p.r>1?'rgba(200,226,255,.65)':'rgba(130,177,219,.33)';c.fillRect(p.x*w,p.y*h,p.r,p.r);}
     const active=sim.ships.filter(s=>s.alive&&!s.escaped);
-    const xs=active.map(s=>s.pos.x),zs=active.map(s=>s.pos.z);
-    const range=Math.max(140,(xs.length?Math.max(...xs)-Math.min(...xs):200)+180,(zs.length?Math.max(...zs)-Math.min(...zs):200)+180);
-    this.scale=Math.min(w,h)*.85/range*this.zoom;
+    let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    for(const ship of active){minX=Math.min(minX,ship.pos.x);maxX=Math.max(maxX,ship.pos.x);minZ=Math.min(minZ,ship.pos.z);maxZ=Math.max(maxZ,ship.pos.z);}
+    const range=active.length?Math.max(140,maxX-minX+180,maxZ-minZ+180):200;
+    this.scale=Math.min(w,h)*.9/range*this.zoom;
     const grid=50*this.scale;
     if(grid>20){c.strokeStyle='rgba(56,104,144,.12)';c.lineWidth=1;
       const o=this.screen(0,0,w,h);for(let x=((o.x%grid)+grid)%grid;x<w;x+=grid){c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke();}
@@ -55,9 +56,10 @@ export class FleetMap2D {
     for(const m of sim.missiles){if(!m.alive)continue;const q=this.screen(m.pos.x,m.pos.z,w,h);c.fillStyle='#ffc483';c.beginPath();c.arc(q.x,q.y,2.2,0,6.283);c.fill();}
     for(const p of sim.projectiles){const q=this.screen(p.pos.x,p.pos.z,w,h);
       c.fillStyle=p.weapon.damage>1000?'#fff0a8':'#91c9ed';c.beginPath();c.arc(q.x,q.y,p.weapon.damage>1000?3.4:1.7,0,6.283);c.fill();}
+    const labels:{x:number;y:number;width:number}[]=[];
     for(const s of active){
       const q=this.screen(s.pos.x,s.pos.z,w,h);const capital=s.role==='dreadnought'||s.role==='carrier'||s.role==='reaper_capital';
-      const size=Math.max(capital?6:3,Math.min(27,Math.sqrt(s.lengthKm)*this.scale*1.9));
+      const size=Math.max(capital?9:4.5,Math.min(31,Math.sqrt(s.lengthKm)*this.scale*2.3));
       const reaper=s.faction==='reaper';const colour=reaper?'#cf6673':s.side==='A'?'#99cdeb':'#f0b489';
       const angle=Math.atan2(s.heading.z,s.heading.x);
       c.save();c.translate(q.x,q.y);c.rotate(angle);
@@ -66,7 +68,13 @@ export class FleetMap2D {
       if(reaper){c.moveTo(size,0);c.lineTo(size*.2,-size*.45);c.lineTo(-size*.75,-size*.5);c.lineTo(-size*.3,0);c.lineTo(-size*.75,size*.5);c.lineTo(size*.2,size*.45);}
       else{c.moveTo(size,0);c.lineTo(size*.2,-size*.23);c.lineTo(-size*.65,-size*.47);c.lineTo(-size*.92,-size*.30);c.lineTo(-size*.38,0);c.lineTo(-size*.92,size*.30);c.lineTo(-size*.65,size*.47);c.lineTo(size*.2,size*.23);}
       c.closePath();c.fill();c.stroke();c.restore();
-      if(capital||this.selected===s.id){c.font='10px ui-monospace,monospace';c.textAlign='center';c.fillStyle=colour;c.fillText(s.name,q.x,q.y+size+15);}
+      if(capital||this.selected===s.id){
+        const label=s.name;const textWidth=Math.min(250,label.length*6);
+        const lx=q.x,ly=q.y+size+15;
+        // Avoid unreadable stacked labels in dense capital formations.
+        const overlap=labels.some(other=>Math.abs(other.y-ly)<14&&Math.abs(other.x-lx)<(other.width+textWidth)*.5+9);
+        if(!overlap||this.selected===s.id){c.font='10px ui-monospace,monospace';c.textAlign='center';c.fillStyle=colour;c.fillText(label,lx,ly);labels.push({x:lx,y:ly,width:textWidth});}
+      }
       if(s.id===this.selected){c.strokeStyle='#f6cd7c';c.setLineDash([4,4]);c.beginPath();c.arc(q.x,q.y,size+7,0,6.283);c.stroke();c.setLineDash([]);}
       if(s.barriers>0&&capital){c.strokeStyle=s.side==='A'?'rgba(76,172,255,.24)':'rgba(248,83,110,.24)';c.beginPath();c.arc(q.x,q.y,size+3,0,6.283);c.stroke();}
     }
