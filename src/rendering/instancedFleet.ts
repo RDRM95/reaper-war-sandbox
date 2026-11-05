@@ -5,7 +5,7 @@ import { DETAIL_MESH_NAMES, type LodLevel } from './lod';
 import { getShipTemplate } from './ships';
 
 interface Part { mesh: THREE.InstancedMesh; detail: boolean; }
-interface Batch { capacity: number; parts: Part[]; full: number; reduced: number; }
+interface Batch { capacity: number; parts: Part[]; }
 const IDENTITY = new THREE.Vector3(1, 1, 1);
 
 /** GPU batches reuse the same original hull geometry/materials as close-up ships.
@@ -40,32 +40,32 @@ export class InstancedFleet {
       this.group.add(mesh);
       parts.push({ mesh, detail: DETAIL_MESH_NAMES.has(source.name) });
     });
-    return { capacity, parts, full: 0, reduced: 0 };
+    return { capacity, parts };
   }
 
-  begin(): void {
-    for (const batch of this.batches.values()) {
-      batch.full = 0;
-      batch.reduced = 0;
-      for (const p of batch.parts) p.mesh.count = 0;
+  begin(ships: readonly ShipState[]): void {
+    const needed = new Map<string, number>();
+    for (const ship of ships) if (ship.alive && !ship.escaped) {
+      needed.set(ship.classId, (needed.get(ship.classId) ?? 0) + 1);
     }
+    for (const [classId, count] of needed) {
+      let batch = this.batches.get(classId);
+      if (!batch || batch.capacity < count) {
+        if (batch) for (const part of batch.parts) {
+          this.group.remove(part.mesh);
+          part.mesh.dispose();
+        }
+        batch = this.createBatch(classId, Math.max(64, 2 ** Math.ceil(Math.log2(count))));
+        this.batches.set(classId, batch);
+      }
+    }
+    for (const batch of this.batches.values()) for (const part of batch.parts) part.mesh.count = 0;
   }
 
   add(ship: ShipState, alpha: number, lod: LodLevel): void {
     let batch = this.batches.get(ship.classId);
-    // A batch cannot be resized in-place. Grow geometrically and preserve the
-    // shared template geometry and material; old instance buffers are freed.
-    if (!batch || Math.max(batch.full, batch.reduced) >= batch.capacity) {
-      const capacity = batch ? batch.capacity * 2 : 64;
-      if (batch) {
-        for (const part of batch.parts) {
-          this.group.remove(part.mesh);
-          part.mesh.dispose();
-        }
-      }
-      batch = this.createBatch(ship.classId, capacity);
-      this.batches.set(ship.classId, batch);
-    }
+    if (!batch) throw new Error('Missing instance batch for ' + ship.classId);
+
     this.pos.set(
       (ship.prevPos.x + (ship.pos.x - ship.prevPos.x) * alpha) * KM,
       (ship.prevPos.y + (ship.pos.y - ship.prevPos.y) * alpha) * KM,
