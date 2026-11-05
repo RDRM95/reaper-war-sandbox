@@ -1,4 +1,27 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta name="theme-color" content="#07111d"/><title>REAPER WAR — Fleet Sandbox</title></head>
-<body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07111d">
+  <title>REAPER WAR — Fleet Sandbox</title>
+  <style>
+    html,body{margin:0;min-height:100%;background:#050c18;color:#d8eafa;font:15px/1.6 system-ui,Segoe UI,sans-serif}
+    #boot-status{max-width:650px;margin:12vh auto;padding:28px;border:1px solid #31516a;background:#0b1929;border-radius:8px}
+    #boot-status h1{font-size:24px;letter-spacing:.13em;margin:0 0 12px}
+    #boot-status a{color:#8bcfff}#boot-status p{color:#b7cbda}
+    #boot-status code{color:#f9d6a0}
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="boot-status" role="status">
+      <h1>REAPER WAR / STARTING</h1>
+      <p>The fleet simulator is loading.</p>
+      <p>If this message remains, GitHub Pages may be publishing the uncompiled source instead of the production build. In the repository's <a href="https://github.com/RDRM95/reaper-war-sandbox/settings/pages">Settings → Pages</a>, choose <strong>GitHub Actions</strong> under <strong>Build and deployment → Source</strong>, then rerun the <a href="https://github.com/RDRM95/reaper-war-sandbox/actions">Deploy spectator sandbox to GitHub Pages</a> workflow.</p>
+      <p>For other startup errors, open the browser console with <code>F12</code>.</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
