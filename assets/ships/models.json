@@ -1,0 +1,15 @@
+{
+  "kilimanjaro": "alliance-kilimanjaro.glb",
+  "everest": "alliance-everest.glb",
+  "alliance-cruiser": "alliance-cruiser.glb",
+  "alliance-frigate": "alliance-frigate.glb",
+  "normandy": "normandy-sr2.glb",
+  "valkyrie": "normandy-valkyrie.glb",
+  "black-dread": "cerberus-black-dread.glb",
+  "black-cruiser": "cerberus-heavy-cruiser.glb",
+  "black-frigate": "cerberus-frigate.glb",
+  "sovereign": "reaper-sovereign.glb",
+  "harbinger": "reaper-harbinger.glb",
+  "reaper-destroyer": "reaper-destroyer.glb",
+  "oculus": "reaper-oculus.glb"
+}
