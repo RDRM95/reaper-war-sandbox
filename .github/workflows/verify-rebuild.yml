@@ -1,0 +1,48 @@
+name: Verify source-based spectator rebuild
+on:
+  push:
+    branches:
+      - codex/source-fidelity-rebuild
+      - codex/targeting-cameras-v1
+      - codex/pure-battle-v1
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Existing simulator tests
+        run: npm test
+      - name: Production TypeScript and Vite build
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
+      - name: Launch preview server
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/vite-preview.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0; sleep 1; done
+          cat /tmp/vite-preview.log
+          exit 1
+      - name: Browser smoke test
+        run: npx playwright test
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spectator-browser-smoke
+          path: |
+            test-artifacts
+            test-results
+          if-no-files-found: ignore
+      - name: Archive preview build
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaper-war-spectator-source-preview
+          path: dist
