@@ -329,6 +329,7 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
     camera: view.rig.camera.position.toArray(),
     quaternion: view.rig.camera.quaternion.toArray(),
     drawCalls:view.drawCalls,triangles:view.frameTriangles,renderCpuMs:view.renderCpuMs,gpuFrameMs:view.gpuFrameMs,
+    exposure:view.renderer.toneMappingExposure,
     lodCounts:view.lodCounts,quality:graphics
   }:null
 });
