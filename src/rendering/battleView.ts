@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { Rng } from '@/core/rng';
 import { cinematicPair, cinematicWing } from './director';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { BattleSimulation } from '@/simulation/battle';
 import { SIM_DT } from '@/simulation/battle';
 import type { BattleEvent, ShipState } from '@/simulation/types';
@@ -10,7 +14,8 @@ import { CameraRig, type CameraSubject, type CinematicFrame } from './cameras';
 import { EffectsSystem } from './effects';
 import { buildEnvironment, type EnvironmentBuild } from './environment';
 import { KM } from './geometry';
-import { instantiateShip, type BuiltShip } from './ships';
+import { instantiateShip, getShipTemplate, type BuiltShip } from './ships';
+import { InstancedFleet } from './instancedFleet';
 import { DETAIL_MESH_NAMES, lodLevel, type LodLevel } from './lod';
 import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
 
@@ -33,20 +38,35 @@ export interface ShipVisual {
 }
 
 export interface GraphicsSettings {
-  quality: 'low' | 'medium' | 'high';
+  quality: 'low' | 'medium' | 'high' | 'ultra';
+  /** Subtle HDR bloom, enabled for Ultra by default. */
+  bloom?: boolean;
   showEngineGlow: boolean;
   pixelRatioCap: number;
   /** Distance-based level of detail (default on). */
   lod?: boolean;
 }
 
-const MAX_FAR_POINTS = 2048;
+// Shared GPU point buffer for formations beyond detailed mesh range.
+const MAX_FAR_POINTS = 16384;
 
 export class BattleView {
   readonly renderer: THREE.WebGLRenderer;
+  private composer?: EffectComposer;
+  renderCpuMs = 0;
+  gpuFrameMs: number | null = null;
+  private gpuTimer?: { gl: WebGL2RenderingContext; elapsed: number; disjoint: number; pending: WebGLQuery[] };
+  frameTriangles = 0;
+  /** Opt-in deterministic screenshot camera; ordinary camera modes are unchanged. */
+  referenceCamera = false;
   readonly scene = new THREE.Scene();
   readonly rig: CameraRig;
   readonly effects = new EffectsSystem();
+  readonly instances = new InstancedFleet();
+  private readonly frustum = new THREE.Frustum();
+  private readonly frustumMatrix = new THREE.Matrix4();
+  private readonly sphere = new THREE.Sphere();
+  private readonly MAX_HERO_VISUALS = 96;
   readonly visuals = new Map<string, ShipVisual>();
   env!: EnvironmentBuild;
   sim: BattleSimulation;
@@ -80,11 +100,19 @@ export class BattleView {
 
   constructor(canvas: HTMLCanvasElement, sim: BattleSimulation, settings: GraphicsSettings) {
     this.settings = settings;
+    this.effects.configure(settings.quality);
+    this.instances.configure(settings.quality);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.quality !== 'low', powerPreference: 'high-performance', logarithmicDepthBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatioCap));
+    const gl = this.renderer.getContext() as WebGL2RenderingContext;
+    const timer = typeof gl.createQuery === 'function' ?
+      gl.getExtension('EXT_disjoint_timer_query_webgl2') : null;
+    if (timer) this.gpuTimer = {
+      gl, elapsed: timer.TIME_ELAPSED_EXT, disjoint: timer.GPU_DISJOINT_EXT, pending: []
+    };
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = settings.quality === 'ultra' ? 1.12 : 1.05;
     this.rig = new CameraRig(canvas.clientWidth / Math.max(1, canvas.clientHeight));
     // Image-based lighting so metallic hull plating reads as metal rather than
     // black: a neutral PMREM environment at low intensity.
@@ -112,7 +140,7 @@ export class BattleView {
     // Camera-relative fill so hulls stay readable when viewed against the sun.
     this.fillLight = new THREE.DirectionalLight(0xb8c8e8, 0.9);
     this.scene.add(this.fillLight, this.fillLight.target);
-    this.scene.add(this.effects.group);
+    this.scene.add(this.effects.group, this.instances.group);
     const farGeom = new THREE.BufferGeometry();
     farGeom.setAttribute('position', new THREE.BufferAttribute(this.farPositions, 3));
     farGeom.setAttribute('color', new THREE.BufferAttribute(this.farColours, 3));
@@ -121,6 +149,13 @@ export class BattleView {
     this.farPoints.frustumCulled = false;
     this.farPoints.name = 'far-points';
     this.scene.add(this.farPoints);
+    if (settings.bloom ?? settings.quality === 'ultra') {
+      const composer = new EffectComposer(this.renderer);
+      composer.addPass(new RenderPass(this.scene, this.rig.camera));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.20, 0.22, 0.91));
+      composer.addPass(new OutputPass());
+      this.composer = composer;
+    }
     this.bind(sim);
   }
 
@@ -132,12 +167,14 @@ export class BattleView {
     this.effects.clear();
     this.nextBeamShieldAt.clear();
     if (this.env) this.scene.remove(this.env.group);
-    this.env = buildEnvironment(sim.config.environment);
+    const resolution = this.settings.quality === 'ultra' ? 2048 :
+      this.settings.quality === 'high' ? 1536 : this.settings.quality === 'medium' ? 1024 : 512;
+    this.env = buildEnvironment(sim.config.environment, resolution, this.settings.quality !== 'low');
     this.scene.add(this.env.group);
     this.sunLight.position.copy(this.env.sunDirection).multiplyScalar(10_000);
     this.sunLight.target.position.set(0, 0, 0);
     this.scene.add(this.sunLight.target);
-    for (const s of sim.ships) this.ensureVisual(s);
+    // Build detailed objects lazily for nearby/selected ships; the rest use GPU batches.
     sim.onEvent = (e) => this.eventQueue.push(e);
     this.selectedIds.clear();
     this.followId = undefined;
@@ -222,61 +259,91 @@ export class BattleView {
     const lodOn = this.settings.lod !== false;
     let far = 0;
     this.lodCounts = { full: 0, reduced: 0, point: 0 };
+    this.instances.begin(sim.ships);
+    this.rig.camera.updateMatrixWorld();
+    this.frustumMatrix.multiplyMatrices(this.rig.camera.projectionMatrix, this.rig.camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
+    let nearVisuals = 0;
     for (const ship of sim.ships) {
-      const v = this.ensureVisual(ship);
-      if (v.removed) continue;
+      const existing = this.visuals.get(ship.id);
       if (!ship.alive) {
-        this.updateDying(v, dt);
+        if (existing && !existing.removed) this.updateDying(existing, dt);
         continue;
       }
       if (ship.escaped) {
-        v.built.group.visible = false;
+        if (existing) existing.built.group.visible = false;
         continue;
       }
-      this.placeVisual(v, alpha);
-      // Level of detail by distance; far ships collapse into the shared point cloud.
-      const dist = cam.distanceTo(v.built.group.position);
-      const level = lodLevel(dist, v.built.lengthUnits, ship.role, lodOn);
-      this.applyLod(v, level);
+      const lengthUnits = getShipTemplate(ship.classId).lengthUnits;
+      const px = (ship.prevPos.x + (ship.pos.x - ship.prevPos.x) * alpha) * KM;
+      const py = (ship.prevPos.y + (ship.pos.y - ship.prevPos.y) * alpha) * KM;
+      const pz = (ship.prevPos.z + (ship.pos.z - ship.prevPos.z) * alpha) * KM;
+      const dist = Math.hypot(px - cam.x, py - cam.y, pz - cam.z);
+      const level = lodLevel(dist, lengthUnits, ship.role, lodOn);
       this.lodCounts[level]++;
-      if (level === 'point' && far < MAX_FAR_POINTS) {
-        const p = v.built.group.position;
-        this.farPositions[far * 3] = p.x;
-        this.farPositions[far * 3 + 1] = p.y;
-        this.farPositions[far * 3 + 2] = p.z;
-        this.tmpColour.setHex(getFaction(ship.faction).engineColourHex);
-        this.farColours[far * 3] = this.tmpColour.r;
-        this.farColours[far * 3 + 1] = this.tmpColour.g;
-        this.farColours[far * 3 + 2] = this.tmpColour.b;
-        far++;
+      this.sphere.center.set(px, py, pz);
+      this.sphere.radius = lengthUnits * 0.8 + 2;
+      const onScreen = this.frustum.intersectsSphere(this.sphere);
+      const priority = this.selectedIds.has(ship.id) || this.followId === ship.id ||
+        this.cine.fromId === ship.id || this.cine.toId === ship.id;
+      if (level === 'point') {
+        if (existing) existing.built.group.visible = false;
+        if (onScreen && far < MAX_FAR_POINTS) {
+          this.farPositions[far * 3] = px;
+          this.farPositions[far * 3 + 1] = py;
+          this.farPositions[far * 3 + 2] = pz;
+          this.tmpColour.setHex(getFaction(ship.faction).engineColourHex);
+          this.farColours[far * 3] = this.tmpColour.r;
+          this.farColours[far * 3 + 1] = this.tmpColour.g;
+          this.farColours[far * 3 + 2] = this.tmpColour.b;
+          far++;
+        }
         continue;
       }
-      // Engine glow intensity follows throttle.
-      const speedFrac = Math.min(1, Math.hypot(ship.vel.x, ship.vel.y, ship.vel.z) / Math.max(0.01, ship.maxSpeed));
-      if (level === 'full') for (const gl of v.glows) (gl.material as THREE.SpriteMaterial).opacity = 0.35 + 0.6 * speedFrac * ship.subsystems.engines;
-      // Damage tint.
-      const hullFrac = ship.hull / ship.maxHull;
-      if (hullFrac < 0.6 && !v.tinted) this.tintDamage(v);
-      if (v.tinted) {
-        const t = 1 - hullFrac;
-        v.built.group.traverse((o) => {
-          const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-          if (m && (m as THREE.MeshStandardMaterial).isMeshStandardMaterial && o.name === 'hull') {
-            m.emissive.setRGB(0.25 * t * (0.6 + 0.4 * Math.sin(sim.time * 7 + ship.id.length)), 0.05 * t, 0);
-            m.emissiveIntensity = 1;
-          }
-        });
+      if (!onScreen && !priority) {
+        if (existing) existing.built.group.visible = false;
+        continue;
+      }
+      const nearby = dist <= Math.max(75, lengthUnits * 22);
+      const hero = priority || (nearby && nearVisuals < this.MAX_HERO_VISUALS);
+      if (hero) {
+        const v = existing ?? this.ensureVisual(ship);
+        if (v.removed) continue;
+        this.placeVisual(v, alpha);
+        this.applyLod(v, level);
+        v.built.group.visible = true;
+        nearVisuals++;
+        const speedFrac = Math.min(1, Math.hypot(ship.vel.x, ship.vel.y, ship.vel.z) / Math.max(0.01, ship.maxSpeed));
+        if (level === 'full') for (const gl of v.glows)
+          (gl.material as THREE.SpriteMaterial).opacity = 0.35 + 0.6 * speedFrac * ship.subsystems.engines;
+        const hullFrac = ship.hull / ship.maxHull;
+        if (hullFrac < 0.6 && !v.tinted) this.tintDamage(v);
+        if (v.tinted) {
+          const t = 1 - hullFrac;
+          v.built.group.traverse(o => {
+            const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+            if (m && m.isMeshStandardMaterial && o.name === 'hull') {
+              m.emissive.setRGB(0.25 * t * (0.6 + 0.4 * Math.sin(sim.time * 7 + ship.id.length)), 0.05 * t, 0);
+              m.emissiveIntensity = 1;
+            }
+          });
+        }
+      } else {
+        if (existing) existing.built.group.visible = false;
+        this.instances.add(ship, alpha, level);
       }
     }
+    this.instances.end();
     const farGeom = this.farPoints.geometry;
     farGeom.setDrawRange(0, far);
     (farGeom.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (farGeom.attributes.color as THREE.BufferAttribute).needsUpdate = true;
     this.farPoints.visible = far > 0;
     // Effects from sim state.
-    const tracers = sim.projectiles.map((p) => ({ pos: p.pos, vel: p.vel, big: p.weapon.damage >= 600 }));
-    this.effects.setTracers(tracers, alpha, SIM_DT);
-    this.effects.setMissiles(sim.missiles.filter((m) => m.alive).map((m) => ({ pos: m.pos, vel: m.vel })), alpha, SIM_DT);
+    // Reuse authoritative simulation arrays; avoid allocating a temporary
+    // object for every projectile and missile every render frame.
+    this.effects.setTracers(sim.projectiles, alpha, SIM_DT);
+    this.effects.setMissiles(sim.missiles, alpha, SIM_DT);
     const beams: { start: THREE.Vector3; end: THREE.Vector3; kind: 'thanix' | 'reaper_beam'; intensity: number }[] = [];
     for (const ship of sim.ships) {
       if (!ship.alive) continue;
@@ -309,13 +376,14 @@ export class BattleView {
 
     // Camera.
     this.cine.age += dt;
-    this.updateCamera(dt);
+    if (!this.referenceCamera) this.updateCamera(dt);
     // Fill light rides with the camera.
     this.fillLight.position.copy(this.rig.camera.position);
     this.fillLight.target.position.copy(this.rig.camera.position).add(this.rig.camera.getWorldDirection(this.tmpB).multiplyScalar(100));
     // Sky objects follow the camera so the starfield never parallaxes.
     for (const o of this.env.skyObjects) if (o.name !== 'sun') o.position.copy(this.rig.camera.position);
     this.env.group.getObjectByName('sun')?.position.copy(this.rig.camera.position).addScaledVector(this.env.sunDirection, 150_000);
+    if (this.env.clouds) this.env.clouds.rotation.y = 1.218 + sim.time * 0.00005;
   }
 
   private tintDamage(v: ShipVisual): void {
@@ -440,12 +508,12 @@ export class BattleView {
   private subjectFor(ship: ShipState | undefined): CameraSubject | undefined {
     if (!ship) return undefined;
     const v = this.visuals.get(ship.id);
-    if (!v) return undefined;
     return {
-      position: v.built.group.position.clone(),
+      position: v && v.built.group.visible ? v.built.group.position.clone() :
+        new THREE.Vector3(ship.pos.x, ship.pos.y, ship.pos.z).multiplyScalar(KM),
       velocity: new THREE.Vector3(ship.vel.x, ship.vel.y, ship.vel.z).multiplyScalar(KM),
       heading: new THREE.Vector3(ship.heading.x, ship.heading.y, ship.heading.z),
-      size: v.built.lengthUnits,
+      size: v?.built.lengthUnits ?? getShipTemplate(ship.classId).lengthUnits,
     };
   }
 
@@ -545,19 +613,18 @@ export class BattleView {
     const cam = this.rig.camera;
     let best: ShipState | undefined;
     let bestD = Infinity;
-    for (const v of this.visuals.values()) {
-      if (!v.ship.alive || v.ship.escaped || v.removed) continue;
-      const p = this.tmpA.copy(v.built.group.position).project(cam);
-      if (p.z > 1) continue;
+    for (const ship of this.sim.ships) {
+      if (!ship.alive || ship.escaped) continue;
+      const p = this.tmpA.set(ship.pos.x * KM, ship.pos.y * KM, ship.pos.z * KM);
+      const dist = cam.position.distanceTo(p);
+      const radius = getShipTemplate(ship.classId).lengthUnits * 0.5;
+      p.project(cam);
+      if (p.z > 1 || p.z < -1) continue;
       const sx = (p.x * 0.5 + 0.5) * width;
       const sy = (-p.y * 0.5 + 0.5) * height;
-      const dist = cam.position.distanceTo(v.built.group.position);
-      const radiusPx = Math.max(14, ((v.built.lengthUnits * 0.5) / Math.max(1, dist)) * (height / (2 * Math.tan((cam.fov * Math.PI) / 360))));
+      const radiusPx = Math.max(14, radius / Math.max(1, dist) * (height / (2 * Math.tan(cam.fov * Math.PI / 360))));
       const d = Math.hypot(sx - x, sy - y);
-      if (d < radiusPx + 6 && d < bestD) {
-        bestD = d;
-        best = v.ship;
-      }
+      if (d < radiusPx + 6 && d < bestD) { bestD = d; best = ship; }
     }
     return best;
   }
@@ -573,16 +640,46 @@ export class BattleView {
 
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
+    this.composer?.setSize(width, height);
     this.rig.resize(width / Math.max(1, height));
   }
 
   render(): void {
-    this.renderer.render(this.scene, this.rig.camera);
+    const started = performance.now();
+    this.renderer.info.autoReset = false;
+    this.renderer.info.reset();
+    const timer = this.gpuTimer;
+    if (timer) {
+      const previous = timer.pending[0];
+      if (previous && timer.gl.getQueryParameter(previous, timer.gl.QUERY_RESULT_AVAILABLE)) {
+        if (!timer.gl.getParameter(timer.disjoint)) {
+          this.gpuFrameMs = timer.gl.getQueryParameter(previous, timer.gl.QUERY_RESULT) / 1e6;
+        }
+        timer.gl.deleteQuery(previous);
+        timer.pending.shift();
+      }
+    }
+    const query = timer && timer.pending.length < 3 ? timer.gl.createQuery() : null;
+    if (query && timer) timer.gl.beginQuery(timer.elapsed, query);
+    try {
+      if (this.composer) this.composer.render();
+      else this.renderer.render(this.scene, this.rig.camera);
+    } finally {
+      if (query && timer) {
+        timer.gl.endQuery(timer.elapsed);
+        timer.pending.push(query);
+      }
+    }
+    this.renderCpuMs = performance.now() - started;
     this.drawCalls = this.renderer.info.render.calls;
+    this.frameTriangles = this.renderer.info.render.triangles;
   }
 
   dispose(): void {
     this.effects.dispose();
+    this.instances.dispose();
+    if(this.gpuTimer)for(const query of this.gpuTimer.pending)this.gpuTimer.gl.deleteQuery(query);
+    this.composer?.dispose();
     this.glowTex.dispose();
     for (const v of this.visuals.values()) {
       for (const glow of v.glows) glow.material.dispose();

@@ -61,7 +61,11 @@ export class EffectsSystem {
   get nuclearRingCount(): number { return this.nuclearRings.length; }
 
   // Tracers (instanced).
-  private readonly tracerMax = 1024;
+  private readonly tracerCapacity = 8192;
+  private tracerMax = 4096;
+  private missileMax = 2048;
+  private beamMax = 256;
+  private pdMax = 2048;
   private readonly tracerMesh: THREE.InstancedMesh;
   private readonly tracerDummy = new THREE.Object3D();
 
@@ -74,8 +78,8 @@ export class EffectsSystem {
 
   // Point defence lines.
   private readonly pdGeometry = new THREE.BufferGeometry();
-  private readonly pdPositions = new Float32Array(512 * 6);
-  private readonly pdColors = new Float32Array(512 * 6);
+  private readonly pdPositions = new Float32Array(4096 * 6);
+  private readonly pdColors = new Float32Array(4096 * 6);
   private readonly pdLines: THREE.LineSegments;
 
   // Missiles (instanced points).
@@ -91,7 +95,7 @@ export class EffectsSystem {
   constructor() {
     const tracerGeo = new THREE.BoxGeometry(0.1, 0.1, 1);
     const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.tracerMesh = new THREE.InstancedMesh(tracerGeo, tracerMat, this.tracerMax);
+    this.tracerMesh = new THREE.InstancedMesh(tracerGeo, tracerMat, this.tracerCapacity);
     this.tracerMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.tracerMesh.frustumCulled = false;
     this.tracerMesh.count = 0;
@@ -106,13 +110,22 @@ export class EffectsSystem {
 
     const mGeo = new THREE.SphereGeometry(0.12, 6, 4);
     const mMat = new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.missileMesh = new THREE.InstancedMesh(mGeo, mMat, 512);
+    this.missileMesh = new THREE.InstancedMesh(mGeo, mMat, 4096);
     this.missileMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.missileMesh.frustumCulled = false;
     this.missileMesh.count = 0;
     this.group.add(this.missileMesh);
 
     this.group.add(this.flashLight, this.barriers.group);
+  }
+
+  /** Quality budgets affect visual sampling only, never projectile simulation. */
+  configure(quality: 'low'|'medium'|'high'|'ultra'): void {
+    const budgets={
+      low:[768,384,96,256],medium:[2048,1024,160,768],
+      high:[4096,2048,256,2048],ultra:[8192,4096,512,4096]
+    } as const;
+    [this.tracerMax,this.missileMax,this.beamMax,this.pdMax]=budgets[quality];
   }
 
   // ------------------------------------------------------------ primitives
@@ -139,7 +152,7 @@ export class EffectsSystem {
   }
 
   private spark(pos: THREE.Vector3, vel: THREE.Vector3, life: number, startScale: number, endScale: number, tex: THREE.Texture, color: number): void {
-    if (this.sparks.length > 900) return;
+    if (this.sparks.length >= 1200) return;
     const sprite = this.getSprite(tex, color);
     sprite.position.copy(pos);
     sprite.scale.setScalar(startScale);
@@ -174,7 +187,7 @@ export class EffectsSystem {
   /** Confirmed internal HADES burst: white flash, expanding shock ring and
    * incandescent vent jets. Render work is capped during mass battery salvos. */
   hadesBurst(position: THREE.Vector3, length: number, payloadDamage: number, heading: THREE.Vector3, velocity = new THREE.Vector3()): void {
-    if (this.sparks.length >= 900) return;
+    if (this.sparks.length >= 1200) return;
     const yieldScale = Math.min(1.5, Math.sqrt(Math.max(0, payloadDamage) / 1000));
     const size = Math.max(0.3, Math.min(6, length * 0.22) * yieldScale);
     const core = this.getSprite(this.blueTex, 0xffffff);
@@ -217,7 +230,7 @@ export class EffectsSystem {
     }
     // Debris: fling the ship's own mesh pieces plus generic fragments.
     const fragments = Math.min(40, Math.floor(size * 3));
-    for (let i = 0; i < fragments; i++) {
+    for (let i = 0; i < fragments && this.debris.length < 800; i++) {
       const g = this.debrisGeo[i % this.debrisGeo.length];
       const m = new THREE.Mesh(g, this.debrisMat);
       const s = size * (0.04 + this.rng.next() * 0.1);
@@ -263,10 +276,14 @@ export class EffectsSystem {
   // --------------------------------------------------------- per-frame sync
 
   /** Update tracers from simulation projectiles (positions in km). */
-  setTracers(items: { pos: { x: number; y: number; z: number }; vel: { x: number; y: number; z: number }; big: boolean }[], alpha: number, dt: number): void {
+  setTracers(items: readonly { pos: { x: number; y: number; z: number }; vel: { x: number; y: number; z: number }; big?: boolean; weapon?: { damage: number } }[], alpha: number, dt: number): void {
     let n = 0;
     const dir = new THREE.Vector3();
-    for (const it of items) {
+    // Uniform subsampling retains fire from both sides of a huge battle.
+    const stride=Math.max(1,Math.ceil(items.length/this.tracerMax));
+    for (let i=0;i<items.length;i+=stride) {
+      const it=items[i];
+      const big=it.big??((it.weapon?.damage??0)>=600);
       if (n >= this.tracerMax) break;
       const px = (it.pos.x + it.vel.x * alpha * dt) * KM;
       const py = (it.pos.y + it.vel.y * alpha * dt) * KM;
@@ -276,8 +293,8 @@ export class EffectsSystem {
       dir.normalize();
       this.tracerDummy.position.set(px, py, pz);
       this.tracerDummy.lookAt(px + dir.x, py + dir.y, pz + dir.z);
-      const len = Math.max(1.5, speed * 0.06) * (it.big ? 1.3 : 0.7);
-      const w = it.big ? 1.1 : 0.45;
+      const len = Math.max(1.5, speed * 0.06) * (big ? 1.3 : 0.7);
+      const w = big ? 1.1 : 0.45;
       this.tracerDummy.scale.set(w, w, len);
       this.tracerDummy.updateMatrix();
       this.tracerMesh.setMatrixAt(n++, this.tracerDummy.matrix);
@@ -286,10 +303,13 @@ export class EffectsSystem {
     this.tracerMesh.instanceMatrix.needsUpdate = true;
   }
 
-  setMissiles(items: { pos: { x: number; y: number; z: number }; vel: { x: number; y: number; z: number } }[], alpha: number, dt: number): void {
+  setMissiles(items: readonly { pos: { x: number; y: number; z: number }; vel: { x: number; y: number; z: number }; alive?: boolean }[], alpha: number, dt: number): void {
     let n = 0;
-    for (const it of items) {
-      if (n >= 512) break;
+    const stride=Math.max(1,Math.ceil(items.length/this.missileMax));
+    for (let i=0;i<items.length;i+=stride) {
+      const it=items[i];
+      if(it.alive===false)continue;
+      if (n >= this.missileMax) break;
       this.tracerDummy.position.set((it.pos.x + it.vel.x * alpha * dt) * KM, (it.pos.y + it.vel.y * alpha * dt) * KM, (it.pos.z + it.vel.z * alpha * dt) * KM);
       this.tracerDummy.rotation.set(0, 0, 0);
       this.tracerDummy.scale.setScalar(2.2);
@@ -303,8 +323,9 @@ export class EffectsSystem {
   /** Active beams: start/end in render units. */
   setBeams(beams: { start: THREE.Vector3; end: THREE.Vector3; kind: 'thanix' | 'reaper_beam'; intensity: number }[]): void {
     for (const b of this.beamPool) b.used = false;
-    for (const b of beams) {
-      let slot = this.beamPool.find((x) => !x.used);
+    for (let i=0; i<beams.length && i<this.beamMax; i++) {
+      const b=beams[i];
+      let slot = this.beamPool[i];
       if (!slot) {
         const geo = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true);
         geo.rotateX(Math.PI / 2);
@@ -331,7 +352,7 @@ export class EffectsSystem {
         mesh.scale.set(r, r, len);
       }
       // Beam impact bloom at the end point.
-      this.spark(b.end, new THREE.Vector3(), 0.08, coreR * 5, coreR * 9, reaper ? this.redTex : this.blueTex, 0xffffff);
+      if(i%6===0)this.spark(b.end, new THREE.Vector3(), 0.08, coreR * 5, coreR * 9, reaper ? this.redTex : this.blueTex, 0xffffff);
     }
     for (const b of this.beamPool) {
       if (!b.used) {
@@ -344,7 +365,7 @@ export class EffectsSystem {
   setPointDefence(lines: { from: THREE.Vector3; to: THREE.Vector3; reaper: boolean }[]): void {
     let n = 0;
     for (const l of lines) {
-      if (n >= 512) break;
+      if (n >= this.pdMax) break;
       const i = n * 6;
       this.pdPositions[i] = l.from.x;
       this.pdPositions[i + 1] = l.from.y;

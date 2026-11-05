@@ -56,9 +56,13 @@ export class FleetMap2D {
     for(const m of sim.missiles){if(!m.alive)continue;const q=this.screen(m.pos.x,m.pos.z,w,h);c.fillStyle='#ffc483';c.beginPath();c.arc(q.x,q.y,2.2,0,6.283);c.fill();}
     for(const p of sim.projectiles){const q=this.screen(p.pos.x,p.pos.z,w,h);
       c.fillStyle=p.weapon.damage>1000?'#fff0a8':'#91c9ed';c.beginPath();c.arc(q.x,q.y,p.weapon.damage>1000?3.4:1.7,0,6.283);c.fill();}
-    const labels:{x:number;y:number;width:number}[]=[];
+    // Spatially bucket labels: dense fleets no longer compare every capital label with every other label.
+    const labels=new Map<string,{x:number;y:number;width:number}[]>();
+    const labelCell=160;
+    const labelKey=(x:number,y:number)=>x+','+y;
     for(const s of active){
-      const q=this.screen(s.pos.x,s.pos.z,w,h);const capital=s.role==='dreadnought'||s.role==='carrier'||s.role==='reaper_capital';
+      const q=this.screen(s.pos.x,s.pos.z,w,h);if(q.x < -48 || q.x > w+48 || q.y < -48 || q.y > h+48) continue;
+      const capital=s.role==='dreadnought'||s.role==='carrier'||s.role==='reaper_capital';
       const size=Math.max(capital?9:4.5,Math.min(31,Math.sqrt(s.lengthKm)*this.scale*2.3));
       const reaper=s.faction==='reaper';const colour=reaper?'#cf6673':s.side==='A'?'#99cdeb':'#f0b489';
       const angle=Math.atan2(s.heading.z,s.heading.x);
@@ -72,8 +76,15 @@ export class FleetMap2D {
         const label=s.name;const textWidth=Math.min(250,label.length*6);
         const lx=q.x,ly=q.y+size+15;
         // Avoid unreadable stacked labels in dense capital formations.
-        const overlap=labels.some(other=>Math.abs(other.y-ly)<14&&Math.abs(other.x-lx)<(other.width+textWidth)*.5+9);
-        if(!overlap||this.selected===s.id){c.font='10px ui-monospace,monospace';c.textAlign='center';c.fillStyle=colour;c.fillText(label,lx,ly);labels.push({x:lx,y:ly,width:textWidth});}
+        let overlap=false;
+        const cx=Math.floor(lx/labelCell),cy=Math.floor(ly/labelCell);
+        for(let dx=-2;dx<=2&&!overlap;dx++)for(let dy=-1;dy<=1&&!overlap;dy++){
+          for(const other of labels.get(labelKey(cx+dx,cy+dy))??[]){
+            if(Math.abs(other.y-ly)<14&&Math.abs(other.x-lx)<(other.width+textWidth)*.5+9){overlap=true;break;}
+          }
+        }
+        if(!overlap||this.selected===s.id){c.font='10px ui-monospace,monospace';c.textAlign='center';c.fillStyle=colour;c.fillText(label,lx,ly);
+          const key=labelKey(cx,cy);let bucket=labels.get(key);if(!bucket){bucket=[];labels.set(key,bucket);}bucket.push({x:lx,y:ly,width:textWidth});}
       }
       if(s.id===this.selected){c.strokeStyle='#f6cd7c';c.setLineDash([4,4]);c.beginPath();c.arc(q.x,q.y,size+7,0,6.283);c.stroke();c.setLineDash([]);}
       if(s.barriers>0&&capital){c.strokeStyle=s.side==='A'?'rgba(76,172,255,.24)':'rgba(248,83,110,.24)';c.beginPath();c.arc(q.x,q.y,size+3,0,6.283);c.stroke();}
