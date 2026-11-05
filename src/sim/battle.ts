@@ -1,7 +1,6 @@
 import {byId} from './catalogue';
 import {RNG} from './rng';
 import type {BattleConfig, BattleEvent, BattleStats, Explosion, Ship, ShipSpec, Shot, Side, Weapon} from './types';
-const TAU=Math.PI*2;
 const clamp=(x:number,a:number,b:number)=>Math.max(a,Math.min(b,x));
 const dist=(a:Ship,b:Ship)=>Math.hypot(a.x-b.x,a.y-b.y);
 const norm=(angle:number)=>Math.atan2(Math.sin(angle),Math.cos(angle));
