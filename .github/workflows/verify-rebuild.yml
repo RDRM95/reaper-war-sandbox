@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - codex/source-fidelity-rebuild
+      - codex/targeting-cameras-v1
       - codex/pure-battle-v1
   workflow_dispatch:
 permissions:
