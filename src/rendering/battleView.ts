@@ -98,6 +98,7 @@ export class BattleView {
 
   constructor(canvas: HTMLCanvasElement, sim: BattleSimulation, settings: GraphicsSettings) {
     this.settings = settings;
+    this.effects.configure(settings.quality);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.quality !== 'low', powerPreference: 'high-performance', logarithmicDepthBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatioCap));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -330,9 +331,10 @@ export class BattleView {
     (farGeom.attributes.color as THREE.BufferAttribute).needsUpdate = true;
     this.farPoints.visible = far > 0;
     // Effects from sim state.
-    const tracers = sim.projectiles.map((p) => ({ pos: p.pos, vel: p.vel, big: p.weapon.damage >= 600 }));
-    this.effects.setTracers(tracers, alpha, SIM_DT);
-    this.effects.setMissiles(sim.missiles.filter((m) => m.alive).map((m) => ({ pos: m.pos, vel: m.vel })), alpha, SIM_DT);
+    // Reuse authoritative simulation arrays; avoid allocating a temporary
+    // object for every projectile and missile every render frame.
+    this.effects.setTracers(sim.projectiles, alpha, SIM_DT);
+    this.effects.setMissiles(sim.missiles, alpha, SIM_DT);
     const beams: { start: THREE.Vector3; end: THREE.Vector3; kind: 'thanix' | 'reaper_beam'; intensity: number }[] = [];
     for (const ship of sim.ships) {
       if (!ship.alive) continue;
