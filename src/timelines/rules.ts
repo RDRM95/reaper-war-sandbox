@@ -259,6 +259,7 @@ export function applyRulesToWeapon(
       rules.special.hyperMassAccelerators &&
       cls.role === 'dreadnought' &&
       weapon.id !== 'omaha_spinal' &&
+      weapon.id !== 'valkyrie_nova' &&
       weapon.kind === 'mass_accelerator' &&
       weapon.antiCapital &&
       weapon.arc <= 20
@@ -290,6 +291,7 @@ export function applyRulesToWeapon(
   if (isGardian) damage *= t.gardianEffectiveness;
 
   const hades = faction !== 'reaper' && isMassEffectFaction(faction) && !rules.strictLore && rules.special.hadesRounds && isMA;
+  const nova = w.id === 'valkyrie_nova';
 
   return {
     ...w,
@@ -298,9 +300,9 @@ export function applyRulesToWeapon(
     range: isMA ? w.range * t.massAcceleratorRange : w.range,
     cooldown: (rules.strictLore && w.id === 'alliance_dn_main' ? 2 : w.cooldown) / t.fireRate,
     accuracy: Math.min(0.99, w.accuracy * t.accuracy),
-    armourBypass: hades ? 0.5 : 0,
-    barrierEfficiencyMultiplier: hades ? 0.6 : 1,
-    internalWarheadFraction: hades ? 0.35 : 0,
+    armourBypass: nova ? 0.95 : hades ? 0.5 : 0,
+    barrierEfficiencyMultiplier: nova ? 0.12 : hades ? 0.6 : 1,
+    internalWarheadFraction: nova ? 0 : hades ? 0.35 : 0,
     substitutedFrom,
   };
 }
