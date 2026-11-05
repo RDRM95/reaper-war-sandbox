@@ -165,7 +165,14 @@ function pushEvent(e:BattleEvent){if(e.type==='ship_destroyed'){
   // DOM log is updated at HUD cadence, not once per combat event.
 }
 function attachEvents(){if(!sim)return;const previous=sim.onEvent;sim.onEvent=e=>{previous?.(e);pushEvent(e);};}
-function createView(){if(!sim)return;view?.dispose();view=null;
+function createView(preserveCamera=false){if(!sim)return;
+  const cameraState=preserveCamera&&view?{
+    mode:view.rig.mode,focus:view.rig.focus.clone(),yaw:view.rig.yaw,
+    pitch:view.rig.pitch,distance:view.rig.distance,followId:view.followId,
+    selected:[...view.selectedIds],position:view.rig.camera.position.clone(),
+    quaternion:view.rig.camera.quaternion.clone()
+  }:undefined;
+  view?.dispose();view=null;
   try{
     const ratio = graphics==='low'?0.75:graphics==='medium'?1:graphics==='high'?1.25:1.6;
     view=new BattleView(third,sim,{quality:graphics,pixelRatioCap:ratio,showEngineGlow:graphics!=='low',lod:true,bloom:graphics==='ultra'});
@@ -175,6 +182,16 @@ function createView(){if(!sim)return;view?.dispose();view=null;
       view.referenceCamera=true;
       view.rig.camera.position.set(600,420,950);
       view.rig.camera.lookAt(0,0,0);
+      view.rig.camera.updateMatrixWorld(true);
+    }
+    if(cameraState&&!referenceMode){
+      view.rig.setMode(cameraState.mode);
+      view.rig.focus.copy(cameraState.focus);
+      view.rig.yaw=cameraState.yaw;view.rig.pitch=cameraState.pitch;
+      view.rig.distance=cameraState.distance;view.followId=cameraState.followId;
+      for(const id of cameraState.selected)view.selectedIds.add(id);
+      view.rig.camera.position.copy(cameraState.position);
+      view.rig.camera.quaternion.copy(cameraState.quaternion);
       view.rig.camera.updateMatrixWorld(true);
     }
     attachEvents();
@@ -216,7 +233,7 @@ $('toggle2d').addEventListener('click',()=>{mode='2d';switchMode();});
 $('launch').addEventListener('click',launch);$('restart').addEventListener('click',launch);
 $('pause').addEventListener('click',()=>{paused=!paused;$('pause').textContent=paused?'▶':'Ⅱ';$('state').textContent=paused?'PAUSED':'ENGAGEMENT LIVE';});
 $('speed').addEventListener('change',()=>{speed=Math.max(1,Number($<HTMLSelectElement>('speed').value)||1);});
-$('graphics').addEventListener('change',()=>{graphics=$<HTMLSelectElement>('graphics').value as GraphicsPreset;if(mode==='3d'&&sim)createView();});
+$('graphics').addEventListener('change',()=>{graphics=$<HTMLSelectElement>('graphics').value as GraphicsPreset;if(mode==='3d'&&sim)createView(true);});
 $('sound').addEventListener('click',()=>{audioEnabled=!audioEnabled;if(audioEnabled)audio.init();audio.settings.muted=!audioEnabled;audio.applySettings();$('sound').textContent=audioEnabled?'SOUND ON':'SOUND OFF';});
 function camera(mode:CameraMode){if(!view||!sim)return;view.rig.setMode(mode);}
 $('cine').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('cinematic');});
