@@ -1,2 +1,13 @@
 import { defineConfig } from 'vite';
-export default defineConfig({ base: './' });
+import { fileURLToPath, URL } from 'node:url';
+
+export default defineConfig({
+  base: './',
+  resolve: {alias: {'@': fileURLToPath(new URL('./src', import.meta.url))}},
+  build: {
+    target: 'es2022',
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {output: {manualChunks: {three: ['three']}}}
+  },
+  server: {port: 5173, strictPort: true}
+});
