@@ -99,6 +99,7 @@ export class BattleView {
   constructor(canvas: HTMLCanvasElement, sim: BattleSimulation, settings: GraphicsSettings) {
     this.settings = settings;
     this.effects.configure(settings.quality);
+    this.instances.configure(settings.quality);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.quality !== 'low', powerPreference: 'high-performance', logarithmicDepthBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatioCap));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
