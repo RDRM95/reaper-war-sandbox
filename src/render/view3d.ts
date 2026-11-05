@@ -27,7 +27,7 @@ export class View3D {
   private effects=new Map<WeaponKind,{line:THREE.LineSegments;pos:Float32Array}>();
   private burst:THREE.InstancedMesh;private ray=new THREE.Raycaster();private privatePointer=new THREE.Vector2();
   private dummy=new THREE.Object3D();private clickAt:{x:number;y:number}|null=null;
-  private selected:number|null=null;private followId:number|null=null;
+  selected:number|null=null;private followId:number|null=null;
   onSelect:(id:number|null)=>void=()=>{};
   private customStatus:(txt:string)=>void=()=>{};
   constructor(container:HTMLElement,onModelStatus?:(msg:string)=>void){
