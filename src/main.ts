@@ -9,6 +9,7 @@ import { MASS_EFFECT_FACTION_IDS, type MassEffectFactionId } from '@/data/types'
 import { FACTIONS } from '@/data/factions';
 import { audio } from '@/audio/engine';
 import { FleetMap2D } from './spectator/flatView';
+import { TargetTelemetry } from './spectator/targetTelemetry';
 
 type Fleet = { faction:MassEffectFactionId; name:string; formation:FormationType; counts:Record<string,number> };
 type ScreenMode = '3d'|'2d';
@@ -36,6 +37,7 @@ let activeSide:Side='A',mode:ScreenMode='3d',speed=1,paused=false,audioEnabled=f
 let sim:BattleSimulation|null=null,view:BattleView|null=null,flat: FleetMap2D|null=null;
 let selectedShip:string|undefined,following=false,accum=0,last=0,lastHud=0;
 let viewError:string|undefined;
+let gunnery=false;
 const feed:{time:number;message:string;side?:Side}[]=[];
 const app=document.getElementById('app')!;
 app.innerHTML=`
@@ -70,7 +72,7 @@ app.innerHTML=`
     <div id="stage" class="stage"><canvas id="scene3d"></canvas><canvas id="scene2d"></canvas>
       <div class="stage-tag"><small>BATTLESPACE / AUTONOMOUS SIMULATION</small><strong id="battle-name">SOL DEFENCE</strong></div>
       <div id="error" class="error" hidden></div>
-      <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button></div>
+      <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY TRACK</button><button id="clean">HUD OFF</button></div>
       <div class="stage-foot"><div><small>ENGAGEMENT TIME</small><strong id="clock">00:00</strong></div><div id="message">AWAITING DEPLOYMENT</div><div class="stage-legend"><span class="dot blue"></span> ALLIED <span class="dot red"></span> OPPOSING</div></div></div>
     <div class="bottom-line"><span>ORIGINAL REAPER WAR SIMULATION CORE</span><span>NO TACTICAL ORDERS</span><span>ME3-ERA SHIP GENERATORS</span></div>
   </main>
@@ -91,6 +93,7 @@ const factionSelect=$<HTMLSelectElement>('faction');
 factionSelect.innerHTML=MASS_EFFECT_FACTION_IDS.map(id=>`<option value="${id}">${escapeHtml(FACTIONS[id].name)}</option>`).join('');
 const third=$<HTMLCanvasElement>('scene3d'),second=$<HTMLCanvasElement>('scene2d');
 flat=new FleetMap2D(second);
+const telemetry=new TargetTelemetry($('stage'));
 flat.onPick=s=>select(s);
 function rowTally(f:Fleet){return Object.values(f.counts).reduce((a,b)=>a+Math.max(0,b),0);}
 function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelect.value=f.faction;$<HTMLSelectElement>('formation').value=f.formation;
@@ -170,7 +173,7 @@ function launch(){try{
     extraA:rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[],
     extraB:rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[]});
   view?.dispose();view=null;
-  sim=new BattleSimulation(config);flat!.reset();selectedShip=undefined;following=false;feed.length=0;accum=0;paused=false;
+  sim=new BattleSimulation(config);flat!.reset();selectedShip=undefined;following=false;gunnery=false;telemetry.show(false);feed.length=0;accum=0;paused=false;
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
   if(audioEnabled){audio.init();}
@@ -179,6 +182,7 @@ function launch(){try{
 function switchMode(){third.style.display=mode==='3d'?'block':'none';second.style.display=mode==='2d'?'block':'none';
   $('toggle3d').classList.toggle('active',mode==='3d');$('toggle2d').classList.toggle('active',mode==='2d');
   $('stage').classList.toggle('flat',mode==='2d');
+  telemetry.show(gunnery&&mode==='3d');
   if(mode==='3d'&&view)view.resize(third.clientWidth||900,third.clientHeight||550);
 }
 $('toggle3d').addEventListener('click',()=>{mode='3d';if(!view&&sim)createView();switchMode();});
@@ -188,9 +192,11 @@ $('pause').addEventListener('click',()=>{paused=!paused;$('pause').textContent=p
 $('speed').addEventListener('change',()=>{speed=Math.max(1,Number($<HTMLSelectElement>('speed').value)||1);});
 $('sound').addEventListener('click',()=>{audioEnabled=!audioEnabled;if(audioEnabled)audio.init();audio.settings.muted=!audioEnabled;audio.applySettings();$('sound').textContent=audioEnabled?'SOUND ON':'SOUND OFF';});
 function camera(mode:CameraMode){if(!view||!sim)return;view.rig.setMode(mode);}
-$('cine').addEventListener('click',()=>camera('cinematic'));
-$('tactical').addEventListener('click',()=>camera('tactical'));
-$('reaper-cam').addEventListener('click',()=>camera('reaper'));
+$('cine').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('cinematic');});
+$('tactical').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('tactical');});
+$('reaper-cam').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('reaper');});
+$('gunner').addEventListener('click',()=>{gunnery=true;mode='3d';switchMode();camera('follow');if(view&&selectedShip)view.followId=selectedShip;telemetry.show(true);});
+$('clean').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.toggle('clean-recording');});
 $('chase').addEventListener('click',()=>{$('follow').click();});
 $('follow').addEventListener('click',()=>{if(!selectedShip||!sim)return;following=!following;if(view){view.followId=following?selectedShip:undefined;view.rig.setMode(following?'follow':'cinematic');}$('follow').textContent=following?'RELEASE FOLLOW':'FOLLOW SELECTED';});
 $('focus').addEventListener('click',()=>{
@@ -222,7 +228,7 @@ window.addEventListener('resize',()=>{if(view&&mode==='3d')view.resize(third.cli
 function frame(now:number){const dt=Math.min(.1,Math.max(0,(now-last)/1000||0));last=now;
   if(sim){if(!paused&&!sim.finished){accum+=dt*speed;let count=0;while(accum>=SIM_DT&&count++<130&&!sim.finished){sim.step();accum-=SIM_DT;}if(count>=130)accum=0;}
     const alpha=paused?1:Math.min(1,accum/SIM_DT);
-    if(view){view.update(dt,alpha);if(mode==='3d')view.render();}
+    if(view){view.update(dt,alpha);if(mode==='3d'){view.render();telemetry.update(sim,view,selectedShip);}}
     if(mode==='2d'){if(following&&selectedShip){const ship=sim.shipById.get(selectedShip);if(ship&&ship.alive)flat!.focus(ship);}flat!.draw(sim);}
     if(now-lastHud>280){lastHud=now;updateHud();}
   }
