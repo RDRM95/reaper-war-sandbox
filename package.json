@@ -1,0 +1,16 @@
+{
+  "name": "reaper-war-sandbox",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Independent spectator-first Mass Effect-inspired fleet battle sandbox",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {"three": "^0.186.1"},
+  "devDependencies": {"typescript": "^5.9.3", "vite": "^7.3.7", "@types/three": "^0.186.0"},
+  "engines": {"node": ">=20.19"}
+}
