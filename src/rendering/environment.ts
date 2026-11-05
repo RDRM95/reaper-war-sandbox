@@ -76,7 +76,6 @@ export function makePlanetTexture(style: PlanetStyle, size = 1024): THREE.Canvas
   return noiseCanvas(size, style.seed, (ctx, rng, w) => {
     const h = w / 2;
     const noise = makeNoise(rng, 96);
-    const noise2 = makeNoise(rng.fork('clouds'), 64);
     const img = ctx.createImageData(w, h);
     const d = img.data;
     for (let y = 0; y < h; y++) {
@@ -112,13 +111,6 @@ export function makePlanetTexture(style: PlanetStyle, size = 1024): THREE.Canvas
         r = r + (style.ice[0] - r) * iceMix;
         g = g + (style.ice[1] - g) * iceMix;
         b = b + (style.ice[2] - b) * iceMix;
-        // Clouds.
-        const c = fbm(noise2, nx * 1.7 + 3, ny * 1.7 + lat * 5, 5);
-        const cloud = Math.max(0, (c - (1 - style.cloudiness)) / style.cloudiness);
-        const cm = Math.min(0.85, cloud * 1.2);
-        r = r + (225 - r) * cm;
-        g = g + (228 - g) * cm;
-        b = b + (234 - b) * cm;
         d[i] = r;
         d[i + 1] = g;
         d[i + 2] = b;
@@ -129,29 +121,64 @@ export function makePlanetTexture(style: PlanetStyle, size = 1024): THREE.Canvas
   });
 }
 
+/** Separate, translucent cloud map so clouds cast their own spherical terminator.
+ * Cloud pixels are generated deterministically, independently of planet albedo.
+ */
+export function makeCloudTexture(style: PlanetStyle, size = 1024): THREE.CanvasTexture {
+  return noiseCanvas(size, style.seed + 500, (ctx, rng, w) => {
+    const h = w / 2;
+    const n = makeNoise(rng, 96);
+    const img = ctx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      const lat = (y / h - 0.5) * 2;
+      for (let x = 0; x < w; x++) {
+        const u = x / w;
+        const nx = Math.cos(u * Math.PI * 2) * 3 + 10;
+        const ny = Math.sin(u * Math.PI * 2) * 3 + 10;
+        const cloud = fbm(n, nx * 2.3 + lat, ny * 2.3 + lat * 4.2, 6);
+        const coverage = Math.max(0, Math.min(1, (cloud - (0.68 - style.cloudiness * 0.30)) * 6));
+        const alpha = Math.round(230 * coverage * coverage * (3 - 2 * coverage));
+        const i = (y * w + x) * 4;
+        img.data[i] = 236;
+        img.data[i + 1] = 242;
+        img.data[i + 2] = 250;
+        img.data[i + 3] = alpha;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+}
+
 const ATMOSPHERE_VERT = `
+uniform vec3 sunDirection;
 varying vec3 vNormal;
 varying vec3 vView;
+varying vec3 vSun;
 void main(){
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vNormal = normalize(normalMatrix * normal);
-  vec4 mv = modelViewMatrix * vec4(position,1.0);
   vView = normalize(-mv.xyz);
+  vSun = normalize((viewMatrix * vec4(sunDirection, 0.0)).xyz);
   gl_Position = projectionMatrix * mv;
 }`;
 const ATMOSPHERE_FRAG = `
 uniform vec3 color;
-uniform float power;
 varying vec3 vNormal;
 varying vec3 vView;
+varying vec3 vSun;
 void main(){
-  float rim = 1.0 - max(dot(vNormal, vView), 0.0);
-  float a = pow(rim, power);
-  gl_FragColor = vec4(color, a * 0.7);
+  float horizon = clamp(1.0 - dot(normalize(vNormal), normalize(vView)), 0.0, 1.0);
+  float limb = pow(horizon, 2.6);
+  float day = smoothstep(-0.25, 0.48, dot(normalize(vNormal), normalize(vSun)));
+  float forward = pow(max(0.0, dot(normalize(vSun), normalize(vView))), 12.0);
+  float density = limb * (0.06 + 0.60 * day + 0.12 * forward);
+  vec3 scattering = color * vec3(0.72, 0.86, 1.12) * (0.75 + 0.25 * forward);
+  gl_FragColor = vec4(scattering, clamp(density, 0.0, 0.75));
 }`;
 
-export function makeAtmosphere(radius: number, color: number): THREE.Mesh {
+export function makeAtmosphere(radius: number, color: number, sunDirection = new THREE.Vector3(0.55, 0.35, -0.75)): THREE.Mesh {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { color: { value: new THREE.Color(color) }, power: { value: 5.0 } },
+    uniforms: { color: { value: new THREE.Color(color) }, sunDirection: { value: sunDirection.clone().normalize() } },
     vertexShader: ATMOSPHERE_VERT,
     fragmentShader: ATMOSPHERE_FRAG,
     transparent: true,
@@ -159,7 +186,7 @@ export function makeAtmosphere(radius: number, color: number): THREE.Mesh {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const m = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.018, 64, 48), mat);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.035, 96, 64), mat);
   m.renderOrder = -1;
   return m;
 }
@@ -301,6 +328,7 @@ export interface EnvironmentBuild {
   /** Camera-relative objects that must follow the camera (skybox etc.). */
   skyObjects: THREE.Object3D[];
   planet?: THREE.Mesh;
+  clouds?: THREE.Mesh;
   name: string;
 }
 
@@ -309,7 +337,7 @@ export interface EnvironmentBuild {
  * scale, placed so it fills the lower sky from a low-orbit battle) — this is
  * a visual choice, not a simulation value.
  */
-export function buildEnvironment(env: Environment): EnvironmentBuild {
+export function buildEnvironment(env: Environment, textureResolution = 1024, showClouds = true): EnvironmentBuild {
   const group = new THREE.Group();
   const sky: THREE.Object3D[] = [];
   const stars = makeStarfield();
@@ -319,17 +347,30 @@ export function buildEnvironment(env: Environment): EnvironmentBuild {
 
   const sunDirection = new THREE.Vector3(0.55, 0.35, -0.75).normalize();
   let planet: THREE.Mesh | undefined;
+  let clouds: THREE.Mesh | undefined;
   let name = 'Deep space';
 
   const addPlanet = (style: PlanetStyle, radius: number, position: THREE.Vector3, label: string, moon?: boolean) => {
-    const tex = makePlanetTexture(style);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, metalness: 0.0, color: 0xb8c0cc });
+    const tex = makePlanetTexture(style, textureResolution);
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.0, color: 0xffffff });
     const p = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 64), mat);
     p.position.copy(position);
     p.rotation.y = 1.2;
     p.name = 'planet';
     group.add(p);
-    const atm = makeAtmosphere(radius, style.atmosphere);
+    if (showClouds) {
+      const cloudMap = makeCloudTexture(style, Math.min(2048, textureResolution));
+      const cloudMat = new THREE.MeshStandardMaterial({
+        map: cloudMap, transparent: true, depthWrite: false, roughness: 1,
+        metalness: 0, color: 0xffffff, alphaTest: 0.015
+      });
+      clouds = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.008, 96, 64), cloudMat);
+      clouds.position.copy(position);
+      clouds.rotation.y = p.rotation.y + 0.018;
+      clouds.name = 'clouds';
+      group.add(clouds);
+    }
+    const atm = makeAtmosphere(radius, style.atmosphere, sunDirection);
     atm.position.copy(position);
     group.add(atm);
     planet = p;
@@ -395,5 +436,5 @@ export function buildEnvironment(env: Environment): EnvironmentBuild {
   group.add(sun);
   sky.push(sun);
 
-  return { group, sunDirection, skyObjects: sky, planet, name };
+  return { group, sunDirection, skyObjects: sky, planet, clouds, name };
 }
