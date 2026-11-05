@@ -178,9 +178,13 @@ function launch(){try{
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
   if(audioEnabled){audio.init();}
-  createView();switchMode();updateHud();
+  if(mode==='3d')createView();switchMode();updateHud();
 }catch(e){reportError(e);}}
-function switchMode(){third.style.display=mode==='3d'?'block':'none';second.style.display=mode==='2d'?'block':'none';
+function switchMode(){
+  // Release the entire WebGL scene in 2D mode. Rebuild it on demand when returning to 3D.
+  // Otherwise the inactive renderer keeps thousands of meshes and queued effects in memory.
+  if(mode==='2d'&&view){view.dispose();view=null;if(sim)sim.onEvent=pushEvent;}
+  third.style.display=mode==='3d'?'block':'none';second.style.display=mode==='2d'?'block':'none';
   $('toggle3d').classList.toggle('active',mode==='3d');$('toggle2d').classList.toggle('active',mode==='2d');
   $('stage').classList.toggle('flat',mode==='2d');
   telemetry.show(gunnery&&mode==='3d');
