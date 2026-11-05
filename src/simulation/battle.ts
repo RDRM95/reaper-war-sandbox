@@ -96,6 +96,8 @@ export class BattleSimulation implements AiContext {
   private engagementAnnounced = new Set<string>();
   private hadesVolleys = new HadesVolleyCoordinator();
   private separationField?: SeparationField;
+  /** Indexed once per tick instead of scanning the full fleet for every carrier. */
+  private carrierFighters = new Map<string, ShipState[]>();
   private primaryVolleys = new PrimaryVolleyControl();
   /** Listener for events (renderer/UI). */
   onEvent?: (e: BattleEvent) => void;
@@ -476,6 +478,13 @@ export class BattleSimulation implements AiContext {
       fleetDecision(this, fleet, dt);
     }
 
+    this.carrierFighters.clear();
+    for (const fighter of this.ships) {
+      if (!fighter.carrierId || !fighter.alive || fighter.escaped) continue;
+      let group = this.carrierFighters.get(fighter.carrierId);
+      if (!group) { group = []; this.carrierFighters.set(fighter.carrierId, group); }
+      group.push(fighter);
+    }
     this.separationField = new SeparationField(this.ships);
     for (const ship of this.ships) {
       if (!ship.alive || ship.escaped) continue;
@@ -588,7 +597,7 @@ export class BattleSimulation implements AiContext {
     }
     // Recall: fighters near the carrier return to the hangar.
     if (!fleet.orders.fightersDeployed) {
-      for (const f of this.ships) {
+      for (const f of this.carrierFighters.get(ship.id) ?? []) {
         if (f.carrierId === ship.id && f.alive && !f.escaped && distance(f.pos, ship.pos) < ship.lengthKm) {
           f.escaped = true; // Treated as recovered: not a loss, no longer in battle.
           f.alive = true;
@@ -597,7 +606,7 @@ export class BattleSimulation implements AiContext {
       }
     }
     // Rearming: fighters that have spent their torpedoes reload alongside the carrier.
-    for (const f of this.ships) {
+    for (const f of this.carrierFighters.get(ship.id) ?? []) {
       if (f.carrierId !== ship.id || !f.rearming || !f.alive || f.escaped) continue;
       if (distance(f.pos, ship.pos) > ship.lengthKm * 1.5) continue;
       f.rearmTimer = (f.rearmTimer ?? REARM_SECONDS) - dt;
