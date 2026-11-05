@@ -137,6 +137,7 @@ function inspect(){if(!sim||!selectedShip){$('selection').textContent='Click a v
 }
 function updateHud(){if(!sim)return;
   $('clock').textContent=clock(sim.time);
+  if(feed.length)$('log').innerHTML=feed.slice(0,22).map(item=>`<div class="entry ${item.side==='A'?'a':'b'}"><time>${clock(item.time)}</time>${escapeHtml(item.message)}</div>`).join('');
   for(const side of ['A','B'] as Side[]){const ships=sim.ships.filter(s=>s.side===side&&s.role!=='fighter');
     const alive=ships.filter(s=>s.alive&&!s.escaped).length;
     $('alive'+side).textContent=fmt(alive)+' / '+fmt(ships.length);
@@ -155,7 +156,7 @@ function pushEvent(e:BattleEvent){if(e.type==='ship_destroyed'){
   else if(e.type==='order_issued'){feed.unshift({time:e.t,message:'COMMAND: '+e.order});}
   else if(e.type==='hades_detonation'&&audioEnabled){audio.play('hades_internal',100,.7);}
   if(feed.length>50)feed.length=50;
-  if(feed.length&&e.type!=='weapon_fired')$('log').innerHTML=feed.slice(0,22).map(item=>`<div class="entry ${item.side==='A'?'a':'b'}"><time>${clock(item.time)}</time>${escapeHtml(item.message)}</div>`).join('');
+  // DOM log is updated at HUD cadence, not once per combat event.
 }
 function attachEvents(){if(!sim)return;const previous=sim.onEvent;sim.onEvent=e=>{previous?.(e);pushEvent(e);};}
 function createView(){if(!sim)return;view?.dispose();view=null;
@@ -225,10 +226,19 @@ third.addEventListener('pointerup',e=>{if(!pointer||!view)return;const moved=poi
   if(!moved){const r=third.getBoundingClientRect();select(view.pick(e.clientX-r.left,e.clientY-r.top,r.width,r.height));}});
 third.addEventListener('wheel',e=>{if(!view)return;e.preventDefault();view.rig.zoom(e.deltaY);},{passive:false});
 window.addEventListener('resize',()=>{if(view&&mode==='3d')view.resize(third.clientWidth||900,third.clientHeight||550);});
+// Fixed simulation steps remain deterministic. A wall-clock budget keeps the UI responsive
+// instead of allowing dozens of expensive ticks to block the browser on large battles.
 function frame(now:number){const dt=Math.min(.1,Math.max(0,(now-last)/1000||0));last=now;
-  if(sim){if(!paused&&!sim.finished){accum+=dt*speed;let count=0;while(accum>=SIM_DT&&count++<130&&!sim.finished){sim.step();accum-=SIM_DT;}if(count>=130)accum=0;}
+  if(sim){if(!paused&&!sim.finished){
+      accum=Math.min(0.5,accum+dt*speed);
+      const started=performance.now();let steps=0;
+      while(accum>=SIM_DT&&steps<10&&!sim.finished){
+        sim.step();accum-=SIM_DT;steps++;
+        if(performance.now()-started>9)break;
+      }
+    }
     const alpha=paused?1:Math.min(1,accum/SIM_DT);
-    if(view){view.update(dt,alpha);if(mode==='3d'){view.render();telemetry.update(sim,view,selectedShip);}}
+    if(mode==='3d'&&view){view.update(dt,alpha);view.render();telemetry.update(sim,view,selectedShip);}
     if(mode==='2d'){if(following&&selectedShip){const ship=sim.shipById.get(selectedShip);if(ship&&ship.alive)flat!.focus(ship);}flat!.draw(sim);}
     if(now-lastHud>280){lastHud=now;updateHud();}
   }
