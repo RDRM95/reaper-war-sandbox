@@ -13,27 +13,28 @@ interface IndexedShip { ship: ShipState; order: number }
 export class CombatSpatialIndex {
   private readonly cells = new Map<string, IndexedShip[]>();
   private readonly sides: Record<Side, ShipState[]> = { A: [], B: [] };
-  private readonly drift: number;
+  private drift = 0;
+  private readonly stepSeconds: number;
   readonly cellSize: number;
 
   constructor(ships: readonly ShipState[], stepSeconds: number, cellSize = 12) {
     this.cellSize = cellSize;
-    let fastest = 0;
-    for (let i = 0; i < ships.length; i++) {
-      const ship = ships[i];
-      if (!ship.alive || ship.escaped) continue;
-      fastest = Math.max(fastest, ship.maxSpeed);
-      this.sides[ship.side].push(ship);
-      const x = Math.floor(ship.pos.x / cellSize);
-      const y = Math.floor(ship.pos.y / cellSize);
-      const z = Math.floor(ship.pos.z / cellSize);
-      const key = this.key(ship.side, x, y, z);
-      let bucket = this.cells.get(key);
-      if (!bucket) { bucket = []; this.cells.set(key, bucket); }
-      bucket.push({ ship, order: i });
-    }
-    // Both the querying ship and the target may move before a shot is fired.
-    this.drift = fastest * Math.max(0, stepSeconds) * 2 + 0.001;
+    this.stepSeconds = Math.max(0, stepSeconds);
+    for (let i = 0; i < ships.length; i++) this.add(ships[i], i);
+  }
+
+  /** Newly deployed fighters are added without forcing a full grid rebuild. */
+  add(ship: ShipState, order: number): void {
+    if (!ship.alive || ship.escaped) return;
+    this.drift = Math.max(this.drift, ship.maxSpeed * this.stepSeconds * 2 + 0.001);
+    this.sides[ship.side].push(ship);
+    const x = Math.floor(ship.pos.x / this.cellSize);
+    const y = Math.floor(ship.pos.y / this.cellSize);
+    const z = Math.floor(ship.pos.z / this.cellSize);
+    const key = this.key(ship.side, x, y, z);
+    let bucket = this.cells.get(key);
+    if (!bucket) { bucket = []; this.cells.set(key, bucket); }
+    bucket.push({ ship, order });
   }
 
   private key(side: Side, x: number, y: number, z: number): string {
