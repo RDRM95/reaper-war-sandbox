@@ -521,6 +521,30 @@ export const WEAPONS: Record<string, WeaponDef> = {
       note: 'Damage, cadence, range and all other numerical specifications are AU simulation estimates.',
     },
   },
+  valkyrie_nova: {
+    id: 'valkyrie_nova',
+    name: 'NOVA Array — 200 GT penetrator (AU)',
+    kind: 'mass_accelerator',
+    damageType: 'kinetic',
+    // AU-only core strike: a successful hit overwhelms capital barriers and hull.
+    // Gameplay points are not a direct conversion from gigatons of TNT.
+    damage: 145000,
+    cooldown: 48,
+    range: 70,
+    projectileSpeed: 64,
+    accuracy: 0.9,
+    penetration: 2.8,
+    heat: 68,
+    antiSmall: false,
+    antiCapital: true,
+    arc: 6,
+    magazine: 8,
+    provenance: {
+      value: 'Alternate-universe 200-gigaton super-dreadnought accelerator; direct hits can eliminate Sovereign-class Reapers and Harbinger.',
+      provenance: 'AU_MODIFIED',
+      note: 'Not a canon Mass Effect weapon. Nominal 200 GT and 300 GT overcharge are fictional design targets; the game does not yet model charge-mode selection.'
+    },
+  },
   apex_hyper_ma: {
     id: 'apex_hyper_ma',
     name: 'Hyper-mass accelerator (HADES rounds)',
