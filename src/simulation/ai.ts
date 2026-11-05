@@ -15,6 +15,8 @@ export interface AiContext {
   ships: ShipState[];
   fleets: Map<string, FleetState>;
   enemiesOf(side: 'A' | 'B'): ShipState[];
+  /** Optional contact broad phase; selectors still check exact range and arc. */
+  enemiesNear?(side: 'A' | 'B', origin: Vec3, range: number): ShipState[];
   alliesOf(side: 'A' | 'B'): ShipState[];
   getShip(id: string): ShipState | undefined;
 }
@@ -148,7 +150,7 @@ export function chooseTarget(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const locked = currentValid && ctx.time < (ship.targetLockUntil ?? 0);
   let best = currentValid ? current : undefined;
   let bestScore = best ? scoreTarget(ctx, ship, fleet, best, range) : -Infinity;
-  for (const e of ctx.enemiesOf(ship.side)) {
+  for (const e of (ctx.enemiesNear?.(ship.side, ship.pos, sensor * 1.5) ?? ctx.enemiesOf(ship.side))) {
     if (!validEnemy(ship, e) || distance(ship.pos, e.pos) > sensor * 1.5) continue;
     if (ship.role === 'fighter' && e.role === 'fighter' && !ship.weapons.some(w => w.def.antiSmall)) continue;
     const reachableReplacement = currentValid && distance(ship.pos, current.pos) > range * 1.4 && distance(ship.pos, e.pos) < range;
