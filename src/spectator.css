@@ -49,3 +49,12 @@ label{font:600 10px 'JetBrains Mono',monospace;letter-spacing:.7px;color:#89a9be
 footer{height:22px;background:#07111d;border-top:1px solid #1c3b53;font:9px 'JetBrains Mono',monospace;letter-spacing:.7px;color:#7999ab;display:flex;align-items:center;justify-content:center}
 @media(max-width:1050px){.rw-layout{grid-template-columns:230px minmax(230px,1fr)200px}.rw-setup,.rw-data{padding:13px 9px}.camera-rail{top:58px;max-width:90%}.stage-tag strong{font-size:20px}.bottom-line{font-size:8px}}
 @media(max-width:760px){.rw-header{padding:10px}.brand strong{font-size:21px}.header-right{gap:4px}.rw-layout{display:flex;flex-direction:column;height:auto;overflow:visible}.rw-setup{max-height:360px}.rw-middle{height:65vh;min-height:420px}.rw-data{max-height:380px}.camera-rail{top:62px;left:15px;right:auto;max-width:95%}.bottom-line span:nth-child(2){display:none}.stage-foot{flex-wrap:wrap}footer{min-height:30px;text-align:center;padding:0 12px;height:auto}}
+
+/* Pure Battle: initial deployment and timed reinforcement columns remain separate. */
+.wave-time{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:3px 0 2px}
+.wave-time input{max-width:86px}
+.ship-row .ship-quantities{display:flex;gap:5px;align-items:center;flex-shrink:0}
+.ship-row .ship-quantities input{width:52px;padding:6px 3px}
+.rw-data .plain.full{margin:5px 0 0}
+#focus{border-color:#6b5460}
+#volley{border-color:#796848}
