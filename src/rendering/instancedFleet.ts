@@ -1,11 +1,12 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ShipState } from '@/simulation/types';
 import { KM } from './geometry';
 import { DETAIL_MESH_NAMES, type LodLevel } from './lod';
 import { getShipTemplate } from './ships';
 
 interface Part { mesh: THREE.InstancedMesh; detail: boolean; }
-interface Batch { capacity: number; parts: Part[]; }
+interface Batch { capacity: number; parts: Part[]; trail?: THREE.InstancedMesh; }
 const IDENTITY = new THREE.Vector3(1, 1, 1);
 
 /** GPU batches reuse the same original hull geometry/materials as close-up ships.
@@ -20,6 +21,8 @@ export class InstancedFleet {
   private readonly quat = new THREE.Quaternion();
   private readonly matrix = new THREE.Matrix4();
   private readonly fwd = new THREE.Vector3(0, 0, 1);
+  private trailsEnabled = true;
+  configure(quality: 'low'|'medium'|'high'|'ultra'): void { this.trailsEnabled = quality !== 'low'; }
 
   private createBatch(classId: string, capacity: number): Batch {
     const template = getShipTemplate(classId);
@@ -42,7 +45,34 @@ export class InstancedFleet {
       this.group.add(mesh);
       parts.push({ mesh, detail: DETAIL_MESH_NAMES.has(source.name) });
     });
-    return { capacity, parts };
+    // A single additional draw call per hull class gives all distant engines
+    // tapered, translucent exhaust plumes; no per-ship sprites are allocated.
+    const exhausts: THREE.BufferGeometry[] = [];
+    const L = Math.max(0.8, template.lengthUnits);
+    const nodes = classId.startsWith('reaper') || classId === 'harbinger'
+      ? template.engineNodes.slice(0, 1) : template.engineNodes.slice(0, 6);
+    for (const node of nodes) {
+      const glow = new THREE.ConeGeometry(Math.max(0.06, L*0.037), L*0.24, 7, 1, true);
+      glow.rotateX(Math.PI/2);
+      glow.translate(node.x,node.y,node.z-L*0.12);
+      exhausts.push(glow);
+    }
+    let trail:THREE.InstancedMesh|undefined;
+    if (exhausts.length) {
+      const geometry = mergeGeometries(exhausts, false);
+      for(const g of exhausts)g.dispose();
+      if(geometry){
+        const material=new THREE.MeshBasicMaterial({
+          color:template.glowColor,transparent:true,opacity:0.25,
+          blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide
+        });
+        trail=new THREE.InstancedMesh(geometry,material,capacity);
+        trail.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        trail.count=0;trail.frustumCulled=false;
+        this.group.add(trail);
+      }
+    }
+    return { capacity, parts, trail };
   }
 
   begin(ships: readonly ShipState[]): void {
@@ -58,11 +88,12 @@ export class InstancedFleet {
           part.mesh.geometry.dispose();
           part.mesh.dispose();
         }
+        if(batch?.trail){this.group.remove(batch.trail);batch.trail.geometry.dispose();(batch.trail.material as THREE.Material).dispose();batch.trail.dispose();}
         batch = this.createBatch(classId, Math.max(64, 2 ** Math.ceil(Math.log2(count))));
         this.batches.set(classId, batch);
       }
     }
-    for (const batch of this.batches.values()) for (const part of batch.parts) part.mesh.count = 0;
+    for (const batch of this.batches.values()) {for (const part of batch.parts) part.mesh.count = 0;if(batch.trail)batch.trail.count=0;}
   }
 
   add(ship: ShipState, alpha: number, lod: LodLevel): void {
@@ -87,6 +118,10 @@ export class InstancedFleet {
       if (n >= batch.capacity) throw new Error('Instancing capacity exceeded for ' + ship.classId);
       part.mesh.setMatrixAt(n, this.matrix);
     }
+    if (this.trailsEnabled && batch.trail && lod !== 'point') {
+      const i=batch.trail.count++;
+      batch.trail.setMatrixAt(i,this.matrix);
+    }
   }
 
   end(): void {
@@ -95,14 +130,26 @@ export class InstancedFleet {
         if (part.mesh.count > 0) part.mesh.instanceMatrix.needsUpdate = true;
         part.mesh.visible = part.mesh.count > 0;
       }
+      if(batch.trail){
+        batch.trail.visible=this.trailsEnabled&&batch.trail.count>0;
+        if(batch.trail.count>0)batch.trail.instanceMatrix.needsUpdate=true;
+      }
     }
   }
 
   dispose(): void {
-    for (const batch of this.batches.values()) for (const part of batch.parts) {
-      this.group.remove(part.mesh);
-      part.mesh.geometry.dispose();
-      part.mesh.dispose();
+    for (const batch of this.batches.values()) {
+      for (const part of batch.parts) {
+        this.group.remove(part.mesh);
+        part.mesh.geometry.dispose();
+        part.mesh.dispose();
+      }
+      if(batch.trail){
+        this.group.remove(batch.trail);
+        batch.trail.geometry.dispose();
+        (batch.trail.material as THREE.Material).dispose();
+        batch.trail.dispose();
+      }
     }
     this.batches.clear();
   }
