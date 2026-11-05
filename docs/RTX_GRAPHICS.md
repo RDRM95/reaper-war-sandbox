@@ -50,6 +50,23 @@ At each count, test High and RTX Cinematic at a real **3840 × 2160** display re
 
 The 60 FPS frame-time budget is **16.7 ms**. Do not confuse `renderCpuMs` (CPU-side renderer submission time) with actual GPU processing time. `gpuFrameMs` uses `EXT_disjoint_timer_query_webgl2` when available, otherwise returns null. The CI software renderer is not a replacement for 9800X3D/5090 measurements.
 
+## One-command local hardware benchmark
+
+On the intended Windows PC, after installing dependencies, run:
+
+```
+npm run benchmark:4k
+```
+
+This uses installed Microsoft Edge when available, opens a real 3840 × 2160 browser viewport, and runs 1,000/3,000/5,000-ship trials at High and Ultra, with 8-second warmup and 10-second samples by default. It writes JSON results and screenshots to `benchmark-results/`. The script is foreground automation; it does not secretly collect, transmit or upload your hardware metrics. It should run on the actual 5090/9800X3D PC to support a meaningful performance claim. It uses FPS/frame intervals and GPU timer queries where supported. An 8–10 second sample is a smoke benchmark, not a rigorous 1% low result.
+
+To adjust cases:
+
+```
+set RW_COUNTS=500,1000,2000,5000
+npm run benchmark:4k
+```
+
 ## Assets not yet provided
 
 - Licensed, high-quality Alliance and Reaper GLB meshes with game-accurate silhouettes, UVs, decals and LOD meshes.
