@@ -29,6 +29,9 @@ const scenarios:Record<string,{a:Fleet;b:Fleet;environment:string;rules:string;r
 };
 function copyFleet(f:Fleet):Fleet {return {faction:f.faction,name:f.name,formation:f.formation,counts:{...f.counts}};}
 let selectedScenario='sol',fleets:Record<Side,Fleet>={A:copyFleet(scenarios.sol.a),B:copyFleet(scenarios.sol.b)};
+type Reinforcement = {delay:number;counts:Record<string,number>};
+const freshWave=():Reinforcement=>({delay:120,counts:{}});
+let waves:Record<Side,Reinforcement>={A:freshWave(),B:freshWave()};
 let activeSide:Side='A',mode:ScreenMode='3d',speed=1,paused=false,audioEnabled=false;
 let sim:BattleSimulation|null=null,view:BattleView|null=null,flat: FleetMap2D|null=null;
 let selectedShip:string|undefined,following=false,accum=0,last=0,lastHud=0;
@@ -57,8 +60,9 @@ app.innerHTML=`
     <div class="side-tabs"><button id="sideA" class="active">SIDE A <b id="countA"></b></button><button id="sideB">SIDE B <b id="countB"></b></button></div>
     <label>FACTION</label><select id="faction"></select>
     <label>FORMATION</label><select id="formation"><option value="line_abreast">Broad battle line</option><option value="strike_wedge">Strike wedge</option><option value="defensive_screen">Defensive screen</option><option value="capital_column">Capital ship column</option><option value="fighter_screen">Fighter screen</option><option value="dispersed">Dispersed</option></select>
-    <div class="roster-header">VESSEL CLASS <span>COUNT</span></div><div class="fleet-roster" id="roster"></div>
-    <div class="left-footer"><p>No manual orders. You assemble the fleets; the original AI handles every engagement.</p><button id="launch" class="primary">▶  LAUNCH BATTLE</button></div>
+    <label class="wave-time">REINFORCEMENTS ARRIVE AFTER (S) <input id="wave-time" type="number" min="1" max="600" value="120"></label>
+    <div class="roster-header">VESSEL CLASS <span>START / WAVE</span></div><div class="fleet-roster" id="roster"></div>
+    <div class="left-footer"><p>Pure Battle: fleets choose their own movement and targets. Optional focus orders below never guarantee hits.</p><button id="launch" class="primary">▶  LAUNCH BATTLE</button></div>
   </aside>
   <main class="rw-middle">
     <div class="toolbar"><div class="seg"><button id="toggle3d" class="active">3D CINEMATIC</button><button id="toggle2d">2D FLEET VIEW</button></div>
@@ -74,7 +78,11 @@ app.innerHTML=`
     <div class="team"><div class="team-title">SIDE A <strong id="aliveA">—</strong></div><div class="meter"><i id="meterA"></i></div><div class="pair">HULLS LOST <b id="lostA">—</b></div></div>
     <div class="team red-team"><div class="team-title">SIDE B <strong id="aliveB">—</strong></div><div class="meter"><i id="meterB"></i></div><div class="pair">HULLS LOST <b id="lostB">—</b></div></div>
     <div class="pane-heading with-border">SHIP INSPECTION <span>03</span></div>
-    <div id="selection" class="selection">Click a vessel in either spectator camera to inspect its condition.</div><button id="follow" class="plain full">FOLLOW SELECTED</button>
+    <div id="selection" class="selection">Click a vessel in either spectator camera to inspect its condition.</div>
+    <button id="follow" class="plain full">FOLLOW SELECTED</button>
+    <button id="focus" class="plain full" disabled>FOCUS OPPOSING FLEET ON SELECTED</button>
+    <button id="autonomy" class="plain full">RESTORE AUTONOMOUS TARGETING</button>
+    <button id="volley" class="plain full" disabled>FIRE READY SPINAL BATTERIES</button>
     <div class="pane-heading with-border">BATTLE LOG <span>04</span></div><div id="log" class="log">Waiting for engagement…</div>
   </aside>
 </div><footer>INDEPENDENT NON-COMMERCIAL FAN PROJECT · ORIGINAL SOURCE-BASED 3D ENGINE · BUILD 0.3 DEVELOPMENT</footer>
@@ -85,20 +93,28 @@ const third=$<HTMLCanvasElement>('scene3d'),second=$<HTMLCanvasElement>('scene2d
 flat=new FleetMap2D(second);
 flat.onPick=s=>select(s);
 function rowTally(f:Fleet){return Object.values(f.counts).reduce((a,b)=>a+Math.max(0,b),0);}
-function editor(){const f=fleets[activeSide];factionSelect.value=f.faction;$<HTMLSelectElement>('formation').value=f.formation;
+function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelect.value=f.faction;$<HTMLSelectElement>('formation').value=f.formation;
+  $<HTMLInputElement>('wave-time').value=String(wave.delay);
   $('sideA').classList.toggle('active',activeSide==='A');$('sideB').classList.toggle('active',activeSide==='B');
-  $('countA').textContent=fmt(rowTally(fleets.A));$('countB').textContent=fmt(rowTally(fleets.B));
+  $('countA').textContent=fmt(rowTally(fleets.A))+' + '+fmt(rowTally({ ...fleets.A,counts:waves.A.counts }));
+  $('countB').textContent=fmt(rowTally(fleets.B))+' + '+fmt(rowTally({ ...fleets.B,counts:waves.B.counts }));
   const classes=SHIP_CLASS_LIST.filter(cls=>cls.faction===f.faction);
-  $('roster').innerHTML=classes.map(cls=>`<label class="ship-row" title="${escapeHtml(cls.description)}"><span><b>${escapeHtml(cls.shortName||cls.name)}</b><small>${cls.role.toUpperCase()}</small></span><input data-class="${cls.id}" type="number" min="0" max="1000" value="${f.counts[cls.id]??0}"></label>`).join('');
-  $('roster').querySelectorAll<HTMLInputElement>('input').forEach(input=>input.addEventListener('input',()=>{f.counts[input.dataset.class!]=Math.min(1000,Math.max(0,Math.floor(Number(input.value)||0)));$('countA').textContent=fmt(rowTally(fleets.A));$('countB').textContent=fmt(rowTally(fleets.B));}));
+  $('roster').innerHTML=classes.map(cls=>`<label class="ship-row" title="${escapeHtml(cls.description)}"><span><b>${escapeHtml(cls.shortName||cls.name)}</b><small>${cls.role.toUpperCase()}</small></span><div class="ship-quantities"><input data-kind="start" data-class="${cls.id}" type="number" min="0" max="9999" value="${f.counts[cls.id]??0}" aria-label="${escapeHtml(cls.name)} initial count"><input data-kind="wave" data-class="${cls.id}" type="number" min="0" max="9999" value="${wave.counts[cls.id]??0}" aria-label="${escapeHtml(cls.name)} reinforcements"></div></label>`).join('');
+  $('roster').querySelectorAll<HTMLInputElement>('input').forEach(input=>input.addEventListener('input',()=>{
+    const target=input.dataset.kind==='wave'?wave.counts:f.counts;
+    target[input.dataset.class!]=Math.min(9999,Math.max(0,Math.floor(Number(input.value)||0)));
+    $('countA').textContent=fmt(rowTally(fleets.A))+' + '+fmt(rowTally({...fleets.A,counts:waves.A.counts}));
+    $('countB').textContent=fmt(rowTally(fleets.B))+' + '+fmt(rowTally({...fleets.B,counts:waves.B.counts}));
+  }));
 }
-function applyScenario(id:string){const p=scenarios[id];selectedScenario=id;fleets={A:copyFleet(p.a),B:copyFleet(p.b)};
+function applyScenario(id:string){const p=scenarios[id];selectedScenario=id;fleets={A:copyFleet(p.a),B:copyFleet(p.b)};waves={A:freshWave(),B:freshWave()};
   $<HTMLSelectElement>('rules').value=p.rules;$<HTMLInputElement>('distance').value=String(p.range);$('battle-name').textContent=$<HTMLSelectElement>('scenario').selectedOptions[0].textContent??'BATTLE';
   editor();
 }
 $('sideA').addEventListener('click',()=>{activeSide='A';editor();});
 $('sideB').addEventListener('click',()=>{activeSide='B';editor();});
-factionSelect.addEventListener('change',()=>{const f=fleets[activeSide];f.faction=factionSelect.value as MassEffectFactionId;f.counts={};f.name=FACTIONS[f.faction].name+' task force';editor();});
+factionSelect.addEventListener('change',()=>{const f=fleets[activeSide];f.faction=factionSelect.value as MassEffectFactionId;f.counts={};waves[activeSide]=freshWave();f.name=FACTIONS[f.faction].name+' task force';editor();});
+$('wave-time').addEventListener('change',()=>{waves[activeSide].delay=Math.min(600,Math.max(1,Math.floor(Number($<HTMLInputElement>('wave-time').value)||120)));});
 $('formation').addEventListener('change',()=>{fleets[activeSide].formation=$<HTMLSelectElement>('formation').value as FormationType;});
 $('scenario').addEventListener('change',()=>applyScenario($<HTMLSelectElement>('scenario').value));
 function reportError(err:unknown){viewError=err instanceof Error?err.message:String(err);
@@ -109,8 +125,10 @@ function select(ship:ShipState|undefined){selectedShip=ship?.id;following=false;
   if(view){view.selectedIds.clear();if(ship)view.selectedIds.add(ship.id);}
   inspect();
 }
-function inspect(){if(!sim||!selectedShip){$('selection').textContent='Click a vessel in either spectator camera to inspect its condition.';return;}
+function inspect(){if(!sim||!selectedShip){$('selection').textContent='Click a vessel in either spectator camera to inspect its condition.';$<HTMLButtonElement>('focus').disabled=true;$<HTMLButtonElement>('volley').disabled=true;return;}
   const s=sim.shipById.get(selectedShip);if(!s){selectedShip=undefined;return;}
+  $<HTMLButtonElement>('focus').disabled=!s.alive;
+  $<HTMLButtonElement>('volley').disabled=!s.alive||s.role!=='dreadnought'||s.faction==='reaper';
   const hull=Math.max(0,Math.round(100*s.hull/Math.max(1,s.maxHull))),shields=Math.max(0,Math.round(100*s.barriers/Math.max(1,s.maxBarriers)));
   $('selection').innerHTML=`<div class="ship-title">${escapeHtml(s.name)}</div><div class="ship-subtitle">${escapeHtml(s.classId.replaceAll('_',' ').toUpperCase())} · SIDE ${s.side}</div><div class="ship-bar-label">HULL <b>${hull}%</b></div><div class="ship-meter"><i style="width:${hull}%"></i></div><div class="ship-bar-label">BARRIERS <b>${shields}%</b></div><div class="ship-meter shield"><i style="width:${shields}%"></i></div><div class="ship-detail">KILLS <b>${s.stats.kills}</b> · ${s.alive?'OPERATIONAL':'DESTROYED'}</div>`;
 }
@@ -130,6 +148,8 @@ function pushEvent(e:BattleEvent){if(e.type==='ship_destroyed'){
     const killer=e.killerId?sim?.shipById.get(e.killerId)?.name:'Unknown';feed.unshift({time:e.t,message:e.name+' destroyed'+(killer?' · '+killer:''),side:e.side});
     if(audioEnabled)audio.play(e.role==='dreadnought'||e.role==='reaper_capital'?'explosion_large':'explosion_small',150,.65);
   }else if(e.type==='comms'){feed.unshift({time:e.t,message:e.text,side:e.side});}
+  else if(e.type==='reinforcement_arrival'){feed.unshift({time:e.t,message:'REINFORCEMENTS ARRIVED: '+e.fleetId,side:e.side});}
+  else if(e.type==='order_issued'){feed.unshift({time:e.t,message:'COMMAND: '+e.order});}
   else if(e.type==='hades_detonation'&&audioEnabled){audio.play('hades_internal',100,.7);}
   if(feed.length>50)feed.length=50;
   if(feed.length&&e.type!=='weapon_fired')$('log').innerHTML=feed.slice(0,22).map(item=>`<div class="entry ${item.side==='A'?'a':'b'}"><time>${clock(item.time)}</time>${escapeHtml(item.message)}</div>`).join('');
@@ -146,7 +166,9 @@ function launch(){try{
     environment:scenarios[selectedScenario].environment as 'earth_orbit'|'palaven_orbit'|'deep_space',
     startingDistanceKm:Math.max(10,Math.min(600,Number($<HTMLInputElement>('distance').value)||110)),
     maxDuration:650,
-    sideA:{...copyFleet(fleets.A)},sideB:{...copyFleet(fleets.B)}});
+    sideA:{...copyFleet(fleets.A)},sideB:{...copyFleet(fleets.B)},
+    extraA:rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[],
+    extraB:rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[]});
   view?.dispose();view=null;
   sim=new BattleSimulation(config);flat!.reset();selectedShip=undefined;following=false;feed.length=0;accum=0;paused=false;
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
@@ -171,6 +193,21 @@ $('tactical').addEventListener('click',()=>camera('tactical'));
 $('reaper-cam').addEventListener('click',()=>camera('reaper'));
 $('chase').addEventListener('click',()=>{$('follow').click();});
 $('follow').addEventListener('click',()=>{if(!selectedShip||!sim)return;following=!following;if(view){view.followId=following?selectedShip:undefined;view.rig.setMode(following?'follow':'cinematic');}$('follow').textContent=following?'RELEASE FOLLOW':'FOLLOW SELECTED';});
+$('focus').addEventListener('click',()=>{
+  if(!sim||!selectedShip||sim.finished)return;const target=sim.getShip(selectedShip);if(!target||!target.alive)return;
+  const opposing:Side=target.side==='A'?'B':'A';
+  for(const f of sim.fleets.values())if(f.spec.side===opposing&&f.arrived)sim.issueOrders(f.spec.id,{order:'attack_target',targetId:target.id,focusFire:true});
+  $('message').textContent='FLEETS REDIRECTED TO '+target.name.toUpperCase();
+});
+$('autonomy').addEventListener('click',()=>{
+  if(!sim||sim.finished)return;for(const f of sim.fleets.values())if(f.arrived)sim.issueOrders(f.spec.id,{order:'attack',targetId:undefined,focusFire:false,priority:'default'});
+  $('message').textContent='AUTONOMOUS TARGETING RESTORED';
+});
+$('volley').addEventListener('click',()=>{
+  if(!sim||!selectedShip||sim.finished)return;const ship=sim.getShip(selectedShip);
+  if(!ship||!ship.alive||ship.faction==='reaper')return;
+  $('message').textContent=sim.releasePrimaryVolley(ship.fleetId)?'READY SPINAL BATTERIES: FIRE':'SPINAL SALVO UNAVAILABLE';
+});
 let pointer:{x:number;y:number;button:number;moved:boolean}|null=null;
 third.addEventListener('contextmenu',e=>e.preventDefault());
 third.addEventListener('pointerdown',e=>{pointer={x:e.clientX,y:e.clientY,button:e.button,moved:false};third.setPointerCapture(e.pointerId);});
