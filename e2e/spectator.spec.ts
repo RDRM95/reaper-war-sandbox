@@ -1,0 +1,19 @@
+import { test, expect } from '@playwright/test';
+
+test('original-engine simulator boots and both spectator modes render', async ({page}) => {
+  const errors:string[]=[];
+  page.on('pageerror', error=>errors.push(error.message));
+  await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+  await expect(page.locator('#launch')).toBeVisible();
+  await expect(page.locator('#clock')).not.toHaveText('00:00',{timeout:30000});
+  await expect(page.locator('#error')).toBeHidden();
+  await expect(page.locator('#scene3d')).toBeVisible();
+  await page.screenshot({path:'test-artifacts/3d-spectator.png',fullPage:true});
+  await page.locator('#toggle2d').click();
+  await expect(page.locator('#scene2d')).toBeVisible();
+  await page.screenshot({path:'test-artifacts/2d-spectator.png',fullPage:true});
+  await page.locator('#sideB').click();
+  await expect(page.locator('#faction')).toHaveValue('reaper');
+  await expect(page.locator('#roster input').first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
