@@ -98,6 +98,8 @@ export class BattleSimulation implements AiContext {
   private hadesVolleys = new HadesVolleyCoordinator();
   private separationField?: SeparationField;
   private spatialIndex?: CombatSpatialIndex;
+  /** Exact narrow-phase projectile checks in the latest fixed tick (profiling). */
+  projectileCandidateChecksLastTick = 0;
   /** Indexed once per tick instead of scanning the full fleet for every carrier. */
   private carrierFighters = new Map<string, ShipState[]>();
   private primaryVolleys = new PrimaryVolleyControl();
@@ -897,6 +899,7 @@ export class BattleSimulation implements AiContext {
 
   private updateProjectiles(dt: number): void {
     const survivors: Projectile[] = [];
+    this.projectileCandidateChecksLastTick = 0;
     for (const p of this.projectiles) {
       p.prevPos = clone(p.pos);
       p.pos = addScaled(p.pos, p.vel, dt);
@@ -904,15 +907,28 @@ export class BattleSimulation implements AiContext {
       let hitShip: ShipState | undefined;
       let hitPoint: Vec3 | undefined;
       let bestT = Infinity;
-      for (const s of this.ships) {
+
+      // The former all-ships scan cost O(projectiles * ships). Broad-phase
+      // contacts now cover the swept segment, plus the largest target radius
+      // and the spatial index's intra-tick movement margin. The precise
+      // segmentSphere test and deployment-order tie breaks are unchanged.
+      const segment = sub(p.pos, p.prevPos);
+      const mid = addScaled(p.prevPos, segment, 0.5);
+      const sweptRadius = Math.sqrt(lengthSq(segment)) * 0.5 +
+        (this.spatialIndex?.maxCollisionRadius ?? 0);
+      const candidates = this.spatialIndex
+        ? this.spatialIndex.enemiesNear(p.side, mid, sweptRadius)
+        : this.ships;
+      for (const s of candidates) {
         if (!s.alive || s.escaped || s.side === p.side) continue;
         if (s.role === 'fighter' && !p.weapon.antiSmall) continue;
+        this.projectileCandidateChecksLastTick++;
         const r = s.radiusKm * (s.role === 'fighter' ? 2.5 : 1);
         const t = segmentSphere(p.prevPos, p.pos, s.pos, r);
         if (t !== undefined && t < bestT) {
           bestT = t;
           hitShip = s;
-          hitPoint = addScaled(p.prevPos, sub(p.pos, p.prevPos), t);
+          hitPoint = addScaled(p.prevPos, segment, t);
         }
       }
       if (hitShip && hitPoint) {

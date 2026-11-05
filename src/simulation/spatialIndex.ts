@@ -16,6 +16,8 @@ export class CombatSpatialIndex {
   private drift = 0;
   private readonly stepSeconds: number;
   readonly cellSize: number;
+  /** Conservative broad-phase radius, including fighter hit-box scaling. */
+  maxCollisionRadius = 0;
 
   constructor(ships: readonly ShipState[], stepSeconds: number, cellSize = 12) {
     this.cellSize = cellSize;
@@ -26,6 +28,7 @@ export class CombatSpatialIndex {
   /** Newly deployed fighters are added without forcing a full grid rebuild. */
   add(ship: ShipState, order: number): void {
     if (!ship.alive || ship.escaped) return;
+    this.maxCollisionRadius = Math.max(this.maxCollisionRadius, ship.radiusKm * (ship.role === 'fighter' ? 2.5 : 1));
     this.drift = Math.max(this.drift, ship.maxSpeed * this.stepSeconds * 2 + 0.001);
     this.sides[ship.side].push(ship);
     const x = Math.floor(ship.pos.x / this.cellSize);

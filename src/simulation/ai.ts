@@ -148,11 +148,15 @@ export function chooseTarget(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const sensor = ship.sensorRange * (0.4 + 0.6 * ship.subsystems.sensors);
   const currentValid = validEnemy(ship, current) && distance(ship.pos, current.pos) <= sensor * 1.7;
   const locked = currentValid && ctx.time < (ship.targetLockUntil ?? 0);
+  // While a valid target remains inside the engagement band, a locked ship
+  // cannot accept any replacement. Avoid a redundant fleet-wide contact scan.
+  if (locked && current && distance(ship.pos, current.pos) <= range * 1.4) return current.id;
+  const cannotFightFighters = ship.role === 'fighter' && !ship.weapons.some(w => w.def.antiSmall);
   let best = currentValid ? current : undefined;
   let bestScore = best ? scoreTarget(ctx, ship, fleet, best, range) : -Infinity;
   for (const e of (ctx.enemiesNear?.(ship.side, ship.pos, sensor * 1.5) ?? ctx.enemiesOf(ship.side))) {
     if (!validEnemy(ship, e) || distance(ship.pos, e.pos) > sensor * 1.5) continue;
-    if (ship.role === 'fighter' && e.role === 'fighter' && !ship.weapons.some(w => w.def.antiSmall)) continue;
+    if (cannotFightFighters && e.role === 'fighter') continue;
     const reachableReplacement = currentValid && distance(ship.pos, current.pos) > range * 1.4 && distance(ship.pos, e.pos) < range;
     if (locked && !reachableReplacement) continue;
     const candidate = scoreTarget(ctx, ship, fleet, e, range);
