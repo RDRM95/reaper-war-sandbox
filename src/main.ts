@@ -16,6 +16,7 @@ type ScreenMode = '3d'|'2d';
 type GraphicsPreset = 'low'|'medium'|'high'|'ultra';
 const parameters = new URLSearchParams(window.location.search);
 const referenceMode = parameters.get('reference') === 'sol-42';
+const requestedShips = Math.min(12000, Math.max(0, Math.floor(Number(parameters.get('ships')) || 0)));
 const referenceSeconds = Math.min(120, Math.max(0, Number(parameters.get('t') ?? 18) || 18));
 const $ = <T extends HTMLElement = HTMLElement>(id:string):T => {
   const value=document.getElementById(id);
@@ -44,6 +45,7 @@ let viewError:string|undefined;
 let gunnery=false;
 let graphics:GraphicsPreset = 'high';
 let fpsCounter=0,fpsLast=0,fpsValue=0,simWorkMs=0;
+const frameTimes:number[]=[];
 const feed:{time:number;message:string;side?:Side}[]=[];
 const app=document.getElementById('app')!;
 app.innerHTML=`
@@ -118,6 +120,24 @@ function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelec
 }
 function applyScenario(id:string){const p=scenarios[id];selectedScenario=id;fleets={A:copyFleet(p.a),B:copyFleet(p.b)};waves={A:freshWave(),B:freshWave()};
   $<HTMLSelectElement>('rules').value=p.rules;$<HTMLInputElement>('distance').value=String(p.range);$('battle-name').textContent=$<HTMLSelectElement>('scenario').selectedOptions[0].textContent??'BATTLE';
+  editor();
+}
+/** Opt-in benchmark roster: preserves faction and relative composition while
+ * allocating an exact requested number of ships. Normal play is untouched. */
+function scaleFleetForBenchmark(total:number):void{
+  const entries:( {side:Side;classId:string;count:number;fraction:number} )[]=[];
+  const original=rowTally(fleets.A)+rowTally(fleets.B);
+  if(original<=0)return;
+  for(const side of ['A','B'] as Side[])for(const [classId,n] of Object.entries(fleets[side].counts)){
+    if(n<=0)continue;
+    const raw=n*total/original;
+    entries.push({side,classId,count:Math.floor(raw),fraction:raw%1});
+  }
+  const left=total-entries.reduce((sum,e)=>sum+e.count,0);
+  entries.sort((a,b)=>b.fraction-a.fraction);
+  for(let i=0;i<left;i++)entries[i%entries.length].count++;
+  fleets.A.counts={};fleets.B.counts={};
+  for(const e of entries)fleets[e.side].counts[e.classId]=e.count;
   editor();
 }
 $('sideA').addEventListener('click',()=>{activeSide='A';editor();});
@@ -271,7 +291,9 @@ third.addEventListener('wheel',e=>{if(!view)return;e.preventDefault();view.rig.z
 window.addEventListener('resize',()=>{if(view&&mode==='3d')view.resize(third.clientWidth||900,third.clientHeight||550);});
 // Fixed simulation steps remain deterministic. A wall-clock budget keeps the UI responsive
 // instead of allowing dozens of expensive ticks to block the browser on large battles.
-function frame(now:number){const dt=Math.min(.1,Math.max(0,(now-last)/1000||0));last=now;
+function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;const dt=Math.min(.1,elapsedMs/1000);last=now;
+  frameTimes.push(elapsedMs);
+  if(frameTimes.length>240)frameTimes.shift();
   if(sim){if(!paused&&!sim.finished){
       accum=Math.min(0.5,accum+dt*speed);
       const started=performance.now();let steps=0;
@@ -298,6 +320,9 @@ function frame(now:number){const dt=Math.min(.1,Math.max(0,(now-last)/1000||0));
 // Read-only testing interface. No gameplay state is changed by inspection.
 (window as Window & { __reaperDiagnostics?: () => unknown }).__reaperDiagnostics=()=>({
   seed:sim?.config.seed,time:sim?.time,shipCount:sim?.ships.length,
+  frameMsAverage:frameTimes.reduce((a,b)=>a+b,0)/Math.max(1,frameTimes.length),
+  frameMsP95:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.floor(frameTimes.length*0.95)-1)]??0,
+  fps:fpsValue,simCpuMs:simWorkMs,
   liveShips:sim?.ships.filter(s=>s.alive&&!s.escaped).length,
   ships:sim?.ships.map(s=>({id:s.id,side:s.side,position:{...s.pos},heading:{...s.heading}})),
   view: view?{
@@ -307,6 +332,6 @@ function frame(now:number){const dt=Math.min(.1,Math.max(0,(now-last)/1000||0));
     lodCounts:view.lodCounts,quality:graphics
   }:null
 });
-applyScenario('sol');switchMode();launch();requestAnimationFrame(frame);
+applyScenario('sol');if(requestedShips>0)scaleFleetForBenchmark(requestedShips);switchMode();launch();requestAnimationFrame(frame);
 window.addEventListener('error',e=>{if(e.error)reportError(e.error);});
 window.addEventListener('unhandledrejection',e=>reportError(e.reason));
