@@ -58,3 +58,26 @@ footer{height:22px;background:#07111d;border-top:1px solid #1c3b53;font:9px 'Jet
 .rw-data .plain.full{margin:5px 0 0}
 #focus{border-color:#6b5460}
 #volley{border-color:#796848}
+
+
+/* Read-only fire-control telemetry: all target geometry and battery information derives from live simulation state. */
+.target-telemetry{position:absolute;inset:0;z-index:3;pointer-events:none;color:#a8dfff;font:11px 'JetBrains Mono',monospace;text-shadow:0 1px 8px #001222}
+.target-telemetry[hidden]{display:none}
+.target-scope{position:absolute;inset:0;pointer-events:none}
+.scope-top{position:absolute;left:50%;top:75px;transform:translateX(-50%);letter-spacing:1.5px;font-size:10px;color:#a0e1ff}
+.scope-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:30px;font-weight:200;opacity:.58}
+.scope-bottom{position:absolute;left:50%;bottom:91px;transform:translateX(-50%);white-space:nowrap;opacity:.65;font-size:9px}
+.target-marker{position:absolute;width:64px;height:64px;transform:translate(-50%,-50%);border:1px solid rgba(150,215,254,.8);box-shadow:0 0 24px #2fa6e055}
+.target-marker:before,.target-marker:after{content:'';position:absolute;background:#8acbfa}
+.target-marker:before{width:16px;height:1px;left:23px;top:31px}
+.target-marker:after{width:1px;height:16px;top:23px;left:31px}
+.target-marker[hidden]{display:none}
+.target-panel,.fire-readout{position:absolute;bottom:96px;padding:12px;background:#061827c9;border:1px solid #4683a8b3;min-width:270px;max-width:42%;line-height:2}
+.target-panel{left:18px}.fire-readout{right:18px}
+.target-panel strong,.target-panel small{display:block}.target-panel strong{color:#e8f8ff;font-size:13px}.target-panel small{color:#84adcf}
+.target-panel div,.fire-readout div{display:flex;gap:8px;justify-content:space-between}
+.target-panel b,.fire-readout b{font-weight:600;color:#fff}
+.target-telemetry.cerberus-hud{color:#ffd499}.target-telemetry.cerberus-hud .target-marker,.target-telemetry.cerberus-hud .target-panel,.target-telemetry.cerberus-hud .fire-readout{border-color:#bf8b44}
+.target-telemetry.reaper-hud{color:#ff9aab}.target-telemetry.reaper-hud .target-marker,.target-telemetry.reaper-hud .target-panel,.target-telemetry.reaper-hud .fire-readout{border-color:#c14b60}
+.clean-recording .stage-tag,.clean-recording .camera-rail,.clean-recording .stage-foot,.clean-recording .target-telemetry{display:none!important}
+@media(max-width:900px){.target-panel,.fire-readout{bottom:75px;max-width:48%;min-width:0;font-size:9px;padding:7px}.scope-top{top:110px}.scope-bottom{display:none}}
