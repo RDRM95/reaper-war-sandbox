@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { Rng } from '@/core/rng';
 import { cinematicPair, cinematicWing } from './director';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { BattleSimulation } from '@/simulation/battle';
 import { SIM_DT } from '@/simulation/battle';
 import type { BattleEvent, ShipState } from '@/simulation/types';
@@ -34,7 +38,9 @@ export interface ShipVisual {
 }
 
 export interface GraphicsSettings {
-  quality: 'low' | 'medium' | 'high';
+  quality: 'low' | 'medium' | 'high' | 'ultra';
+  /** Subtle HDR bloom, enabled for Ultra by default. */
+  bloom?: boolean;
   showEngineGlow: boolean;
   pixelRatioCap: number;
   /** Distance-based level of detail (default on). */
@@ -46,6 +52,9 @@ const MAX_FAR_POINTS = 16384;
 
 export class BattleView {
   readonly renderer: THREE.WebGLRenderer;
+  private composer?: EffectComposer;
+  renderCpuMs = 0;
+  frameTriangles = 0;
   readonly scene = new THREE.Scene();
   readonly rig: CameraRig;
   readonly effects = new EffectsSystem();
@@ -91,7 +100,7 @@ export class BattleView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatioCap));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = settings.quality === 'ultra' ? 1.12 : 1.05;
     this.rig = new CameraRig(canvas.clientWidth / Math.max(1, canvas.clientHeight));
     // Image-based lighting so metallic hull plating reads as metal rather than
     // black: a neutral PMREM environment at low intensity.
@@ -128,6 +137,13 @@ export class BattleView {
     this.farPoints.frustumCulled = false;
     this.farPoints.name = 'far-points';
     this.scene.add(this.farPoints);
+    if (settings.bloom ?? settings.quality === 'ultra') {
+      const composer = new EffectComposer(this.renderer);
+      composer.addPass(new RenderPass(this.scene, this.rig.camera));
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.20, 0.22, 0.91));
+      composer.addPass(new OutputPass());
+      this.composer = composer;
+    }
     this.bind(sim);
   }
 
@@ -139,7 +155,9 @@ export class BattleView {
     this.effects.clear();
     this.nextBeamShieldAt.clear();
     if (this.env) this.scene.remove(this.env.group);
-    this.env = buildEnvironment(sim.config.environment);
+    const resolution = this.settings.quality === 'ultra' ? 2048 :
+      this.settings.quality === 'high' ? 1536 : this.settings.quality === 'medium' ? 1024 : 512;
+    this.env = buildEnvironment(sim.config.environment, resolution, this.settings.quality !== 'low');
     this.scene.add(this.env.group);
     this.sunLight.position.copy(this.env.sunDirection).multiplyScalar(10_000);
     this.sunLight.target.position.set(0, 0, 0);
@@ -352,6 +370,7 @@ export class BattleView {
     // Sky objects follow the camera so the starfield never parallaxes.
     for (const o of this.env.skyObjects) if (o.name !== 'sun') o.position.copy(this.rig.camera.position);
     this.env.group.getObjectByName('sun')?.position.copy(this.rig.camera.position).addScaledVector(this.env.sunDirection, 150_000);
+    if (this.env.clouds) this.env.clouds.rotation.y = 1.218 + sim.time * 0.00005;
   }
 
   private tintDamage(v: ShipVisual): void {
@@ -608,17 +627,24 @@ export class BattleView {
 
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
+    this.composer?.setSize(width, height);
     this.rig.resize(width / Math.max(1, height));
   }
 
   render(): void {
-    this.renderer.render(this.scene, this.rig.camera);
+    const started = performance.now();
+    this.renderer.info.autoReset = true;
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.rig.camera);
+    this.renderCpuMs = performance.now() - started;
     this.drawCalls = this.renderer.info.render.calls;
+    this.frameTriangles = this.renderer.info.render.triangles;
   }
 
   dispose(): void {
     this.effects.dispose();
     this.instances.dispose();
+    this.composer?.dispose();
     this.glowTex.dispose();
     for (const v of this.visuals.values()) {
       for (const glow of v.glows) glow.material.dispose();
