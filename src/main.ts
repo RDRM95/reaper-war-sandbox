@@ -68,11 +68,11 @@ app.innerHTML=`
   </aside>
   <main class="rw-middle">
     <div class="toolbar"><div class="seg"><button id="toggle3d" class="active">3D CINEMATIC</button><button id="toggle2d">2D FLEET VIEW</button></div>
-       <div class="seg"><button id="pause">Ⅱ</button><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="restart">↻</button></div></div>
+       <div class="seg"><button id="clean">HUD OFF</button><button id="pause">Ⅱ</button><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="restart">↻</button></div></div>
     <div id="stage" class="stage"><canvas id="scene3d"></canvas><canvas id="scene2d"></canvas>
       <div class="stage-tag"><small>BATTLESPACE / AUTONOMOUS SIMULATION</small><strong id="battle-name">SOL DEFENCE</strong></div>
       <div id="error" class="error" hidden></div>
-      <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY TRACK</button><button id="clean">HUD OFF</button></div>
+      <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY TRACK</button></div>
       <div class="stage-foot"><div><small>ENGAGEMENT TIME</small><strong id="clock">00:00</strong></div><div id="message">AWAITING DEPLOYMENT</div><div class="stage-legend"><span class="dot blue"></span> ALLIED <span class="dot red"></span> OPPOSING</div></div></div>
     <div class="bottom-line"><span>ORIGINAL REAPER WAR SIMULATION CORE</span><span>NO TACTICAL ORDERS</span><span>ME3-ERA SHIP GENERATORS</span></div>
   </main>
