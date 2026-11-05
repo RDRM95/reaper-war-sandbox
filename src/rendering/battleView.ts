@@ -55,6 +55,8 @@ export class BattleView {
   private composer?: EffectComposer;
   renderCpuMs = 0;
   frameTriangles = 0;
+  /** Opt-in deterministic screenshot camera; ordinary camera modes are unchanged. */
+  referenceCamera = false;
   readonly scene = new THREE.Scene();
   readonly rig: CameraRig;
   readonly effects = new EffectsSystem();
@@ -363,7 +365,7 @@ export class BattleView {
 
     // Camera.
     this.cine.age += dt;
-    this.updateCamera(dt);
+    if (!this.referenceCamera) this.updateCamera(dt);
     // Fill light rides with the camera.
     this.fillLight.position.copy(this.rig.camera.position);
     this.fillLight.target.position.copy(this.rig.camera.position).add(this.rig.camera.getWorldDirection(this.tmpB).multiplyScalar(100));
@@ -633,7 +635,8 @@ export class BattleView {
 
   render(): void {
     const started = performance.now();
-    this.renderer.info.autoReset = true;
+    this.renderer.info.autoReset = false;
+    this.renderer.info.reset();
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.rig.camera);
     this.renderCpuMs = performance.now() - started;
