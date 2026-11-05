@@ -56,8 +56,7 @@ export class InstancedFleet {
         if (batch) for (const part of batch.parts) {
           this.group.remove(part.mesh);
           part.mesh.geometry.dispose();
-          part.mesh.geometry.dispose();
-      part.mesh.dispose();
+          part.mesh.dispose();
         }
         batch = this.createBatch(classId, Math.max(64, 2 ** Math.ceil(Math.log2(count))));
         this.batches.set(classId, batch);
@@ -102,6 +101,7 @@ export class InstancedFleet {
   dispose(): void {
     for (const batch of this.batches.values()) for (const part of batch.parts) {
       this.group.remove(part.mesh);
+      part.mesh.geometry.dispose();
       part.mesh.dispose();
     }
     this.batches.clear();
