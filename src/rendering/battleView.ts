@@ -112,13 +112,14 @@ export class BattleView {
     };
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = settings.quality === 'ultra' ? 1.12 : 1.05;
+    // Cinematic is a darker space photograph, not an all-scene exposure boost.
+    this.renderer.toneMappingExposure = settings.quality === 'ultra' ? 0.82 : 1.05;
     this.rig = new CameraRig(canvas.clientWidth / Math.max(1, canvas.clientHeight));
     // Image-based lighting so metallic hull plating reads as metal rather than
     // black: a neutral PMREM environment at low intensity.
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.35;
+    this.scene.environmentIntensity = settings.quality === 'ultra' ? 0.22 : 0.35;
     pmrem.dispose();
     this.sim = sim;
 
@@ -133,12 +134,12 @@ export class BattleView {
     ctx.fillRect(0, 0, 64, 64);
     this.glowTex = new THREE.CanvasTexture(c);
 
-    this.sunLight = new THREE.DirectionalLight(0xfff2e0, 2.6);
+    this.sunLight = new THREE.DirectionalLight(0xfff2e0, settings.quality === 'ultra' ? 2.25 : 2.6);
     this.scene.add(this.sunLight);
-    this.scene.add(new THREE.HemisphereLight(0x8fb4ff, 0x1a1420, 0.7));
-    this.scene.add(new THREE.AmbientLight(0x404a60, 0.45));
+    this.scene.add(new THREE.HemisphereLight(0x8fb4ff, 0x1a1420, settings.quality === 'ultra' ? 0.35 : 0.7));
+    this.scene.add(new THREE.AmbientLight(0x404a60, settings.quality === 'ultra' ? 0.16 : 0.45));
     // Camera-relative fill so hulls stay readable when viewed against the sun.
-    this.fillLight = new THREE.DirectionalLight(0xb8c8e8, 0.9);
+    this.fillLight = new THREE.DirectionalLight(0xb8c8e8, settings.quality === 'ultra' ? 0.24 : 0.9);
     this.scene.add(this.fillLight, this.fillLight.target);
     this.scene.add(this.effects.group, this.instances.group);
     const farGeom = new THREE.BufferGeometry();
@@ -152,7 +153,8 @@ export class BattleView {
     if (settings.bloom ?? settings.quality === 'ultra') {
       const composer = new EffectComposer(this.renderer);
       composer.addPass(new RenderPass(this.scene, this.rig.camera));
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.20, 0.22, 0.91));
+      // Only true HDR emitters should bloom. Keep hulls, planet, and stars crisp.
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.075, 0.055, 1.5));
       composer.addPass(new OutputPass());
       this.composer = composer;
     }
@@ -169,7 +171,7 @@ export class BattleView {
     if (this.env) this.scene.remove(this.env.group);
     const resolution = this.settings.quality === 'ultra' ? 2048 :
       this.settings.quality === 'high' ? 1536 : this.settings.quality === 'medium' ? 1024 : 512;
-    this.env = buildEnvironment(sim.config.environment, resolution, this.settings.quality !== 'low');
+    this.env = buildEnvironment(sim.config.environment, resolution, this.settings.quality !== 'low', this.settings.quality === 'ultra');
     this.scene.add(this.env.group);
     this.sunLight.position.copy(this.env.sunDirection).multiplyScalar(10_000);
     this.sunLight.target.position.set(0, 0, 0);

@@ -163,6 +163,7 @@ void main(){
 }`;
 const ATMOSPHERE_FRAG = `
 uniform vec3 color;
+uniform float strength;
 varying vec3 vNormal;
 varying vec3 vView;
 varying vec3 vSun;
@@ -171,14 +172,15 @@ void main(){
   float limb = pow(horizon, 2.6);
   float day = smoothstep(-0.25, 0.48, dot(normalize(vNormal), normalize(vSun)));
   float forward = pow(max(0.0, dot(normalize(vSun), normalize(vView))), 12.0);
-  float density = limb * (0.06 + 0.60 * day + 0.12 * forward);
+  // No wide veil over the planet: scattering stays confined to its sunlit limb.
+  float density = limb * (0.025 + 0.46 * day + 0.055 * forward) * strength;
   vec3 scattering = color * vec3(0.72, 0.86, 1.12) * (0.75 + 0.25 * forward);
   gl_FragColor = vec4(scattering, clamp(density, 0.0, 0.75));
 }`;
 
-export function makeAtmosphere(radius: number, color: number, sunDirection = new THREE.Vector3(0.55, 0.35, -0.75)): THREE.Mesh {
+export function makeAtmosphere(radius: number, color: number, sunDirection = new THREE.Vector3(0.55, 0.35, -0.75), strength = 1): THREE.Mesh {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { color: { value: new THREE.Color(color) }, sunDirection: { value: sunDirection.clone().normalize() } },
+    uniforms: { color: { value: new THREE.Color(color) }, sunDirection: { value: sunDirection.clone().normalize() }, strength: { value: strength } },
     vertexShader: ATMOSPHERE_VERT,
     fragmentShader: ATMOSPHERE_FRAG,
     transparent: true,
@@ -237,7 +239,7 @@ export function makeStarfield(count = 6000, radius = 180_000): THREE.Points {
 }
 
 /** Soft galaxy band and nebula haze on a huge sphere. */
-export function makeGalaxyBand(radius = 170_000): THREE.Mesh {
+export function makeGalaxyBand(radius = 170_000, opacity = 0.6): THREE.Mesh {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
   canvas.height = 512;
@@ -267,7 +269,7 @@ export function makeGalaxyBand(radius = 170_000): THREE.Mesh {
   ctx.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending });
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
   const m = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), mat);
   m.rotation.z = 0.5;
   m.rotation.x = 0.2;
@@ -337,11 +339,11 @@ export interface EnvironmentBuild {
  * scale, placed so it fills the lower sky from a low-orbit battle) — this is
  * a visual choice, not a simulation value.
  */
-export function buildEnvironment(env: Environment, textureResolution = 1024, showClouds = true): EnvironmentBuild {
+export function buildEnvironment(env: Environment, textureResolution = 1024, showClouds = true, darkSpace = false): EnvironmentBuild {
   const group = new THREE.Group();
   const sky: THREE.Object3D[] = [];
   const stars = makeStarfield();
-  const band = makeGalaxyBand();
+  const band = makeGalaxyBand(170_000, darkSpace ? 0.22 : 0.6);
   sky.push(stars, band);
   group.add(stars, band);
 
@@ -362,7 +364,8 @@ export function buildEnvironment(env: Environment, textureResolution = 1024, sho
       const cloudMap = makeCloudTexture(style, Math.min(2048, textureResolution));
       const cloudMat = new THREE.MeshStandardMaterial({
         map: cloudMap, transparent: true, depthWrite: false, roughness: 1,
-        metalness: 0, color: 0xffffff, alphaTest: 0.015
+        metalness: 0, color: 0xffffff, alphaTest: 0.015,
+        opacity: darkSpace ? 0.7 : 1
       });
       clouds = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.008, 96, 64), cloudMat);
       clouds.position.copy(position);
@@ -370,7 +373,7 @@ export function buildEnvironment(env: Environment, textureResolution = 1024, sho
       clouds.name = 'clouds';
       group.add(clouds);
     }
-    const atm = makeAtmosphere(radius, style.atmosphere, sunDirection);
+    const atm = makeAtmosphere(radius, style.atmosphere, sunDirection, darkSpace ? 0.48 : 1);
     atm.position.copy(position);
     group.add(atm);
     planet = p;
@@ -429,9 +432,9 @@ export function buildEnvironment(env: Environment, textureResolution = 1024, sho
   sctx.fillStyle = grad;
   sctx.fillRect(0, 0, 256, 256);
   const sunTex = new THREE.CanvasTexture(sunCanvas);
-  const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, transparent: true, opacity: darkSpace ? 0.68 : 1, depthWrite: false, blending: THREE.AdditiveBlending }));
   sun.position.copy(sunDirection).multiplyScalar(150_000);
-  sun.scale.setScalar(26_000);
+  sun.scale.setScalar(darkSpace ? 18_000 : 26_000);
   sun.name = 'sun';
   group.add(sun);
   sky.push(sun);

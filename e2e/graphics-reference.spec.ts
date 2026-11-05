@@ -4,7 +4,7 @@ type Diagnostics = {
   seed:number;time:number;shipCount:number;liveShips:number;
   ships:Array<{id:string;side:string;position:{x:number;y:number;z:number}}>;
   frameMsAverage:number;frameMsP95:number;fps:number;simCpuMs:number;
-  view:{camera:number[];quaternion:number[];drawCalls:number;triangles:number;renderCpuMs:number;gpuFrameMs:number|null;quality:string}|null;
+  view:{camera:number[];quaternion:number[];drawCalls:number;triangles:number;renderCpuMs:number;gpuFrameMs:number|null;exposure:number;quality:string}|null;
 };
 
 async function snapshot(page:import('@playwright/test').Page):Promise<Diagnostics>{
@@ -37,6 +37,9 @@ test('fixed sol battle uses identical ships and camera at low and cinematic fide
   expect(ultra.view?.quaternion).toEqual(low.view?.quaternion);
   expect(ultra.view?.quality).toBe('ultra');
   expect(low.view?.quality).toBe('low');
+  // Cinematic must no longer raise the entire scene exposure and wash out black space.
+  expect(low.view?.exposure).toBeCloseTo(1.05, 2);
+  expect(ultra.view?.exposure).toBeCloseTo(0.82, 2);
   console.log('REAPER_GRAPHICS_METRICS '+JSON.stringify({
     environment:'GitHub Actions Ubuntu Chromium SwiftShader, not RTX 5090',
     low:{fps:low.fps,frameMsAverage:low.frameMsAverage,frameMsP95:low.frameMsP95,drawCalls:low.view?.drawCalls,triangles:low.view?.triangles,renderCpuMs:low.view?.renderCpuMs,gpuFrameMs:low.view?.gpuFrameMs},
