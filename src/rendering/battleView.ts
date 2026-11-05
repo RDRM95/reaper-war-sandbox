@@ -54,6 +54,8 @@ export class BattleView {
   readonly renderer: THREE.WebGLRenderer;
   private composer?: EffectComposer;
   renderCpuMs = 0;
+  gpuFrameMs: number | null = null;
+  private gpuTimer?: { gl: WebGL2RenderingContext; elapsed: number; disjoint: number; pending: WebGLQuery[] };
   frameTriangles = 0;
   /** Opt-in deterministic screenshot camera; ordinary camera modes are unchanged. */
   referenceCamera = false;
@@ -102,6 +104,12 @@ export class BattleView {
     this.instances.configure(settings.quality);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.quality !== 'low', powerPreference: 'high-performance', logarithmicDepthBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatioCap));
+    const gl = this.renderer.getContext() as WebGL2RenderingContext;
+    const timer = typeof gl.createQuery === 'function' ?
+      gl.getExtension('EXT_disjoint_timer_query_webgl2') : null;
+    if (timer) this.gpuTimer = {
+      gl, elapsed: timer.TIME_ELAPSED_EXT, disjoint: timer.GPU_DISJOINT_EXT, pending: []
+    };
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = settings.quality === 'ultra' ? 1.12 : 1.05;
@@ -640,8 +648,28 @@ export class BattleView {
     const started = performance.now();
     this.renderer.info.autoReset = false;
     this.renderer.info.reset();
-    if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.rig.camera);
+    const timer = this.gpuTimer;
+    if (timer) {
+      const previous = timer.pending[0];
+      if (previous && timer.gl.getQueryParameter(previous, timer.gl.QUERY_RESULT_AVAILABLE)) {
+        if (!timer.gl.getParameter(timer.disjoint)) {
+          this.gpuFrameMs = timer.gl.getQueryParameter(previous, timer.gl.QUERY_RESULT) / 1e6;
+        }
+        timer.gl.deleteQuery(previous);
+        timer.pending.shift();
+      }
+    }
+    const query = timer && timer.pending.length < 3 ? timer.gl.createQuery() : null;
+    if (query && timer) timer.gl.beginQuery(timer.elapsed, query);
+    try {
+      if (this.composer) this.composer.render();
+      else this.renderer.render(this.scene, this.rig.camera);
+    } finally {
+      if (query && timer) {
+        timer.gl.endQuery(timer.elapsed);
+        timer.pending.push(query);
+      }
+    }
     this.renderCpuMs = performance.now() - started;
     this.drawCalls = this.renderer.info.render.calls;
     this.frameTriangles = this.renderer.info.render.triangles;
@@ -650,6 +678,7 @@ export class BattleView {
   dispose(): void {
     this.effects.dispose();
     this.instances.dispose();
+    if(this.gpuTimer)for(const query of this.gpuTimer.pending)this.gpuTimer.gl.deleteQuery(query);
     this.composer?.dispose();
     this.glowTex.dispose();
     for (const v of this.visuals.values()) {
