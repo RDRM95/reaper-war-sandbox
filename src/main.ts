@@ -311,7 +311,7 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
     if(now-fpsLast>=1000){fpsValue=Math.round(fpsCounter*1000/(now-fpsLast));fpsCounter=0;fpsLast=now;}
     if(now-lastHud>280){lastHud=now;updateHud();
       $('perf').textContent=mode==='3d'&&view?
-        fpsValue+' FPS · '+view.drawCalls+' DRAWS · '+Math.round(view.frameTriangles/1000)+'K TRI · SIM '+simWorkMs.toFixed(1)+'MS':
+        fpsValue+' FPS · '+view.drawCalls+' DRAWS · '+Math.round(view.frameTriangles/1000)+'K TRI · GPU '+(view.gpuFrameMs?.toFixed(1)??'N/A')+'MS · SIM '+simWorkMs.toFixed(1)+'MS':
         fpsValue+' FPS · 2D · SIM '+simWorkMs.toFixed(1)+'MS';
     }
   }
@@ -328,7 +328,7 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
   view: view?{
     camera: view.rig.camera.position.toArray(),
     quaternion: view.rig.camera.quaternion.toArray(),
-    drawCalls:view.drawCalls,triangles:view.frameTriangles,renderCpuMs:view.renderCpuMs,
+    drawCalls:view.drawCalls,triangles:view.frameTriangles,renderCpuMs:view.renderCpuMs,gpuFrameMs:view.gpuFrameMs,
     lodCounts:view.lodCounts,quality:graphics
   }:null
 });
