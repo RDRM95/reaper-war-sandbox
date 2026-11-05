@@ -13,6 +13,10 @@ import { TargetTelemetry } from './spectator/targetTelemetry';
 
 type Fleet = { faction:MassEffectFactionId; name:string; formation:FormationType; counts:Record<string,number> };
 type ScreenMode = '3d'|'2d';
+type GraphicsPreset = 'low'|'medium'|'high'|'ultra';
+const parameters = new URLSearchParams(window.location.search);
+const referenceMode = parameters.get('reference') === 'sol-42';
+const referenceSeconds = Math.min(120, Math.max(0, Number(parameters.get('t') ?? 18) || 18));
 const $ = <T extends HTMLElement = HTMLElement>(id:string):T => {
   const value=document.getElementById(id);
   if(!value) throw new Error('Missing interface element: '+id);
@@ -38,6 +42,8 @@ let sim:BattleSimulation|null=null,view:BattleView|null=null,flat: FleetMap2D|nu
 let selectedShip:string|undefined,following=false,accum=0,last=0,lastHud=0;
 let viewError:string|undefined;
 let gunnery=false;
+let graphics:GraphicsPreset = 'high';
+let fpsCounter=0,fpsLast=0,fpsValue=0,simWorkMs=0;
 const feed:{time:number;message:string;side?:Side}[]=[];
 const app=document.getElementById('app')!;
 app.innerHTML=`
@@ -68,13 +74,13 @@ app.innerHTML=`
   </aside>
   <main class="rw-middle">
     <div class="toolbar"><div class="seg"><button id="toggle3d" class="active">3D CINEMATIC</button><button id="toggle2d">2D FLEET VIEW</button></div>
-       <div class="seg"><button id="clean">HUD OFF</button><button id="pause">Ⅱ</button><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="restart">↻</button></div></div>
+       <div class="seg"><select id="graphics" aria-label="Graphics preset" title="Graphics quality"><option value="low">PERFORMANCE</option><option value="medium">BALANCED</option><option value="high" selected>HIGH</option><option value="ultra">RTX CINEMATIC</option></select><button id="clean">HUD OFF</button><button id="pause">Ⅱ</button><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="restart">↻</button></div></div>
     <div id="stage" class="stage"><canvas id="scene3d"></canvas><canvas id="scene2d"></canvas>
       <div class="stage-tag"><small>BATTLESPACE / AUTONOMOUS SIMULATION</small><strong id="battle-name">SOL DEFENCE</strong></div>
       <div id="error" class="error" hidden></div>
       <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY TRACK</button></div>
       <div class="stage-foot"><div><small>ENGAGEMENT TIME</small><strong id="clock">00:00</strong></div><div id="message">AWAITING DEPLOYMENT</div><div class="stage-legend"><span class="dot blue"></span> ALLIED <span class="dot red"></span> OPPOSING</div></div></div>
-    <div class="bottom-line"><span>ORIGINAL REAPER WAR SIMULATION CORE</span><span>NO TACTICAL ORDERS</span><span>ME3-ERA SHIP GENERATORS</span></div>
+    <div class="bottom-line"><span>ORIGINAL REAPER WAR SIMULATION CORE</span><span>NO TACTICAL ORDERS</span><span>ME3-ERA SHIP GENERATORS</span><span id="perf" aria-label="Renderer performance">— FPS</span></div>
   </main>
   <aside class="pane rw-data"><div class="pane-heading">ENGAGEMENT TELEMETRY <span>02</span></div>
     <div class="team"><div class="team-title">SIDE A <strong id="aliveA">—</strong></div><div class="meter"><i id="meterA"></i></div><div class="pair">HULLS LOST <b id="lostA">—</b></div></div>
@@ -160,8 +166,18 @@ function pushEvent(e:BattleEvent){if(e.type==='ship_destroyed'){
 }
 function attachEvents(){if(!sim)return;const previous=sim.onEvent;sim.onEvent=e=>{previous?.(e);pushEvent(e);};}
 function createView(){if(!sim)return;view?.dispose();view=null;
-  try{view=new BattleView(third,sim,{quality:'high',pixelRatioCap:1.75,showEngineGlow:true,lod:true});
-    view.resize(third.clientWidth||900,third.clientHeight||550);view.rig.setMode('cinematic');attachEvents();
+  try{
+    const ratio = graphics==='low'?0.75:graphics==='medium'?1:graphics==='high'?1.25:1.6;
+    view=new BattleView(third,sim,{quality:graphics,pixelRatioCap:ratio,showEngineGlow:graphics!=='low',lod:true,bloom:graphics==='ultra'});
+    view.resize(third.clientWidth||900,third.clientHeight||550);
+    view.rig.setMode(referenceMode?'tactical':'cinematic');
+    if(referenceMode){
+      view.referenceCamera=true;
+      view.rig.camera.position.set(600,420,950);
+      view.rig.camera.lookAt(0,0,0);
+      view.rig.camera.updateMatrixWorld(true);
+    }
+    attachEvents();
   }catch(e){mode='2d';switchMode();reportError('3D renderer unavailable; switched to 2D: '+String(e));}
 }
 function launch(){try{
@@ -174,7 +190,12 @@ function launch(){try{
     extraA:rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[],
     extraB:rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[]});
   view?.dispose();view=null;
-  sim=new BattleSimulation(config);flat!.reset();selectedShip=undefined;following=false;gunnery=false;telemetry.show(false);feed.length=0;accum=0;paused=false;
+  sim=new BattleSimulation(config);
+  if(referenceMode){
+    for(let i=0;i<Math.round(referenceSeconds/SIM_DT)&&!sim.finished;i++)sim.step();
+  }
+  flat!.reset();selectedShip=undefined;following=false;gunnery=false;telemetry.show(false);feed.length=0;accum=0;paused=referenceMode;
+  if(referenceMode)$('pause').textContent='▶';
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
   if(audioEnabled){audio.init();}
@@ -195,6 +216,7 @@ $('toggle2d').addEventListener('click',()=>{mode='2d';switchMode();});
 $('launch').addEventListener('click',launch);$('restart').addEventListener('click',launch);
 $('pause').addEventListener('click',()=>{paused=!paused;$('pause').textContent=paused?'▶':'Ⅱ';$('state').textContent=paused?'PAUSED':'ENGAGEMENT LIVE';});
 $('speed').addEventListener('change',()=>{speed=Math.max(1,Number($<HTMLSelectElement>('speed').value)||1);});
+$('graphics').addEventListener('change',()=>{graphics=$<HTMLSelectElement>('graphics').value as GraphicsPreset;if(mode==='3d'&&sim)createView();});
 $('sound').addEventListener('click',()=>{audioEnabled=!audioEnabled;if(audioEnabled)audio.init();audio.settings.muted=!audioEnabled;audio.applySettings();$('sound').textContent=audioEnabled?'SOUND ON':'SOUND OFF';});
 function camera(mode:CameraMode){if(!view||!sim)return;view.rig.setMode(mode);}
 $('cine').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('cinematic');});
@@ -240,14 +262,34 @@ function frame(now:number){const dt=Math.min(.1,Math.max(0,(now-last)/1000||0));
         sim.step();accum-=SIM_DT;steps++;
         if(performance.now()-started>9)break;
       }
+      simWorkMs=performance.now()-started;
     }
     const alpha=paused?1:Math.min(1,accum/SIM_DT);
     if(mode==='3d'&&view){view.update(dt,alpha);view.render();telemetry.update(sim,view,selectedShip);}
     if(mode==='2d'){if(following&&selectedShip){const ship=sim.shipById.get(selectedShip);if(ship&&ship.alive)flat!.focus(ship);}flat!.draw(sim);}
-    if(now-lastHud>280){lastHud=now;updateHud();}
+    fpsCounter++;
+    if(!fpsLast)fpsLast=now;
+    if(now-fpsLast>=1000){fpsValue=Math.round(fpsCounter*1000/(now-fpsLast));fpsCounter=0;fpsLast=now;}
+    if(now-lastHud>280){lastHud=now;updateHud();
+      $('perf').textContent=mode==='3d'&&view?
+        fpsValue+' FPS · '+view.drawCalls+' DRAWS · '+Math.round(view.frameTriangles/1000)+'K TRI · SIM '+simWorkMs.toFixed(1)+'MS':
+        fpsValue+' FPS · 2D · SIM '+simWorkMs.toFixed(1)+'MS';
+    }
   }
   requestAnimationFrame(frame);
 }
+// Read-only testing interface. No gameplay state is changed by inspection.
+(window as Window & { __reaperDiagnostics?: () => unknown }).__reaperDiagnostics=()=>({
+  seed:sim?.config.seed,time:sim?.time,shipCount:sim?.ships.length,
+  liveShips:sim?.ships.filter(s=>s.alive&&!s.escaped).length,
+  ships:sim?.ships.map(s=>({id:s.id,side:s.side,position:{...s.pos},heading:{...s.heading}})),
+  view: view?{
+    camera: view.rig.camera.position.toArray(),
+    quaternion: view.rig.camera.quaternion.toArray(),
+    drawCalls:view.drawCalls,triangles:view.frameTriangles,renderCpuMs:view.renderCpuMs,
+    lodCounts:view.lodCounts,quality:graphics
+  }:null
+});
 applyScenario('sol');switchMode();launch();requestAnimationFrame(frame);
 window.addEventListener('error',e=>{if(e.error)reportError(e.error);});
 window.addEventListener('unhandledrejection',e=>reportError(e.reason));
