@@ -28,15 +28,17 @@ export class InstancedFleet {
     template.group.traverse(obj => {
       const source = obj as THREE.Mesh;
       if (!source.isMesh) return;
-      const mesh = new THREE.InstancedMesh(source.geometry, source.material, capacity);
+      // Bake source-local offsets into geometry so eye, engines and plate
+      // positions rotate with each ship, rather than the global scene axes.
+      const geometry = source.geometry.clone();
+      geometry.applyMatrix4(source.matrixWorld);
+      const mesh = new THREE.InstancedMesh(geometry, source.material, capacity);
       mesh.name = 'instanced-' + classId + '-' + source.name;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       // Dynamic large-fleet instance bounds are recomputed only by GPU frustum
       // culling at per-instance LOD; do not cull the entire batch as one hull.
       mesh.frustumCulled = false;
       mesh.count = 0;
-      mesh.matrix.copy(source.matrixWorld);
-      mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
       parts.push({ mesh, detail: DETAIL_MESH_NAMES.has(source.name) });
     });
@@ -53,7 +55,9 @@ export class InstancedFleet {
       if (!batch || batch.capacity < count) {
         if (batch) for (const part of batch.parts) {
           this.group.remove(part.mesh);
-          part.mesh.dispose();
+          part.mesh.geometry.dispose();
+          part.mesh.geometry.dispose();
+      part.mesh.dispose();
         }
         batch = this.createBatch(classId, Math.max(64, 2 ** Math.ceil(Math.log2(count))));
         this.batches.set(classId, batch);
