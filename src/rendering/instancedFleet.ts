@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ShipState } from '@/simulation/types';
 import { KM } from './geometry';
 import { DETAIL_MESH_NAMES, type LodLevel } from './lod';
@@ -28,51 +29,71 @@ export class InstancedFleet {
     const template = getShipTemplate(classId);
     template.group.updateMatrixWorld(true);
     const parts: Part[] = [];
+
+    // A model may contain dozens of separate meshes using the same faction
+    // material. Merge those *once per class*, before instancing, so 5,000
+    // ships incur draw calls per material rather than per decorative plate.
+    // Hero ships continue to use their original unmodified scene hierarchy.
+    type GeometryGroup = {
+      geometries: THREE.BufferGeometry[];
+      material: THREE.Material | THREE.Material[];
+      detail: boolean;
+      name: string;
+    };
+    const groups = new Map<string, GeometryGroup>();
+    let standalone = 0;
     template.group.traverse(obj => {
       const source = obj as THREE.Mesh;
       if (!source.isMesh) return;
-      // Bake source-local offsets into geometry so eye, engines and plate
-      // positions rotate with each ship, rather than the global scene axes.
       const geometry = source.geometry.clone();
       geometry.applyMatrix4(source.matrixWorld);
-      const mesh = new THREE.InstancedMesh(geometry, source.material, capacity);
-      mesh.name = 'instanced-' + classId + '-' + source.name;
+      const material = source.material;
+      const detail = DETAIL_MESH_NAMES.has(source.name);
+      const hasMorphs = Object.keys(geometry.morphAttributes).length !== 0;
+      const signature = Object.entries(geometry.attributes)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, attr]) => name + ':' + attr.itemSize + ':' + attr.normalized + ':' + attr.constructor.name)
+        .join('|');
+      // Multi-material and morphing meshes must remain independent. The
+      // geometry signature guards mergeGeometries against incompatible data.
+      const key = Array.isArray(material) || hasMorphs
+        ? 'standalone:' + standalone++
+        : material.uuid + ':' + detail + ':' + !!geometry.index + ':' + signature;
+      let group = groups.get(key);
+      if (!group) {
+        group = { geometries: [], material, detail, name: source.name };
+        groups.set(key, group);
+      }
+      group.geometries.push(geometry);
+    });
+
+    const addPart = (geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], detail: boolean, name: string): void => {
+      const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+      mesh.name = 'instanced-' + classId + '-' + name;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      // Dynamic large-fleet instance bounds are recomputed only by GPU frustum
-      // culling at per-instance LOD; do not cull the entire batch as one hull.
+      // Culling happens per ship before it enters a batch. Batch-wide Three.js
+      // frustum culling would hide visible ships when other instances move.
       mesh.frustumCulled = false;
       mesh.count = 0;
       this.group.add(mesh);
-      parts.push({ mesh, detail: DETAIL_MESH_NAMES.has(source.name) });
-    });
-    // A single additional draw call per hull class gives all distant engines
-    // tapered, translucent exhaust plumes; no per-ship sprites are allocated.
-    const exhausts: THREE.BufferGeometry[] = [];
-    const L = Math.max(0.8, template.lengthUnits);
-    const nodes = classId.startsWith('reaper') || classId === 'harbinger'
-      ? template.engineNodes.slice(0, 1) : template.engineNodes.slice(0, 6);
-    for (const node of nodes) {
-      const glow = new THREE.ConeGeometry(Math.max(0.06, L*0.037), L*0.24, 7, 1, true);
-      glow.rotateX(Math.PI/2);
-      glow.translate(node.x,node.y,node.z-L*0.12);
-      exhausts.push(glow);
-    }
-    let trail:THREE.InstancedMesh|undefined;
-    if (exhausts.length) {
-      const geometry = mergeGeometries(exhausts, false);
-      for(const g of exhausts)g.dispose();
-      if(geometry){
-        const material=new THREE.MeshBasicMaterial({
-          color:template.glowColor,transparent:true,opacity:0.25,
-          blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide
-        });
-        trail=new THREE.InstancedMesh(geometry,material,capacity);
-        trail.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        trail.count=0;trail.frustumCulled=false;
-        this.group.add(trail);
+      parts.push({ mesh, detail });
+    };
+
+    for (const group of groups.values()) {
+      if (group.geometries.length === 1) {
+        addPart(group.geometries[0], group.material, group.detail, group.name);
+        continue;
+      }
+      const merged = mergeGeometries(group.geometries, false);
+      if (merged) {
+        group.geometries.forEach(g => g.dispose());
+        addPart(merged, group.material, group.detail, group.name);
+      } else {
+        // Defensive fallback for unusual third-party models.
+        for (const geometry of group.geometries) addPart(geometry, group.material, group.detail, group.name);
       }
     }
-    return { capacity, parts, trail };
+    return { capacity, parts };
   }
 
   begin(ships: readonly ShipState[]): void {
