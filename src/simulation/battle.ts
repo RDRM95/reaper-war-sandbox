@@ -29,6 +29,7 @@ import { summarise } from './results';
 import { BATTLESPACE_SCALE as S } from './constants';
 import { advanceMotion } from './motion';
 import { SeparationField } from './separation';
+import { CombatSpatialIndex } from './spatialIndex';
 import { HadesVolleyCoordinator } from './volleys';
 import { ShipNameGenerator } from './shipNames';
 import {
@@ -96,6 +97,7 @@ export class BattleSimulation implements AiContext {
   private engagementAnnounced = new Set<string>();
   private hadesVolleys = new HadesVolleyCoordinator();
   private separationField?: SeparationField;
+  private spatialIndex?: CombatSpatialIndex;
   /** Indexed once per tick instead of scanning the full fleet for every carrier. */
   private carrierFighters = new Map<string, ShipState[]>();
   private primaryVolleys = new PrimaryVolleyControl();
@@ -288,6 +290,11 @@ export class BattleSimulation implements AiContext {
       (s.side === 'A' ? A : B).push(s);
     }
     this.sideCache = { tick: this.tick, A, B };
+  }
+
+  /** Spatial broad-phase, retaining ship deployment order for deterministic ties. */
+  enemiesNear(side: Side, origin: Vec3, radius: number): ShipState[] {
+    return this.spatialIndex?.enemiesNear(side, origin, radius) ?? this.enemiesOf(side);
   }
 
   /** Living, present ships on the opposing side (cached per tick). */
@@ -485,6 +492,7 @@ export class BattleSimulation implements AiContext {
       if (!group) { group = []; this.carrierFighters.set(fighter.carrierId, group); }
       group.push(fighter);
     }
+    this.spatialIndex = new CombatSpatialIndex(this.ships, dt);
     this.separationField = new SeparationField(this.ships);
     for (const ship of this.ships) {
       if (!ship.alive || ship.escaped) continue;
@@ -589,6 +597,8 @@ export class BattleSimulation implements AiContext {
           f.slot = v3((this.rng.next() - 0.5) * 6 * S, (2 + this.rng.next() * 2) * S, (10 + this.rng.next() * 3) * S);
           this.ships.push(f);
           this.shipById.set(f.id, f);
+          this.sideCache.tick = -1;
+          this.spatialIndex?.add(f, this.ships.length - 1);
           this.emit({ t: this.time, type: 'ship_deployed', shipId: f.id, classId: f.classId, faction: f.faction, side: f.side, name: f.name });
         }
         h.remaining -= n;
@@ -697,7 +707,7 @@ export class BattleSimulation implements AiContext {
         }
       }
       if (!missile) {
-        for (const e of this.enemiesOf(ship.side)) {
+        for (const e of this.enemiesNear(ship.side, origin, def.range)) {
           if (!e.alive || e.escaped) continue;
           if (e.role !== 'fighter') continue;
           const d = distance(origin, e.pos);
@@ -709,7 +719,7 @@ export class BattleSimulation implements AiContext {
       }
       if (!missile && !target && def.kind === 'gardian') {
         // GARDIAN lasers can scorch nearby hulls (bypassing barriers) — low priority.
-        for (const e of this.enemiesOf(ship.side)) {
+        for (const e of this.enemiesNear(ship.side, origin, def.range)) {
           if (!e.alive || e.escaped) continue;
           const d = distance(origin, e.pos);
           if (d <= def.range && d < best) {
@@ -720,7 +730,7 @@ export class BattleSimulation implements AiContext {
       }
       if (!missile && !target) return;
     } else {
-      target = weaponTarget(ship, fleet, w, id => this.shipById.get(id), this.enemiesOf(ship.side));
+      target = weaponTarget(ship, fleet, w, id => this.shipById.get(id), this.enemiesNear(ship.side, origin, def.range));
       if (!target) return;
     }
 
