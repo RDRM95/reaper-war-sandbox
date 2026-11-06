@@ -46,12 +46,19 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
   const axial = dot(force, facing);
   const forward = scale(facing, axial);
   const lateral = sub(force, forward);
-  const lateralFraction = ship.role === 'fighter' ? 0.85 :
+  const typicalLateralFraction = ship.role === 'fighter' ? 0.85 :
     ship.role === 'frigate' ? 0.68 :
     ship.role === 'reaper_destroyer' ? 0.62 :
     ship.role === 'cruiser' ? 0.46 :
     ship.role === 'carrier' ? 0.24 :
     ship.role === 'dreadnought' || ship.role === 'reaper_capital' ? 0.28 : 0.42;
+  // Fine station keeping and collision avoidance use small omnidirectional
+  // thrusters. Do not cripple the final arrival controller or clearance field
+  // merely to prevent conspicuous sideways motion during powered cruising.
+  const stationKeeping = Math.max(8, ship.lengthKm * 3);
+  const lateralFraction = dist < stationKeeping ||
+    (goal.avoidanceAcceleration && length(goal.avoidanceAcceleration) > 1e-6)
+    ? 1 : typicalLateralFraction;
   // Slowing/braking is allowed through forward-facing RCS. Only forward
   // acceleration lights the dominant aft engine; inertia alone does not.
   force = add(forward,scale(lateral,lateralFraction));
@@ -70,7 +77,9 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
   const dv = sub(velocity, before);
   const dvLength = length(dv);
   if (dvLength > acceleration * dt) velocity = addScaled(before, dv, acceleration * dt / dvLength);
-  if (dist < 0.002 && length(velocity) < acceleration * dt && (!goal.avoidanceAcceleration || length(goal.avoidanceAcceleration) < acceleration * 0.01)) {
+  if (dist < 0.002 && length(before) <= acceleration * dt &&
+      length(velocity) <= acceleration * dt &&
+      (!goal.avoidanceAcceleration || length(goal.avoidanceAcceleration) < acceleration * 0.01)) {
     ship.pos = { ...goal.position };
     ship.vel = v3();
     ship.engineThrust = 0;
