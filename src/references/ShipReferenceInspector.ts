@@ -35,6 +35,7 @@ const css=`
 .shipref-cell footer{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:6px}
 .shipref-cell input[type=file]{width:100%;max-width:170px;font-size:9px}
 .shipref-cell button{background:#193b51;border:1px solid #526d85;color:#eee;font-size:10px;padding:4px 7px;cursor:pointer}
+.shipref-cell button:disabled{opacity:.42;cursor:not-allowed}
 .shipref-note{width:100%;min-height:30px;background:#091c2d;color:#dceaff;border:1px solid #3c5870;resize:vertical}
 .shipref-unverified{color:#f7c68f}
 .shipref-pass{color:#78e3b4}
@@ -79,6 +80,22 @@ function showInspector():void{
   const opacityLabel=make('label');text(opacityLabel,'REFERENCE OPACITY ');
   const alpha=document.createElement('input');alpha.type='range';alpha.min='0';alpha.max='100';alpha.value='50';
   opacityLabel.append(alpha);top.append(opacityLabel);
+  const exportReport=button('EXPORT QA JSON',()=>{
+    const reviewed=records.map(match=>({
+      referenceId:match.reference.id,name:match.reference.name,
+      geometryStatus:match.reference.geometry_status,sourceVisibility:match.reference.source_visibility,
+      classId:match.classId,modelAvailable:match.modelAvailable,actualGameMesh:false,
+      views:Object.fromEntries(views.map(v=>[v.name,{
+        approval:sessionStorage.getItem(key(match.reference.id,v.name))??'NOT VERIFIED',
+        notes:sessionStorage.getItem(key(match.reference.id,v.name)+':note')??''
+      }]))
+    }));
+    const blob=new Blob([JSON.stringify({source:'user-reference-pack-v1',reviewed},null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);const link=document.createElement('a');
+    link.href=url;link.download='reaper-war-ship-reference-audit.json';document.body.append(link);link.click();
+    link.remove();URL.revokeObjectURL(url);
+  });
+  top.append(exportReport);
   const close=button('CLOSE',()=>{release();panel.remove();});top.append(close);
   panel.append(top);
   const main=make('main','shipref-main'),context=make('div','shipref-context'),grid=make('div','shipref-grid');
@@ -138,9 +155,11 @@ function showInspector():void{
       file.addEventListener('change',()=>{
         const f=file.files?.[0];if(!f)return;
         const url=URL.createObjectURL(f);urls.push(url);img.src=url;img.hidden=false;
+        const approve=foot.querySelector<HTMLButtonElement>('[data-qa-pass]');if(approve)approve.disabled=false;
       });
       foot.append(file);
-      const pass=button('PASS',()=>{status.textContent='PASS · LOCAL REVIEW';status.className='shipref-pass';sessionStorage.setItem(key(ref.id,v.name),'pass');});
+      const pass=button('PASS',()=>{if(img.hidden)return;status.textContent='PASS · LOCAL REVIEW';status.className='shipref-pass';sessionStorage.setItem(key(ref.id,v.name),'pass');});
+      pass.dataset.qaPass='yes';pass.disabled=true;pass.title='Upload a reference screenshot before marking PASS';
       const fail=button('FAIL',()=>{status.textContent='FAIL · LOCAL REVIEW';status.className='shipref-unverified';sessionStorage.setItem(key(ref.id,v.name),'fail');});
       foot.append(pass,fail);cell.append(foot);
       const note=document.createElement('textarea');note.className='shipref-note';
