@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { BattleSimulation } from '@/simulation/battle';
-import type { ShipState } from '@/simulation/types';
+import type { ShipState, BattleEvent } from '@/simulation/types';
+import { primaryGunneryMount } from '@/rendering/gunnery';
+import { inWeaponArc } from '@/simulation/fireControl';
 import type { BattleView } from '@/rendering/battleView';
 import { KM } from '@/rendering/geometry';
 
@@ -18,20 +20,39 @@ export class TargetTelemetry {
   private panel:HTMLDivElement;
   private readout:HTMLDivElement;
   private base=new THREE.Vector3();
+  private readonly line:HTMLDivElement;
+  private readonly charge:HTMLElement;
+  private lastShotTime=-100;
+  private lastImpactTime=-100;
+  private lastShotLabel='FIRE CONTROL STANDBY';
   private target3=new THREE.Vector3();
   enabled=false;
   constructor(private stage:HTMLElement){
     const root=document.createElement('div');
     root.className='target-telemetry';
     root.hidden=true;
-    root.innerHTML='<div class="target-scope"><span class="scope-top">LIVE BALLISTIC TELEMETRY // SIMULATED TRACK</span><div class="scope-center">+</div><span class="scope-bottom">OBSERVATION ONLY · ALL FIRE FROM SIMULATION</span></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="target-panel"></div><div class="fire-readout"></div>';
+    root.innerHTML='<div class="target-scope"><span class="scope-top">FIRST-PERSON GUNNERY // DIRECT LIVE FIRE CONTROL</span><div class="scope-center">+</div><span class="scope-bottom">WEAPONS ARE AUTONOMOUS · NO SYNTHETIC FIRING</span></div><div class="gunnery-line" role="status"></div><div class="charge-track"><i class="charge-fill"></i></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="target-panel"></div><div class="fire-readout"></div>';
     stage.append(root);
     this.root=root;
+    this.line=root.querySelector('.gunnery-line') as HTMLDivElement;
+    this.charge=root.querySelector('.charge-fill') as HTMLElement;
     this.marker=root.querySelector('.target-marker') as HTMLDivElement;
     this.panel=root.querySelector('.target-panel') as HTMLDivElement;
     this.readout=root.querySelector('.fire-readout') as HTMLDivElement;
   }
   show(on:boolean){this.enabled=on;this.root.hidden=!on;}
+  /** Called only for actual simulation events. No visual timers fire weapons. */
+  notify(event:BattleEvent,shipId:string|undefined):void{
+    if(!shipId)return;
+    if(event.type==='weapon_fired'&&event.shipId===shipId){
+      this.lastShotTime=event.t;
+      this.lastShotLabel='SHOT CONFIRMED · '+event.kind.replaceAll('_',' ').toUpperCase();
+    }
+    if(event.type==='projectile_impact'&&event.shipId===shipId){
+      this.lastImpactTime=event.t;
+    }
+  }
+
   update(sim:BattleSimulation,view:BattleView,shipId:string|undefined){
     if(!this.enabled)return;
     const source=shipId?sim.shipById.get(shipId):undefined;
@@ -39,20 +60,31 @@ export class TargetTelemetry {
       this.panel.textContent='SELECT A LIVING VESSEL TO ACCESS ITS GUNNERY TELEMETRY';
       this.readout.textContent='NO ACTIVE WEAPON PLATFORM';
       this.marker.hidden=true;
-      this.root.classList.remove('reaper-hud','cerberus-hud');
+      this.root.classList.remove('reaper-hud','cerberus-hud','firing','impact');
+      this.line.textContent='AWAITING ACTIVE WEAPON PLATFORM';
+      this.charge.style.width='0%';
       return;
     }
     this.root.classList.toggle('reaper-hud',source.faction==='reaper');
     this.root.classList.toggle('cerberus-hud',source.faction==='cerberus');
     const target=source.targetId?sim.shipById.get(source.targetId):undefined;
-    const weapons=source.weapons.filter(w=>w.def.kind!=='gardian');
-    const primary=weapons[0];
+    const primary= view.gunneryWeaponIndex===undefined ? primaryGunneryMount(source) :
+      (source.weapons[view.gunneryWeaponIndex] ?? primaryGunneryMount(source));
     const weaponLabel=primary?.def.name??'NO OFFENSIVE BATTERY';
     const cooldown=Math.max(0,primary?.cooldown??0);
     const charge=pct(Math.max(0,(primary?.def.cooldown??0)-cooldown),primary?.def.cooldown??0);
     const heat=pct(source.heat,source.heatCapacity);
     const range=target&&target.alive?Math.hypot(target.pos.x-source.pos.x,target.pos.y-source.pos.y,target.pos.z-source.pos.z):0;
     const inRange=primary&&target?range<=primary.def.range:false;
+    const linedUp=!!(target&&primary&&inWeaponArc(source,primary,target.pos));
+    const cooling=cooldown>0.03;
+    const lock=target&&target.alive?(inRange&&linedUp?'TARGET IN FIRING ARC':inRange?'ROTATING TO TARGET':'TRACKING / OUT OF RANGE'):'SEARCHING FOR CONTACT';
+    this.root.classList.toggle('firing',sim.time-this.lastShotTime<=0.22);
+    this.root.classList.toggle('impact',sim.time-this.lastImpactTime<=0.28);
+    this.charge.style.width=charge+'%';
+    const flash=sim.time-this.lastShotTime<=1.1 ? this.lastShotLabel :
+      (cooling?'MAIN GUN RECHARGING':inRange&&linedUp?'FIRING SOLUTION READY':lock);
+    this.line.textContent=flash+' · '+lock;
     this.panel.innerHTML='<strong>'+tidy(source.name)+'</strong><small>'+tidy(weaponLabel)+'</small><div>WEAPON READY <b>'+charge+'%</b> · HEAT <b>'+heat+'%</b></div><div>AMMUNITION <b>'+(primary?.ammo===undefined?'UNLIMITED':String(primary.ammo))+'</b> · KILLS <b>'+source.stats.kills+'</b></div>';
     this.readout.innerHTML=target&&target.alive?
       '<div>TRACK <b>'+tidy(target.name)+'</b></div><div>RANGE <b>'+metres(range)+'</b> · '+(inRange?'WITHIN BATTERY RANGE':'OUTSIDE BATTERY RANGE')+'</div><div>TARGET BARRIERS <b>'+pct(target.barriers,target.maxBarriers)+'%</b> · HULL <b>'+pct(target.hull,target.maxHull)+'%</b></div>':

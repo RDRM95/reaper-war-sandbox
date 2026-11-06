@@ -2,7 +2,7 @@ import type { Sourced } from '@/core/provenance';
 
 export const MASS_EFFECT_FACTION_IDS = ['alliance', 'turian', 'asari', 'salarian', 'quarian', 'geth', 'cerberus', 'reaper'] as const;
 export const CROSSOVER_FACTION_IDS = ['unsc', 'covenant', 'imperium', 'chaos', 'skynet'] as const;
-export const SANDBOX_FACTION_IDS = ['prothean', 'past_cycle', 'player_civ'] as const;
+export const SANDBOX_FACTION_IDS = ['prothean', 'past_cycle', 'player_civ', 'axiom_guard', 'exile_hegemony', 'terminus_compact'] as const;
 export type MassEffectFactionId = (typeof MASS_EFFECT_FACTION_IDS)[number];
 export type CrossoverFactionId = (typeof CROSSOVER_FACTION_IDS)[number];
 export type SandboxFactionId = (typeof SANDBOX_FACTION_IDS)[number];

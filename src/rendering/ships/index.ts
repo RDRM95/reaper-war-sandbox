@@ -8,12 +8,19 @@ import { buildHarbinger, buildReaperCapital, buildReaperDestroyer } from './reap
 import { buildSalarianCruiser, buildSalarianDreadnought, buildSalarianFighter, buildStgFrigate } from './salarian';
 import { buildTurianCruiser, buildTurianDreadnought, buildTurianFighter, buildTurianFrigate } from './turian';
 import type { BuiltShip } from './types';
+import { buildAxiomAncient, buildAxiomWarden, buildExileArk, buildExileRaider, buildCompactSiege, buildCompactGunship } from './expansion';
 import { buildChaosDesolator, buildChaosMurder, buildCovenantCas, buildCovenantCcs, buildImperiumLunar, buildImperiumRetribution, buildUnscInfinity, buildUnscMarathon } from './crossover';
 import { buildPastCycleCruiser, buildPastCycleDreadnought, buildPlayerCivCruiser, buildPlayerCivDreadnought, buildProtheanCruiser, buildProtheanDreadnought, buildSkynetHarvester, buildSkynetHunter } from './auHumanity';
 
 export type { BuiltShip } from './types';
 
 const BUILDERS: Record<string, () => BuiltShip> = {
+  axiom_ancient: buildAxiomAncient,
+  axiom_warden: buildAxiomWarden,
+  exile_ark: buildExileArk,
+  exile_raider: buildExileRaider,
+  compact_siege: buildCompactSiege,
+  compact_gunship: buildCompactGunship,
   alliance_dreadnought: buildAllianceDreadnought,
   alliance_omaha: buildAllianceOmaha,
   alliance_valkyrie: buildAllianceValkyrie,

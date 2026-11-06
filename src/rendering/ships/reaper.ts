@@ -104,41 +104,108 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
   plateMesh.name = 'plates';
   group.add(plateMesh);
 
-  // --- Arms: tapered tubes rooted on the lower-forward hull, sweeping forward.
-  const armGeoms: THREE.BufferGeometry[] = [];
-  const seamGeoms: THREE.BufferGeometry[] = [];
+  // --- Articulated, rigid mechanical limbs.
+  // A Reaper is NOT soft rubber. Every segment remains solid metal and moves
+  // only around mechanical shoulder/elbow bearings. Each pivot is a lightweight
+  // Transform node; the geometry itself is never deformed or vertex-skinned.
   const armLen = L * opts.armLengthFactor;
   const n = opts.arms;
   for (let i = 0; i < n; i++) {
-    // Distribute arms around the lower 240° of the hull so the top stays clear (hooded look).
-    const spread = opts.arms === 4 ? Math.PI * 1.65 : Math.PI * 1.35;
+    const spread = n === 4 ? Math.PI * 1.65 : Math.PI * 1.35;
     const ang = -Math.PI / 2 - spread / 2 + (spread * (i + 0.5)) / n;
     const rootR = R * 0.78;
     const root = new THREE.Vector3(Math.cos(ang) * rootR, Math.sin(ang) * rootR * 0.8, L * 0.1);
     const outward = new THREE.Vector3(Math.cos(ang), Math.sin(ang) * 0.8, 0).normalize();
-    const c1 = root.clone().add(outward.clone().multiplyScalar(R * (n === 4 ? 1.8 : 1.15))).add(new THREE.Vector3(0, 0, armLen * 0.18));
-    const c2 = root.clone().add(outward.clone().multiplyScalar(R * (n === 4 ? 2.0 : 1.6))).add(new THREE.Vector3(0, 0, armLen * 0.56));
-    const tip = root.clone().add(outward.clone().multiplyScalar(R * (n === 4 ? 1.7 : 1.1))).add(new THREE.Vector3(0, -R * 0.35, armLen));
-    const curve = new THREE.CatmullRomCurve3([root, c1, c2, tip]);
+    const c1 = root.clone().addScaledVector(outward, R * (n === 4 ? 1.8 : 1.15))
+      .add(new THREE.Vector3(0, 0, armLen * 0.18));
+    const c2 = root.clone().addScaledVector(outward, R * (n === 4 ? 2.0 : 1.6))
+      .add(new THREE.Vector3(0, 0, armLen * 0.56));
+    const tip = root.clone().addScaledVector(outward, R * (n === 4 ? 1.7 : 1.1))
+      .add(new THREE.Vector3(0, -R * 0.35, armLen));
+    const upperEnd = c2.clone().sub(root);
+    const lowerEnd = tip.clone().sub(c2);
     const baseR = R * 0.34;
-    // Segmented, tapering arm with plated ridges.
-    armGeoms.push(taperedTube(curve, (t) => baseR * (1 - t * 0.82) * (1 + 0.12 * Math.sin(t * 22)), 30, 10, 0.78));
-    // Red seam along each arm (thin tube offset slightly outward).
-    const seamCurve = new THREE.CatmullRomCurve3([root.clone().add(outward.clone().multiplyScalar(baseR * 0.95)), c1.clone().add(outward.clone().multiplyScalar(baseR * 0.8)), c2.clone().add(outward.clone().multiplyScalar(baseR * 0.5)), tip.clone()]);
-    seamGeoms.push(taperedTube(seamCurve, (t) => baseR * 0.1 * (1 - t * 0.8), 20, 5));
-    // Joint knuckles.
-    for (const kt of [0.22, 0.5]) {
-      const k = curve.getPointAt(kt);
-      armGeoms.push(new THREE.SphereGeometry(baseR * (1 - kt * 0.8) * 1.15, 8, 6).translate(k.x, k.y, k.z));
-    }
+    const pivot = new THREE.Group();
+    pivot.name = 'reaper-shoulder';
+    pivot.userData = { reaperRig: 'shoulder', index: i, side: Math.sign(outward.x) || 1, destroyer: n === 4 };
+    pivot.position.copy(root);
+    group.add(pivot);
+
+    const upper = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, 0, 0),
+      c1.clone().sub(root),
+      upperEnd,
+    ]);
+    const upperMesh = new THREE.Mesh(
+      taperedTube(upper, t => baseR * (1 - 0.42 * t) * (1 + 0.07 * Math.sin(17 * t)), 20, 9, 0.78),
+      p.hullDark
+    );
+    upperMesh.name = 'reaper-arm-plate';
+    pivot.add(upperMesh);
+    const upperSeam = new THREE.Mesh(taperedTube(new THREE.CatmullRomCurve3([
+      outward.clone().multiplyScalar(baseR*.88),
+      c1.clone().sub(root).addScaledVector(outward, baseR*.72),
+      upperEnd.clone().addScaledVector(outward, baseR*.54),
+    ]), t => baseR * .075 * (1 - .3*t), 12, 5), p.windows);
+    upperSeam.name = 'reaper-arm-seam';
+    pivot.add(upperSeam);
+    const shoulderRing = new THREE.Mesh(new THREE.SphereGeometry(baseR*1.1, 9, 7), p.accent);
+    shoulderRing.name = 'reaper-joint';
+    pivot.add(shoulderRing);
+
+    const elbow = new THREE.Group();
+    elbow.name = 'reaper-elbow';
+    elbow.userData = { reaperRig: 'elbow', index: i, side: Math.sign(outward.x) || 1, destroyer: n === 4 };
+    elbow.position.copy(upperEnd);
+    pivot.add(elbow);
+    const lower = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, 0, 0),
+      lowerEnd.clone().multiplyScalar(.56).addScaledVector(outward, R * .07),
+      lowerEnd
+    ]);
+    const lowerMesh = new THREE.Mesh(
+      taperedTube(lower, t => baseR * .59 * (1 - .74*t) * (1 + .06*Math.cos(16*t)), 16, 8, .82),
+      p.hullDark
+    );
+    lowerMesh.name = 'reaper-arm-tip';
+    elbow.add(lowerMesh);
+    const lowerSeam = new THREE.Mesh(taperedTube(new THREE.CatmullRomCurve3([
+      outward.clone().multiplyScalar(baseR*.48),
+      lowerEnd.clone().multiplyScalar(.56).addScaledVector(outward, baseR*.36),
+      lowerEnd.clone(),
+    ]), t => baseR * .046 * (1-t*.5), 12, 5), p.windows);
+    lowerSeam.name = 'reaper-arm-seam';
+    elbow.add(lowerSeam);
+    const knuckle = new THREE.Mesh(new THREE.SphereGeometry(baseR*.7, 9, 7), p.accent);
+    knuckle.name = 'reaper-joint';
+    elbow.add(knuckle);
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(baseR*.32, baseR*1.5, 6), p.hullDark);
+    claw.rotation.x = Math.PI/2;
+    claw.position.copy(lowerEnd);
+    claw.name = 'reaper-claw';
+    elbow.add(claw);
   }
-  const armMesh = new THREE.Mesh(merge(armGeoms), p.hullDark);
-  armMesh.name = 'arms';
-  armMesh.userData.armCount = n;
-  group.add(armMesh);
-  const seamMesh = new THREE.Mesh(merge(seamGeoms), p.windows);
-  seamMesh.name = 'seams';
-  group.add(seamMesh);
+
+  // Five short jointed facial feelers, distinct from the four/six locomotor
+  // limbs. The head moves in very small increments, like heavy actuators.
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI*.88 + (Math.PI*.76*i/4);
+    const r = R*.47;
+    const joint = new THREE.Group();
+    joint.name = 'reaper-mandible';
+    joint.userData = { reaperRig: 'mandible', index: i, side: Math.cos(a)>=0?1:-1, destroyer:n===4 };
+    joint.position.set(Math.cos(a)*r, -R*.72 + Math.sin(a)*R*.13, L*.225);
+    const length = (n===4?.25:.19)*L;
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(),
+      new THREE.Vector3(Math.cos(a)*R*.15,-R*.035,length*.45),
+      new THREE.Vector3(Math.cos(a)*R*.10,-R*.10,length)
+    ]);
+    const feeler = new THREE.Mesh(taperedTube(curve, t=>R*.11*(1-t*.8), 11, 6), p.hullDark);
+    feeler.name = 'reaper-mandible-tip';
+    joint.add(feeler);
+    group.add(joint);
+  }
 
   // --- Weapon aperture: the "eye" in the hood, lower-forward.
   const eyeZ = L * 0.2;
@@ -155,6 +222,26 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
   iris.position.set(0, eyeY, eyeZ + R * 0.1);
   iris.name = 'eye';
   group.add(iris);
+  // Armoured shutters expose the emitter as it charges. These never alter
+  // weapon timing or the collision model: just hinged plates above the eye.
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2;
+    const shutter = new THREE.Group();
+    shutter.name = 'reaper-shutter';
+    shutter.userData = { reaperRig:'shutter', index:i };
+    shutter.position.set(
+      Math.cos(angle)*R*.13,
+      eyeY + Math.sin(angle)*R*.13,
+      eyeZ + R*.16
+    );
+    shutter.rotation.z = angle;
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(R*.18,R*.065,R*.19),p.hullDark);
+    plate.name = 'aperture-shutter';
+    plate.position.set(R*.065,0,0);
+    shutter.add(plate);
+    group.add(shutter);
+  }
+
 
   // --- Rear "tail" emitters and dorsal spines.
   const tailGlow = new THREE.Mesh(zCylinder(R * 0.1, R * 0.05, R * 0.5, 8), p.windows);
@@ -193,13 +280,15 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
   const overall = opts.arms === 4 ? 1.6 : opts.spines ? 24 : 20;
   const fit = overall / Math.max(1e-6, bounds.max.z - bounds.min.z);
   const centreZ = (bounds.max.z + bounds.min.z) / 2;
-  // Bake scaling into original geometry: renderer and hit silhouette agree.
-  group.traverse(object => {
-    const mesh = object as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    mesh.geometry.translate(0, 0, -centreZ).scale(fit, fit, fit);
-    mesh.position.multiplyScalar(fit);
-  });
+  // Normalise the *whole articulated skeleton* under a single internal
+  // rig transform. Baking transforms into each mesh would break local joints,
+  // while scaling the outer root would also affect simulation placement.
+  const model = new THREE.Group();
+  model.name = 'reaper-model-root';
+  while (group.children.length) model.add(group.children[0]);
+  model.position.z = -centreZ * fit;
+  model.scale.setScalar(fit);
+  group.add(model);
   const point = (x: number, y: number, z: number) => new THREE.Vector3(x * fit, y * fit, (z - centreZ) * fit);
   return {
     group,

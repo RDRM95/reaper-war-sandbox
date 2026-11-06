@@ -1,4 +1,5 @@
 import { v3, type Vec3 } from '@/core/vec3';
+import { EXPANDED_BATTLES } from './expandedBattles';
 import { getPreset } from '@/timelines/presets';
 import { TECH_KEYS, type RuleSet, type TechModifiers } from '@/timelines/rules';
 import { TECH_RANGE } from '@/timelines/schema';
@@ -596,6 +597,32 @@ export const SCENARIOS: ScenarioDef[] = [
     build: (rules, seed, ws) => base('custom', 'Custom Battle', 'custom', seed, rules, 'deep_space', 420, 'Destroy the enemy force.', ws, []),
   },
 ];
+
+/** Additional AU chapters remain regular BattleConfig presets, so every
+ * front end (including the numerical resolver) uses the same validated rosters. */
+SCENARIOS.push(...EXPANDED_BATTLES.map(expanded => ({
+  id:expanded.id,name:expanded.name,subtitle:expanded.subtitle,
+  environment:expanded.environment,description:expanded.description,
+  recommendedRules:[expanded.rules],auOnly:true,objective:expanded.objective,
+  maxDuration:expanded.maxDuration,
+  briefing:[expanded.era,expanded.description],
+  build:(rules:RuleSet,seed:number,worldState:Record<string,string>):BattleConfig=>({
+    id:expanded.id+'-'+rules.id+'-'+seed,
+    name:expanded.name,scenarioId:expanded.id,alternateHistory:true,
+    seed,rules,environment:expanded.environment,maxDuration:expanded.maxDuration,
+    perspectiveSide:'A',objective:expanded.objective,worldState,
+    fleets:([
+      {side:'A' as Side,f:expanded.a,z:-expanded.distance/2,heading:1},
+      {side:'B' as Side,f:expanded.b,z:expanded.distance/2,heading:-1}
+    ]).map(({side,f,z,heading})=>({
+      id:expanded.id+'-'+side.toLowerCase(),name:f.name,faction:f.faction,side,
+      formation:f.formation,
+      ships:Object.entries(f.counts).filter(([,n])=>n>0).map(([classId,count])=>({classId,count})),
+      position:v3(0,0,z),heading:v3(0,0,heading),
+      playerControlled:side==='A',techOverride:f.tech
+    }))
+  })
+})));
 
 export const getScenario = (id: string): ScenarioDef => {
   const s = SCENARIOS.find((x) => x.id === id);

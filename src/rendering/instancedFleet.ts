@@ -21,6 +21,7 @@ export class InstancedFleet {
   private readonly quat = new THREE.Quaternion();
   private readonly matrix = new THREE.Matrix4();
   private readonly fwd = new THREE.Vector3(0, 0, 1);
+  private readonly bankQuat = new THREE.Quaternion();
   private trailsEnabled = true;
   configure(quality: 'low'|'medium'|'high'|'ultra'): void { this.trailsEnabled = quality !== 'low'; }
 
@@ -131,6 +132,14 @@ export class InstancedFleet {
       ship.prevHeading.z + (ship.heading.z - ship.prevHeading.z) * alpha
     ).normalize();
     this.quat.setFromUnitVectors(this.fwd, this.dir);
+    // ME-style screen behaviour: fighters bank hard during attack passes,
+    // escorts bank slightly, while dreadnoughts/Reapers stay massive and level.
+    // This is visual only; no change to heading, velocity, physics or AI.
+    const turn=ship.prevHeading.x*ship.heading.z-ship.prevHeading.z*ship.heading.x;
+    const factor=ship.role==='fighter'?.36:ship.role==='frigate'?.12:
+      ship.role==='cruiser'?.025:ship.role==='reaper_destroyer'?.015:0;
+    const bank=Math.max(-factor,Math.min(factor,turn*3.5));
+    if(bank!==0)this.quat.multiply(this.bankQuat.setFromAxisAngle(this.fwd,bank));
     this.matrix.compose(this.pos, this.quat, IDENTITY);
     for (const part of batch.parts) {
       if (lod === 'reduced' && part.detail) continue;

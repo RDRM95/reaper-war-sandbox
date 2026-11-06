@@ -18,6 +18,9 @@ import { instantiateShip, getShipTemplate, type BuiltShip } from './ships';
 import { InstancedFleet } from './instancedFleet';
 import { DETAIL_MESH_NAMES, lodLevel, type LodLevel } from './lod';
 import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
+import { weaponWorldOffset } from '@/simulation/fireControl';
+import { primaryGunneryMount } from './gunnery';
+import { animateReaperRig, captureReaperRig, isArticulatedReaper, type ReaperRig } from './reaperMotion';
 
 /**
  * Binds a BattleSimulation to a Three.js scene. The simulation owns all
@@ -35,6 +38,8 @@ export interface ShipVisual {
   tinted: boolean;
   /** Current level of detail. */
   lod: LodLevel;
+  /** Per-vessel skeletal pivots, only allocated for nearby/selected Reapers. */
+  reaperRig?: ReaperRig;
 }
 
 export interface GraphicsSettings {
@@ -74,6 +79,9 @@ export class BattleView {
   alpha = 0;
   selectedIds = new Set<string>();
   followId?: string;
+  /** Last confirmed non-PD firing mount for the first-person view. */
+  gunneryWeaponIndex?: number;
+  gunneryShot?: { t: number; shipId: string; targetId: string; weaponIndex: number; kind: string };
   /** Cinematic director state. */
   private directorRng = new Rng(1);
   private cine: { fromId?: string; toId?: string; age: number; hold: number; wreck?: boolean; members?: string[] } = { age: 0, hold: 0 };
@@ -177,9 +185,11 @@ export class BattleView {
     this.sunLight.target.position.set(0, 0, 0);
     this.scene.add(this.sunLight.target);
     // Build detailed objects lazily for nearby/selected ships; the rest use GPU batches.
-    sim.onEvent = (e) => this.eventQueue.push(e);
+    sim.onEvent = e => this.queueEvent(e);
     this.selectedIds.clear();
     this.followId = undefined;
+    this.gunneryWeaponIndex = undefined;
+    this.gunneryShot = undefined;
     this.cine = { age: 0, hold: 0 };
     this.cineShot = 0;
     this.directorRng = new Rng(`director-${sim.config.seed}`);
@@ -214,7 +224,8 @@ export class BattleView {
     built.group.name = ship.id;
     built.group.userData.shipId = ship.id;
     this.scene.add(built.group);
-    v = { ship, built, glows, removed: false, tinted: false, lod: 'full' };
+    v = { ship, built, glows, removed: false, tinted: false, lod: 'full',
+      reaperRig: isArticulatedReaper(ship) ? captureReaperRig(built.group, ship.id) : undefined };
     this.visuals.set(ship.id, v);
     this.placeVisual(v, 1);
     return v;
@@ -231,12 +242,15 @@ export class BattleView {
     this.tmpA.set(s.prevHeading.x + (s.heading.x - s.prevHeading.x) * alpha, s.prevHeading.y + (s.heading.y - s.prevHeading.y) * alpha, s.prevHeading.z + (s.heading.z - s.prevHeading.z) * alpha).normalize();
     this.tmpQ.setFromUnitVectors(this.fwd, this.tmpA);
     g.quaternion.copy(this.tmpQ);
-    // Subtle bank for small ships based on lateral velocity.
-    if (s.role === 'fighter' || s.role === 'frigate') {
-      const right = this.tmpB.set(this.tmpA.z, 0, -this.tmpA.x);
-      const lat = s.vel.x * right.x + s.vel.z * right.z;
-      g.rotateZ(-lat * (s.role === 'fighter' ? 0.5 : 0.25));
-    }
+    // Match GPU-instanced animation: agile fighter attack banking, subtle
+    // escort roll, and heavy capital hulls remaining level during slow turns.
+    const turn = s.prevHeading.x * s.heading.z - s.prevHeading.z * s.heading.x;
+    const right = this.tmpB.set(this.tmpA.z, 0, -this.tmpA.x);
+    const lat = s.vel.x * right.x + s.vel.z * right.z;
+    const factor = s.role === 'fighter' ? 0.36 : s.role === 'frigate' ? 0.12 :
+      s.role === 'cruiser' ? 0.025 : s.role === 'reaper_destroyer' ? 0.015 : 0;
+    const bank = THREE.MathUtils.clamp(turn * 3.5 + lat * factor * 0.12, -factor, factor);
+    if (bank) g.rotateZ(bank);
   }
 
   // ------------------------------------------------------------- per frame
@@ -312,6 +326,7 @@ export class BattleView {
         const v = existing ?? this.ensureVisual(ship);
         if (v.removed) continue;
         this.placeVisual(v, alpha);
+        if (v.reaperRig) animateReaperRig(v.reaperRig, ship, sim.time, dt);
         this.applyLod(v, level);
         v.built.group.visible = true;
         nearVisuals++;
@@ -446,12 +461,27 @@ export class BattleView {
     this.selectedIds.delete(ship.id);
   }
 
+  /** Public event entry point: the controller attaches one listener even
+   * when toggling Fullscreen, 2D or rebuilding graphics presets. */
+  queueEvent(e: BattleEvent): void {
+    this.eventQueue.push(e);
+  }
+
   private processEvents(): void {
     const q = this.eventQueue;
     this.eventQueue = [];
     for (const e of q) {
       switch (e.type) {
         case 'weapon_fired': {
+          // This is an authoritative fixed-step fire event, not an animation timer.
+          if (this.rig.mode === 'gunnery' && e.shipId === this.followId) {
+            const shooter = this.sim.getShip(e.shipId);
+            const mount = shooter?.weapons[e.weaponIndex];
+            if (mount && !mount.def.antiSmall) {
+              this.gunneryWeaponIndex = e.weaponIndex;
+              this.gunneryShot = { t: e.t, shipId: e.shipId, targetId: e.targetId, weaponIndex: e.weaponIndex, kind: e.kind };
+            }
+          }
           if (e.kind !== 'mass_accelerator') break;
           const ship = this.sim.getShip(e.shipId);
           const v = ship ? this.visuals.get(ship.id) : undefined;
@@ -553,6 +583,45 @@ export class BattleView {
       }
       subject = this.subjectFor(ship);
     }
+    let gunnery: { position: THREE.Vector3; aim: THREE.Vector3 } | undefined;
+    if (this.rig.mode === 'gunnery') {
+      let ship = this.followId ? sim.getShip(this.followId) : undefined;
+      if (!ship || !ship.alive || ship.escaped) {
+        // Fallback picks one persistent live warship, never a random camera cut.
+        ship = sim.ships.find(s => s.alive && !s.escaped &&
+          s.side === sim.config.perspectiveSide && s.role === 'dreadnought') ??
+          sim.ships.find(s => s.alive && !s.escaped &&
+          s.side === sim.config.perspectiveSide && s.weapons.some(w => !w.def.antiSmall));
+        this.followId = ship?.id;
+        this.gunneryWeaponIndex = undefined;
+      }
+      if (ship) {
+        const primary = primaryGunneryMount(ship);
+        let weapon = this.gunneryWeaponIndex === undefined ? primary :
+          ship.weapons[this.gunneryWeaponIndex];
+        if (!weapon || weapon.def.antiSmall) weapon = primary;
+        if (weapon) {
+          // The weapon offset and selected target come from the current sim tick.
+          const pos = weaponWorldOffset(ship, weapon);
+          const interpolation = Math.max(0, Math.min(1, this.alpha));
+          const fwd = new THREE.Vector3(ship.heading.x, ship.heading.y, ship.heading.z).normalize();
+          const station = new THREE.Vector3(
+            (pos.x + (ship.prevPos.x - ship.pos.x) * (1 - interpolation)) * KM,
+            (pos.y + (ship.prevPos.y - ship.pos.y) * (1 - interpolation)) * KM,
+            (pos.z + (ship.prevPos.z - ship.pos.z) * (1 - interpolation)) * KM
+          ).addScaledVector(fwd, Math.max(0.18, ship.radiusKm * KM * 0.2));
+          const targetId = weapon.beamRemaining > 0 && weapon.beamTargetId ?
+            weapon.beamTargetId : ship.targetId;
+          const target = targetId ? sim.getShip(targetId) : undefined;
+          const aim = target && target.alive && !target.escaped ?
+            new THREE.Vector3(target.pos.x, target.pos.y, target.pos.z).multiplyScalar(KM) :
+            station.clone().addScaledVector(fwd, 2000);
+          // Optical alignment is observational; the combat solver still
+          // determines if the actual mount can fire or hit the target.
+          gunnery = { position: station, aim };
+        }
+      }
+    }
     let cinematic: CinematicFrame | undefined;
     if (this.rig.mode === 'cinematic') {
       this.cine.hold -= dt;
@@ -597,7 +666,7 @@ export class BattleView {
         }
       }
     }
-    this.rig.update(dt, { subject, cinematic, projectile, fleetCentre });
+    this.rig.update(dt, { subject, cinematic, projectile, gunnery, fleetCentre });
   }
 
   private pickCinematicShot(): void {

@@ -8,6 +8,8 @@ export type SoundId =
   | 'ui_hover'
   | 'ui_confirm'
   | 'alert'
+  | 'target_lock'
+  | 'battery_ready'
   | 'ma_small'
   | 'ma_large'
   | 'hades_internal'
@@ -148,6 +150,14 @@ export class AudioEngine {
       case 'alert':
         this.tone('square', 440, 440, 0.12, 0.06 * att, bus);
         this.tone('square', 440, 440, 0.12, 0.06 * att, bus, 0.2);
+        break;
+      case 'target_lock':
+        // Soft two-pulse tracking confirmation, restrained and diegetic.
+        this.tone('sine', 920, 1070, 0.075, 0.07 * att, bus);
+        this.tone('sine', 1120, 1360, 0.10, 0.045 * att, bus, 0.105);
+        break;
+      case 'battery_ready':
+        this.tone('triangle', 420, 760, 0.15, 0.06 * att, bus);
         break;
       case 'ma_small':
         this.noise(0.12, 'bandpass', 1800, 1.2, 0.25 * att, bus);
