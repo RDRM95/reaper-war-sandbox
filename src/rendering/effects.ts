@@ -70,7 +70,9 @@ export class EffectsSystem {
   private readonly tracerDummy = new THREE.Object3D();
 
   // Beams.
-  private readonly beamPool: { core: THREE.Mesh; glow: THREE.Mesh; used: boolean }[] = [];
+  private readonly beamPool: { core: THREE.Mesh; glow: THREE.Mesh; impact: THREE.Sprite }[] = [];
+  private readonly beamGeometry = new THREE.CylinderGeometry(1,1,1,10,1,true);
+  private readonly beamMid = new THREE.Vector3();
   private readonly beamCoreMatReaper = new THREE.MeshBasicMaterial({ color: 0xfff0e0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
   private readonly beamGlowMatReaper = new THREE.MeshBasicMaterial({ color: 0xff1738, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
   private readonly beamCoreMatThanix = new THREE.MeshBasicMaterial({ color: 0xf0f8ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -93,6 +95,7 @@ export class EffectsSystem {
   private flashLightLife = 0;
 
   constructor() {
+    this.beamGeometry.rotateX(Math.PI/2);
     const tracerGeo = new THREE.BoxGeometry(0.1, 0.1, 1);
     const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
     this.tracerMesh = new THREE.InstancedMesh(tracerGeo, tracerMat, this.tracerCapacity);
@@ -336,44 +339,47 @@ export class EffectsSystem {
   }
 
   /** Active beams: start/end in render units. */
+  /** Beam segments and contact sprites are allocated only once per visible
+   * beam, then reused. No per-frame spark spawning, mesh geometry creation
+   * or large white impact blooms when hundreds of Reapers fire together.
+   */
   setBeams(beams: { start: THREE.Vector3; end: THREE.Vector3; kind: 'thanix' | 'reaper_beam'; intensity: number }[]): void {
-    for (const b of this.beamPool) b.used = false;
-    for (let i=0; i<beams.length && i<this.beamMax; i++) {
-      const b=beams[i];
-      let slot = this.beamPool[i];
-      if (!slot) {
-        const geo = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true);
-        geo.rotateX(Math.PI / 2);
-        const core = new THREE.Mesh(geo, this.beamCoreMatReaper);
-        const glow = new THREE.Mesh(geo, this.beamGlowMatReaper);
-        core.frustumCulled = false;
-        glow.frustumCulled = false;
-        this.group.add(core, glow);
-        slot = { core, glow, used: false };
-        this.beamPool.push(slot);
+    const visible=Math.min(beams.length,this.beamMax);
+    for(let i=0;i<visible;i++){
+      const beam=beams[i];
+      let slot=this.beamPool[i];
+      if(!slot){
+        const core=new THREE.Mesh(this.beamGeometry,this.beamCoreMatReaper);
+        const glow=new THREE.Mesh(this.beamGeometry,this.beamGlowMatReaper);
+        const impact=new THREE.Sprite(new THREE.SpriteMaterial({
+          map:this.redTex,color:0xffffff,transparent:true,opacity:.55,
+          blending:THREE.AdditiveBlending,depthWrite:false,
+        }));
+        core.frustumCulled=false;glow.frustumCulled=false;
+        this.group.add(core,glow,impact);
+        slot={core,glow,impact};this.beamPool.push(slot);
       }
-      slot.used = true;
-      const reaper = b.kind === 'reaper_beam';
-      slot.core.material = reaper ? this.beamCoreMatReaper : this.beamCoreMatThanix;
-      slot.glow.material = reaper ? this.beamGlowMatReaper : this.beamGlowMatThanix;
-      const len = b.start.distanceTo(b.end);
-      const mid = b.start.clone().add(b.end).multiplyScalar(0.5);
-      const coreR = (reaper ? 0.09 : 0.05) * b.intensity;
-      const glowR = coreR * 3.2;
-      for (const [mesh, r] of [[slot.core, coreR], [slot.glow, glowR]] as [THREE.Mesh, number][]) {
-        mesh.visible = true;
-        mesh.position.copy(mid);
-        mesh.lookAt(b.end);
-        mesh.scale.set(r, r, len);
-      }
-      // Beam impact bloom at the end point.
-      if(i%6===0)this.spark(b.end, new THREE.Vector3(), 0.08, coreR * 5, coreR * 9, reaper ? this.redTex : this.blueTex, 0xffffff);
+      const reaper=beam.kind==='reaper_beam';
+      slot.core.material=reaper?this.beamCoreMatReaper:this.beamCoreMatThanix;
+      slot.glow.material=reaper?this.beamGlowMatReaper:this.beamGlowMatThanix;
+      const len=beam.start.distanceTo(beam.end);
+      const mid=this.beamMid.copy(beam.start).add(beam.end).multiplyScalar(.5);
+      const coreR=(reaper?.09:.05)*beam.intensity;
+      slot.core.visible=true;
+      slot.core.position.copy(mid);
+      slot.core.lookAt(beam.end);
+      slot.core.scale.set(coreR,coreR,len);
+      slot.glow.visible=true;
+      slot.glow.position.copy(mid);
+      slot.glow.lookAt(beam.end);
+      slot.glow.scale.set(coreR*2.6,coreR*2.6,len);
+      slot.impact.visible=true;
+      slot.impact.position.copy(beam.end);
+      slot.impact.scale.setScalar(coreR*6);
+      (slot.impact.material as THREE.SpriteMaterial).map=reaper?this.redTex:this.blueTex;
     }
-    for (const b of this.beamPool) {
-      if (!b.used) {
-        b.core.visible = false;
-        b.glow.visible = false;
-      }
+    for(let i=visible;i<this.beamPool.length;i++){
+      const slot=this.beamPool[i];slot.core.visible=false;slot.glow.visible=false;slot.impact.visible=false;
     }
   }
 
