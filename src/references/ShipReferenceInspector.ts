@@ -12,7 +12,7 @@ const views=[
   {name:'STERN',pos:[0,0,-1],up:[0,1,0]},
 ] as const;
 const css=`
-.shipref-open{position:fixed;right:16px;bottom:16px;z-index:9998;cursor:pointer;
+.shipref-open{position:fixed;right:12px;top:12px;bottom:auto;z-index:9998;cursor:pointer;
   font:600 12px ui-monospace,monospace;padding:10px 14px;color:#d8ebfb;
   background:#10283b;border:1px solid #6a9ebf}
 .shipref-panel{position:fixed;inset:5vh 4vw;z-index:9999;display:flex;flex-direction:column;
@@ -32,11 +32,11 @@ const css=`
 .shipref-stage{position:relative;aspect-ratio:1.48;background:#020712;overflow:hidden}
 .shipref-stage canvas,.shipref-stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .shipref-stage img{pointer-events:none}
-.shipref-cell footer{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:6px}
+.shipref-cell footer{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:8px 6px;position:relative;z-index:3;min-height:42px;isolation:isolate}
 .shipref-cell input[type=file]{width:100%;max-width:170px;font-size:9px}
 .shipref-cell button{background:#193b51;border:1px solid #526d85;color:#eee;font-size:10px;padding:4px 7px;cursor:pointer}
 .shipref-cell button:disabled{opacity:.42;cursor:not-allowed}
-.shipref-note{width:100%;min-height:30px;background:#091c2d;color:#dceaff;border:1px solid #3c5870;resize:vertical}
+.shipref-note{display:block;position:relative;z-index:1;box-sizing:border-box;width:100%;max-height:100px;min-height:46px;margin:10px 0 0;background:#091c2d;color:#dceaff;border:1px solid #3c5870;resize:vertical}
 .shipref-unverified{color:#f7c68f}
 .shipref-pass{color:#78e3b4}
 @media(max-width:900px){.shipref-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
