@@ -182,7 +182,7 @@ export class BattleView {
     this.sunLight.target.position.set(0, 0, 0);
     this.scene.add(this.sunLight.target);
     // Build detailed objects lazily for nearby/selected ships; the rest use GPU batches.
-    sim.onEvent = (e) => this.eventQueue.push(e);
+    sim.onEvent = e => this.queueEvent(e);
     this.selectedIds.clear();
     this.followId = undefined;
     this.gunneryWeaponIndex = undefined;
@@ -451,6 +451,12 @@ export class BattleView {
     this.rig.addShake(Math.min(1, (v.built.lengthUnits * 30) / Math.max(50, camDist)));
     if (this.followId === ship.id) this.followId = undefined;
     this.selectedIds.delete(ship.id);
+  }
+
+  /** Public event entry point: the controller attaches one listener even
+   * when toggling Fullscreen, 2D or rebuilding graphics presets. */
+  queueEvent(e: BattleEvent): void {
+    this.eventQueue.push(e);
   }
 
   private processEvents(): void {
