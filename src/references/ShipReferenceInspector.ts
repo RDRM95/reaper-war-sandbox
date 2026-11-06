@@ -11,6 +11,10 @@ const views=[
   {name:'BOW',pos:[0,0,1],up:[0,1,0]},
   {name:'STERN',pos:[0,0,-1],up:[0,1,0]},
 ] as const;
+const heroViews = [
+  {name:'HERO 3/4 FRONT',pos:[1,.7,1.4],up:[0,1,0]},
+  {name:'HERO 3/4 AFT',pos:[-1,.7,-1.4],up:[0,1,0]},
+] as const;
 const css=`
 .shipref-open{position:fixed;right:12px;top:12px;bottom:auto;z-index:9998;cursor:pointer;
   font:600 12px ui-monospace,monospace;padding:10px 14px;color:#d8ebfb;
@@ -77,6 +81,13 @@ function showInspector():void{
     select.append(option);
   }
   top.append(select);
+  let includeHero=false;
+  const heroButton=button('SHOW 3/4 VIEWS',()=>{
+    includeHero=!includeHero;
+    heroButton.textContent=includeHero?'HIDE 3/4 VIEWS':'SHOW 3/4 VIEWS';
+    render();
+  });
+  top.append(heroButton);
   const opacityLabel=make('label');text(opacityLabel,'REFERENCE OPACITY ');
   const alpha=document.createElement('input');alpha.type='range';alpha.min='0';alpha.max='100';alpha.value='50';
   opacityLabel.append(alpha);top.append(opacityLabel);
@@ -85,7 +96,7 @@ function showInspector():void{
       referenceId:match.reference.id,name:match.reference.name,
       geometryStatus:match.reference.geometry_status,sourceVisibility:match.reference.source_visibility,
       classId:match.classId,modelAvailable:match.modelAvailable,actualGameMesh:false,
-      views:Object.fromEntries(views.map(v=>[v.name,{
+      views:Object.fromEntries([...views,...heroViews].map(v=>[v.name,{
         approval:sessionStorage.getItem(key(match.reference.id,v.name))??'NOT VERIFIED',
         notes:sessionStorage.getItem(key(match.reference.id,v.name)+':note')??''
       }]))
@@ -154,7 +165,8 @@ function showInspector():void{
     scene.add(new THREE.AmbientLight(0xb9cde3,1.2));
     const directional=new THREE.DirectionalLight(0xffffff,2);
     directional.position.set(extent,extent,extent);scene.add(directional);
-    for(const v of views){
+    const angles=[...views,...(includeHero?heroViews:[])];
+    for(const v of angles){
       const cell=make('article','shipref-cell'),head=make('header');
       const heading=make('strong');heading.textContent=v.name;
       const status=make('span','shipref-unverified');status.textContent='NOT VERIFIED';
