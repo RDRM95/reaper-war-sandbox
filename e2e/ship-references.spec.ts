@@ -17,7 +17,7 @@ test('ship registry is immutable and distinguishes original AU models from on-sc
   });
   expect(data.total).toBe(43);expect(data.p0).toBe(13);expect(data.apex).toBe(7);
   expect(data.immutable).toBe(true);expect(data.unapproved).toBe(true);
-  expect(data.missing).toContain('ALL-001');
+  expect(data.missing).not.toContain('ALL-001');
   expect(data.sovereign).toBe(2000);expect(data.destroyer).toBe(160);
 });
 
