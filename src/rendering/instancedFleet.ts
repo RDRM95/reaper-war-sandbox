@@ -147,8 +147,12 @@ export class InstancedFleet {
       if (n >= batch.capacity) throw new Error('Instancing capacity exceeded for ' + ship.classId);
       part.mesh.setMatrixAt(n, this.matrix);
     }
-    if (this.trailsEnabled && batch.trail && lod !== 'point') {
+    const thrust=ship.engineThrust??.5;
+    if (this.trailsEnabled && batch.trail && lod !== 'point' && !ship.inertialCoast && thrust>.09) {
       const i=batch.trail.count++;
+      // Reuse the current hull transform but lengthen exhaust only under thrust.
+      const scale=new THREE.Vector3(1,1,.2+.8*thrust);
+      this.matrix.compose(this.pos,this.quat,scale);
       batch.trail.setMatrixAt(i,this.matrix);
     }
   }
