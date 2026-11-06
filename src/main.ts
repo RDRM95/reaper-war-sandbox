@@ -262,6 +262,12 @@ function currentConfig(){
     config.alternateHistory=true;
     config.objective=chapter.objective;
     config.maxDuration=chapter.maxDuration;
+    // The same faction technology must apply to physical battles and
+    // instantaneous numerical estimates.
+    for(const fleet of config.fleets){
+      if(fleet.id==='custom-a'&&chapter.a.tech)fleet.techOverride={...chapter.a.tech};
+      if(fleet.id==='custom-b'&&chapter.b.tech)fleet.techOverride={...chapter.b.tech};
+    }
   }
   return config;
 }
