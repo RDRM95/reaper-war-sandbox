@@ -72,15 +72,15 @@ footer{height:22px;background:#07111d;border-top:1px solid #1c3b53;font:9px 'Jet
 .target-marker:before{width:16px;height:1px;left:23px;top:31px}
 .target-marker:after{width:1px;height:16px;top:23px;left:31px}
 .target-marker[hidden]{display:none}
-.target-panel,.fire-readout{position:absolute;bottom:96px;padding:12px;background:#061827c9;border:1px solid #4683a8b3;min-width:270px;max-width:42%;line-height:2}
-.target-panel{left:18px}.fire-readout{right:18px}
-.target-panel strong,.target-panel small{display:block}.target-panel strong{color:#e8f8ff;font-size:13px}.target-panel small{color:#84adcf}
-.target-panel div,.fire-readout div{display:flex;gap:8px;justify-content:space-between}
-.target-panel b,.fire-readout b{font-weight:600;color:#fff}
-.target-telemetry.cerberus-hud{color:#ffd499}.target-telemetry.cerberus-hud .target-marker,.target-telemetry.cerberus-hud .target-panel,.target-telemetry.cerberus-hud .fire-readout{border-color:#bf8b44}
-.target-telemetry.reaper-hud{color:#ff9aab}.target-telemetry.reaper-hud .target-marker,.target-telemetry.reaper-hud .target-panel,.target-telemetry.reaper-hud .fire-readout{border-color:#c14b60}
+.gunner-readout-panel,.fire-readout{position:absolute;bottom:96px;padding:12px;background:#061827c9;border:1px solid #4683a8b3;min-width:270px;max-width:42%;line-height:2}
+.gunner-readout-panel{left:18px}.fire-readout{right:18px}
+.gunner-readout-panel strong,.gunner-readout-panel small{display:block}.gunner-readout-panel strong{color:#e8f8ff;font-size:13px}.gunner-readout-panel small{color:#84adcf}
+.gunner-readout-panel div,.fire-readout div{display:flex;gap:8px;justify-content:space-between}
+.gunner-readout-panel b,.fire-readout b{font-weight:600;color:#fff}
+.target-telemetry.cerberus-hud{color:#ffd499}.target-telemetry.cerberus-hud .target-marker,.target-telemetry.cerberus-hud .gunner-readout-panel,.target-telemetry.cerberus-hud .fire-readout{border-color:#bf8b44}
+.target-telemetry.reaper-hud{color:#ff9aab}.target-telemetry.reaper-hud .target-marker,.target-telemetry.reaper-hud .gunner-readout-panel,.target-telemetry.reaper-hud .fire-readout{border-color:#c14b60}
 .clean-recording .stage-tag,.clean-recording .camera-rail,.clean-recording .stage-foot,.clean-recording .target-telemetry{display:none!important}
-@media(max-width:900px){.target-panel,.fire-readout{bottom:75px;max-width:48%;min-width:0;font-size:9px;padding:7px}.scope-top{top:110px}.scope-bottom{display:none}}
+@media(max-width:900px){.gunner-readout-panel,.fire-readout{bottom:75px;max-width:48%;min-width:0;font-size:9px;padding:7px}.scope-top{top:110px}.scope-bottom{display:none}}
 
 /* Graphics selection adds a control without moving the existing HUD. */
 #graphics{width:116px;flex-shrink:0}
@@ -205,9 +205,46 @@ footer{height:22px;background:#07111d;border-top:1px solid #1c3b53;font:9px 'Jet
 .target-telemetry.signal-lost .target-scope .scope-center,
 .target-telemetry.signal-lost .target-scope .scope-bottom,
 .target-telemetry.signal-lost .target-marker,
-.target-telemetry.signal-lost .target-panel,
+.target-telemetry.signal-lost .gunner-readout-panel,
 .target-telemetry.signal-lost .fire-readout,
 .target-telemetry.signal-lost .charge-track{visibility:hidden}
 .target-telemetry.signal-lost .gunnery-line{
   top:50%;color:#c5d5df;font-size:14px;letter-spacing:.18em
 }
+
+
+/* Optical tracking is four quiet open corners, never a coloured box painted
+   over the target. No artificial glow, centred square or full-screen flash. */
+.target-telemetry .target-marker{
+  width:60px;height:60px;border:0;box-shadow:none;background:transparent;
+  color:rgba(150,209,235,.65);opacity:.80;
+}
+.target-telemetry .target-marker:before,
+.target-telemetry .target-marker:after,
+.target-telemetry .target-marker span:before,
+.target-telemetry .target-marker span:after{
+  content:'';position:absolute;width:11px;height:11px;
+  background:none;transform:none;
+  box-shadow:none;
+}
+.target-telemetry .target-marker:before{
+  left:0;top:0;right:auto;bottom:auto;
+  border-top:1px solid currentColor;border-left:1px solid currentColor;
+}
+.target-telemetry .target-marker:after{
+  left:auto;top:0;right:0;bottom:auto;
+  border-top:1px solid currentColor;border-right:1px solid currentColor;
+}
+.target-telemetry .target-marker span:before{
+  left:0;top:auto;right:auto;bottom:0;
+  border-bottom:1px solid currentColor;border-left:1px solid currentColor;
+}
+.target-telemetry .target-marker span:after{
+  left:auto;top:auto;right:0;bottom:0;
+  border-bottom:1px solid currentColor;border-right:1px solid currentColor;
+}
+.target-telemetry.impact .target-marker,
+.stage.gunnery-active .target-telemetry.impact .target-marker{
+  animation:none;filter:brightness(1.12);
+}
+.target-telemetry .gunner-readout-panel{pointer-events:none}
