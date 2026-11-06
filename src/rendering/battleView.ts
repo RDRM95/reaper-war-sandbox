@@ -385,7 +385,9 @@ export class BattleView {
           if (v) start = weaponBeamOrigin(v.built.group, v.built.muzzle, w, ship.faction === 'reaper');
           else start = new THREE.Vector3(w.beamStart.x * KM, w.beamStart.y * KM, w.beamStart.z * KM);
           const t = w.beamTargetId ? sim.getShip(w.beamTargetId) : undefined;
-          const end = w.beamHit && t ? new THREE.Vector3(t.pos.x * KM, t.pos.y * KM, t.pos.z * KM) : new THREE.Vector3(w.beamEnd.x * KM, w.beamEnd.y * KM, w.beamEnd.z * KM);
+          // The simulation's beamEnd already tracks the selected rotating hull contact.
+          // Do not silently force hits back to the centre of the target.
+          const end = new THREE.Vector3(w.beamEnd.x * KM, w.beamEnd.y * KM, w.beamEnd.z * KM);
           if (w.beamHit && t?.alive && t.barriers > 0 && sim.time >= (this.nextBeamShieldAt.get(t.id) ?? 0)) {
             const victim = this.visuals.get(t.id);
             if (victim && !victim.removed) {
@@ -504,7 +506,9 @@ export class BattleView {
           const big = w.def.damage >= 600;
           if (!big && Math.random() > 0.35) break; // thin out small-gun flashes
           const pose = weaponFlashPose(v.built.group, v.built.muzzle, w);
-          this.effects.muzzleFlash(pose.position, pose.direction, big ? 6 : 1.4, ship.faction === 'reaper');
+          const pov = this.rig.mode === 'gunnery' && ship.id === this.followId;
+          this.effects.muzzleFlash(pose.position, pose.direction,
+            pov ? (big ? 1.8 : 0.75) : (big ? 3.6 : 1.2), ship.faction === 'reaper');
           if (big && this.rig.mode === 'projectile') this.projectileTrack = { id: this.sim.projectiles[this.sim.projectiles.length - 1]?.id ?? 0 };
           break;
         }
