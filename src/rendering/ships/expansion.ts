@@ -58,7 +58,11 @@ function styleBuilt(built: BuiltShip, style: Style): BuiltShip {
   // Catalogue length is authoritative for simulation placement. Compute
   // the visual scale from the real donor template rather than an approximate
   // multiplier (previously some silhouettes mismatched their metre metadata).
-  const scale = style.lengthM / (100 * built.lengthUnits);
+  // Donor templates sometimes have a few percent of extra geometry beyond
+  // their nominal lengthUnits. Measure *actual* visible bounds to keep class
+  // silhouette size consistent with the simulation's metre datum.
+  const actualLength=new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3()).z;
+  const scale = (style.lengthM / 100) / Math.max(1e-6,actualLength);
   group.scale.multiplyScalar(scale);
   return { ...built, lengthUnits: style.lengthM / 100,
     glowColor:style.engine,
