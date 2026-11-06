@@ -242,6 +242,14 @@ export class BattleView {
     this.tmpA.set(s.prevHeading.x + (s.heading.x - s.prevHeading.x) * alpha, s.prevHeading.y + (s.heading.y - s.prevHeading.y) * alpha, s.prevHeading.z + (s.heading.z - s.prevHeading.z) * alpha).normalize();
     this.tmpQ.setFromUnitVectors(this.fwd, this.tmpA);
     g.quaternion.copy(this.tmpQ);
+    // Engine exhaust is driven by commanded acceleration, not current speed.
+    // Coasting / disabled engines retain only a dim idle lens.
+    const output=THREE.MathUtils.clamp(s.engineThrust??0.5,0,1);
+    for(const glow of v.glows) {
+      const material=glow.material as THREE.SpriteMaterial;
+      material.opacity=s.inertialCoast?.12:(.22+.62*Math.sqrt(output));
+    }
+
     // Match GPU-instanced animation: agile fighter attack banking, subtle
     // escort roll, and heavy capital hulls remaining level during slow turns.
     const turn = s.prevHeading.x * s.heading.z - s.prevHeading.z * s.heading.x;
