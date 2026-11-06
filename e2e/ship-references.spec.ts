@@ -5,12 +5,15 @@ test('ship registry is immutable and distinguishes original AU models from on-sc
   const data=await page.evaluate(async()=>{
     const {ShipReferenceRegistry,auditShipReferences}=await import('/src/references/ShipReferenceRegistry.ts');
     const {buildShipQAAudit}=await import('/src/references/shipQA.ts');
+    const qaRows=buildShipQAAudit();
+    const sr1=qaRows.find(row=>row.registryId==='ALL-001');
     const list=[...ShipReferenceRegistry.values()],audit=auditShipReferences(),qa=buildShipQAAudit();
     return {total:list.length,p0:list.filter(r=>r.build_priority==='P0').length,
       apex:list.filter(r=>r.apex_original).length,
       immutable:list.every(r=>Object.isFrozen(r)&&Object.isFrozen(r.primary_source_ids)),
       unapproved:audit.every(a=>!a.actualGameMesh&&a.approval!=='pass'),
       missing:audit.filter(a=>!a.modelAvailable).map(a=>a.reference.id),
+      sr1: {renderCandidate:sr1?.modelStatus,engines:sr1?.thrusters,sourceLength:sr1?.referenceLengthM,approval:sr1?.approval},
       sovereign:qa.find(a=>a.registryId==='REP-001')?.referenceLengthM,
       destroyer:qa.find(a=>a.registryId==='REP-003')?.referenceLengthM
     };
@@ -18,6 +21,7 @@ test('ship registry is immutable and distinguishes original AU models from on-sc
   expect(data.total).toBe(43);expect(data.p0).toBe(13);expect(data.apex).toBe(7);
   expect(data.immutable).toBe(true);expect(data.unapproved).toBe(true);
   expect(data.missing).not.toContain('ALL-001');
+  expect(data.sr1).toEqual({renderCandidate:'procedural_unverified',engines:4,sourceLength:null,approval:'not_reviewed'});
   expect(data.sovereign).toBe(2000);expect(data.destroyer).toBe(160);
 });
 
