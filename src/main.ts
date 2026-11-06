@@ -10,6 +10,8 @@ import { buildCustomBattle } from '@/scenarios';
 import { SHIP_CLASS_LIST } from '@/data/ships';
 import { MASS_EFFECT_FACTION_IDS, SANDBOX_FACTION_IDS, type FactionId } from '@/data/types';
 import { EXPANDED_BATTLES } from '@/scenarios/expandedBattles';
+import { AU_CHAPTERS } from '@/scenarios/auLibrary';
+import { PRESETS } from '@/timelines/presets';
 import { FACTIONS } from '@/data/factions';
 import { audio } from '@/audio/engine';
 import { FleetMap2D } from './spectator/flatView';
@@ -112,14 +114,24 @@ app.innerHTML=`
   </aside>
 </div><footer>INDEPENDENT NON-COMMERCIAL FAN PROJECT · ORIGINAL SOURCE-BASED 3D ENGINE · BUILD 0.3 DEVELOPMENT</footer>
 `;
-for(const chapter of EXPANDED_BATTLES){
+const selectableChapters=[...EXPANDED_BATTLES,...AU_CHAPTERS];
+// Every scenario can be tested under an AU ruleset, including late-cycle AUs.
+for(const preset of PRESETS){
+  const options=$<HTMLSelectElement>('rules');
+  if(![...options.options].some(opt=>opt.value===preset.id)){
+    const option=document.createElement('option');option.value=preset.id;option.textContent=preset.name.toUpperCase();options.append(option);
+  }
+}
+for(const chapter of selectableChapters){
   scenarios[chapter.id]={
     a:{...chapter.a,counts:{...chapter.a.counts}},
     b:{...chapter.b,counts:{...chapter.b.counts}},
     environment:chapter.environment,rules:chapter.rules,range:chapter.distance
   };
   const option=document.createElement('option');
-  option.value=chapter.id;option.textContent=chapter.name.toUpperCase()+' / AU';
+  option.value=chapter.id;
+  option.title=chapter.description;
+  option.textContent=(('era' in chapter)?chapter.era+' / ':'')+chapter.name.toUpperCase()+(chapter.mathRecommended?' · INSTANT MATH RECOMMENDED':'');
   $<HTMLSelectElement>('scenario').append(option);
 }
 const factionSelect=$<HTMLSelectElement>('faction');
@@ -168,7 +180,7 @@ function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelec
 }
 function applyScenario(id:string){const p=scenarios[id];selectedScenario=id;fleets={A:copyFleet(p.a),B:copyFleet(p.b)};waves={A:freshWave(),B:freshWave()};
   $<HTMLSelectElement>('rules').value=p.rules;$<HTMLInputElement>('distance').value=String(p.range);$('battle-name').textContent=$<HTMLSelectElement>('scenario').selectedOptions[0].textContent??'BATTLE';
-  $('resolve').textContent=EXPANDED_BATTLES.find(c=>c.id===id)?.mathRecommended?'Σ INSTANT RESULTS — RECOMMENDED':'Σ INSTANT BATTLE RESULTS';
+  $('resolve').textContent=selectableChapters.find(c=>c.id===id)?.mathRecommended?'Σ INSTANT RESULTS — RECOMMENDED':'Σ INSTANT BATTLE RESULTS';
   editor();
 }
 /** Opt-in benchmark roster: preserves faction and relative composition while
@@ -287,9 +299,15 @@ function currentConfig(){
     startingDistanceKm:Math.max(10,Math.min(600,Number($<HTMLInputElement>('distance').value)||110)),
     maxDuration:650,
     sideA:{...copyFleet(fleets.A)},sideB:{...copyFleet(fleets.B)},
-    extraA:rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[],
-    extraB:rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[]});
-  const chapter=EXPANDED_BATTLES.find(c=>c.id===selectedScenario);
+    extraA:[
+      ...(AU_CHAPTERS.find(ch=>ch.id===selectedScenario)?.extraA??[]).map(e=>({...e,techOverride:e.tech})),
+      ...(rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[])
+    ],
+    extraB:[
+      ...(AU_CHAPTERS.find(ch=>ch.id===selectedScenario)?.extraB??[]).map(e=>({...e,techOverride:e.tech})),
+      ...(rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[])
+    ]});
+  const chapter=selectableChapters.find(c=>c.id===selectedScenario);
   if(chapter){
     config.id=chapter.id+'-'+config.rules.id+'-'+config.seed;
     config.name=chapter.name;
@@ -302,6 +320,9 @@ function currentConfig(){
     for(const fleet of config.fleets){
       if(fleet.id==='custom-a'&&chapter.a.tech)fleet.techOverride={...chapter.a.tech};
       if(fleet.id==='custom-b'&&chapter.b.tech)fleet.techOverride={...chapter.b.tech};
+      // buildCustomBattle() already copies technology overrides for coalition
+      // extras. Keep those IDs and faction doctrines intact.
+
     }
   }
   return config;
