@@ -1,6 +1,7 @@
 import './spectator.css';
 import { installShipReferenceInspector } from '@/references/ShipReferenceInspector';
 import { BattleSimulation, SIM_DT } from '@/simulation/battle';
+import { ShipKillScoreboard } from '@/simulation/killScoreboard';
 import { resolveQuickBattle, type QuickBattleReport } from '@/simulation/quickBattle';
 import { BattleView } from '@/rendering/battleView';
 import type { CameraMode } from '@/rendering/cameras';
@@ -52,6 +53,9 @@ let graphics:GraphicsPreset = 'high';
 let fpsCounter=0,fpsLast=0,fpsValue=0,simWorkMs=0;
 const frameTimes:number[]=[];
 const feed:{time:number;message:string;side?:Side}[]=[];
+const killScoreboard=new ShipKillScoreboard();
+let killScoreVisible=true;
+let lastScoreDraw=-1;
 const app=document.getElementById('app')!;
 app.innerHTML=`
 <header class="rw-header"><div class="brand"><small>MASS EFFECT / FAN-MADE SIMULATION</small><strong>REAPER WAR <span>— SPECTATOR</span></strong></div>
@@ -92,6 +96,12 @@ app.innerHTML=`
   <aside class="pane rw-data"><div class="pane-heading">ENGAGEMENT TELEMETRY <span>02</span></div>
     <div class="team"><div class="team-title">SIDE A <strong id="aliveA">—</strong></div><div class="meter"><i id="meterA"></i></div><div class="pair">HULLS LOST <b id="lostA">—</b></div></div>
     <div class="team red-team"><div class="team-title">SIDE B <strong id="aliveB">—</strong></div><div class="meter"><i id="meterB"></i></div><div class="pair">HULLS LOST <b id="lostB">—</b></div></div>
+    <div class="pane-heading with-border">KILLS BY SHIP TYPE <button id="score-toggle" class="score-toggle" aria-expanded="true" title="Show or hide class kill scoreboard">HIDE</button></div>
+    <section id="kill-scoreboard" class="kill-scoreboard" aria-label="Destroyed ship types">
+      <div class="kill-totals"><span>SIDE A LOST <b id="score-total-A">0</b></span><span>SIDE B LOST <b id="score-total-B">0</b></span></div>
+      <div class="kill-columns"><div><strong>SIDE A · DESTROYED</strong><div id="score-A" class="kill-list">No losses</div></div>
+        <div><strong>SIDE B · DESTROYED</strong><div id="score-B" class="kill-list">No losses</div></div></div>
+    </section>
     <div class="pane-heading with-border">SHIP INSPECTION <span>03</span></div>
     <div id="selection" class="selection">Click a vessel in either spectator camera to inspect its condition.</div>
     <button id="follow" class="plain full">FOLLOW SELECTED</button>
@@ -117,6 +127,29 @@ factionSelect.innerHTML=([...MASS_EFFECT_FACTION_IDS,...SANDBOX_FACTION_IDS] as 
 const third=$<HTMLCanvasElement>('scene3d'),second=$<HTMLCanvasElement>('scene2d');
 flat=new FleetMap2D(second);
 const telemetry=new TargetTelemetry($('stage'));
+$('score-toggle').addEventListener('click',()=>{
+  killScoreVisible=!killScoreVisible;
+  $('kill-scoreboard').hidden=!killScoreVisible;
+  $('score-toggle').textContent=killScoreVisible?'HIDE':'SHOW';
+  $('score-toggle').setAttribute('aria-expanded',String(killScoreVisible));
+});
+function updateKillScoreboard(force=false):void{
+  if(!sim)return;
+  const changed=killScoreboard.sync(sim.events);
+  if(!force&&!changed||(!killScoreVisible&&!force))return;
+  const total=killScoreboard.totalDestroyed;
+  if(total===lastScoreDraw&&!force)return;
+  lastScoreDraw=total;
+  for(const side of ['A','B'] as Side[]){
+    $('score-total-'+side).textContent=fmt(killScoreboard.total(side));
+    const rows=killScoreboard.rows(side);
+    $('score-'+side).innerHTML=rows.length?rows.map(row=>
+      '<div class="kill-row"><span title="'+escapeHtml(row.faction+' / '+row.classId)+'">'+
+      escapeHtml(row.className)+'</span><b>'+fmt(row.destroyed)+'</b></div>'
+    ).join(''):'<span class="kill-empty">No losses</span>';
+  }
+}
+
 flat.onPick=s=>select(s);
 function rowTally(f:Fleet){return Object.values(f.counts).reduce((a,b)=>a+Math.max(0,b),0);}
 function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelect.value=f.faction;$<HTMLSelectElement>('formation').value=f.formation;
@@ -180,6 +213,7 @@ function inspect(){if(!sim||!selectedShip){$('selection').textContent='Click a v
 }
 function updateHud(){if(!sim)return;
   $('clock').textContent=clock(sim.time);
+  updateKillScoreboard();
   if(feed.length)$('log').innerHTML=feed.slice(0,22).map(item=>`<div class="entry ${item.side==='A'?'a':'b'}"><time>${clock(item.time)}</time>${escapeHtml(item.message)}</div>`).join('');
   for(const side of ['A','B'] as Side[]){const ships=sim.ships.filter(s=>s.side===side&&s.role!=='fighter');
     const alive=ships.filter(s=>s.alive&&!s.escaped).length;
@@ -276,6 +310,7 @@ function launch(){try{
   $('quick-report').hidden=true;
   $('error').hidden=true;viewError=undefined;
   const config=currentConfig();
+  killScoreboard.reset();lastScoreDraw=-1;
   view?.dispose();view=null;
   sim=new BattleSimulation(config);
   if(referenceMode){
@@ -286,7 +321,7 @@ function launch(){try{
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
   if(audioEnabled){audio.init();}
-  if(mode==='3d')createView();switchMode();updateHud();
+  if(mode==='3d')createView();switchMode();updateKillScoreboard(true);updateHud();
 }catch(e){reportError(e);}}
 let quickReport: QuickBattleReport | null=null;
 function reportCounts(side:Side,report:QuickBattleReport):string{
