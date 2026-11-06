@@ -319,4 +319,32 @@ export const buildReaperCapital = (): BuiltShip => buildReaper({ length: 11, arm
 export const buildReaperDestroyer = (): BuiltShip => buildReaper({ length: 0.95, arms: 4, armLengthFactor: 0.75, bodyRadiusFactor: 0.2 });
 
 /** Harbinger: larger, spined, and with a brighter aperture. */
+/** Extragalactic Ascendant — derived from the unmistakable Sovereign anatomy,
+ * keeping material plates and independently articulated appendages.
+ * The scale is an AU render datum, not an attempt to match a canon mesh.
+ */
+export const buildReaperAscendant = (): BuiltShip => {
+  const built = buildReaper({length:11,arms:6,armLengthFactor:.87,bodyRadiusFactor:.12,spines:true,tint:0x692d30});
+  // Structural ridges communicate a higher engineering generation without
+  // turning the cephalopod Reaper into a conventional starship.
+  const plate=new THREE.MeshStandardMaterial({
+    color:0x34404c,metalness:.84,roughness:.43,emissive:0x130405,emissiveIntensity:.08
+  });
+  for(const side of [-1,1])for(let i=0;i<4;i++){
+    const strut=new THREE.Mesh(new THREE.BoxGeometry(.12,.1,1.4),plate);
+    strut.position.set(side*(.45+i*.025),.12,-3.4+i*2.1);
+    strut.rotation.y=side*.18;
+    strut.name='ascendant-carapace-ridge';
+    built.group.add(strut);
+  }
+  const scale=30000/2000;
+  built.group.scale.multiplyScalar(scale);
+  built.lengthUnits*=scale;
+  built.engineNodes=built.engineNodes.map(p=>p.clone().multiplyScalar(scale));
+  if(built.muzzle)built.muzzle.multiplyScalar(scale);
+  built.glowColor=0xb53439;
+  built.group.name='Ascendant Reaper — extragalactic AU';
+  return built;
+};
+
 export const buildHarbinger = (): BuiltShip => buildReaper({ length: 13.2, arms: 6, armLengthFactor: 0.8, bodyRadiusFactor: 0.115, spines: true, tint: 0xffa040 });
