@@ -188,3 +188,26 @@ footer{height:22px;background:#07111d;border-top:1px solid #1c3b53;font:9px 'Jet
 .kill-row span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
 .kill-row b{font-variant-numeric:tabular-nums;color:#f1f7ff;font-size:13px}
 .kill-empty{color:#6e91a7;font:11px ui-monospace,monospace}
+
+
+/* Diegetic optical cues: restrained, no flashing or full-screen whiteout. */
+.target-telemetry .gunnery-warning{
+  position:absolute;left:50%;top:17%;transform:translateX(-50%);
+  color:#ddb988;letter-spacing:.1em;font:10px ui-monospace,monospace;
+  text-shadow:0 1px 5px #000;white-space:nowrap;opacity:.86
+}
+.target-telemetry .gunnery-warning:empty{display:none}
+.target-telemetry.signal-lost{
+  background:rgba(2,6,11,.86);
+  color:#9aafbf;
+  transition:background .17s ease-out;
+}
+.target-telemetry.signal-lost .target-scope .scope-center,
+.target-telemetry.signal-lost .target-scope .scope-bottom,
+.target-telemetry.signal-lost .target-marker,
+.target-telemetry.signal-lost .target-panel,
+.target-telemetry.signal-lost .fire-readout,
+.target-telemetry.signal-lost .charge-track{visibility:hidden}
+.target-telemetry.signal-lost .gunnery-line{
+  top:50%;color:#c5d5df;font-size:14px;letter-spacing:.18em
+}
