@@ -545,6 +545,28 @@ export const WEAPONS: Record<string, WeaponDef> = {
       note: 'Not a canon Mass Effect weapon. Nominal 200 GT and 300 GT overcharge are fictional design targets; the game does not yet model charge-mode selection.'
     },
   },
+  aegis_nova_command: {
+    id: 'aegis_nova_command',
+    name: 'Aegis-pattern NOVA lance (AU)',
+    kind: 'mass_accelerator',
+    damageType: 'kinetic',
+    damage: 38000,
+    cooldown: 33,
+    range: 65,
+    projectileSpeed: 55,
+    accuracy: 0.86,
+    penetration: 2.05,
+    heat: 45,
+    antiSmall: false,
+    antiCapital: true,
+    arc: 10,
+    magazine: 12,
+    provenance: {
+      value: 'Serial-production Apex AU command dreadnought spinal accelerator inspired by the Valkyrie, but smaller and weaker than her experimental 200 GT NOVA Array.',
+      provenance: 'AU_MODIFIED',
+      note: 'Fictional simulation weapon. Power, range and 12-round magazine are AU estimates; no canonical specification.'
+    },
+  },
   apex_hyper_ma: {
     id: 'apex_hyper_ma',
     name: 'Hyper-mass accelerator (HADES rounds)',
