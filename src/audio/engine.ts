@@ -5,6 +5,9 @@
  */
 export type SoundId =
   | 'gunner_spinal'
+  | 'gunner_beam'
+  | 'gunner_thanix'
+  | 'gunner_glance'
   | 'gunner_charge'
   | 'gunner_signal'
   | 'gunner_warning'
@@ -169,6 +172,23 @@ export class AudioEngine {
         this.tone('triangle', 75, 36, .46, .24*att, bus);
         this.noise(.16, 'lowpass', 240, .8, .25*att, bus);
         this.tone('sine', 48, 33, .82, .13*att, bus, .07);
+        break;
+      case 'gunner_beam':
+        // Inside a Reaper: structural field resonance, not a duplicated
+        // exterior MHD beam blast. All frequencies low and short.
+        this.tone('triangle', 62, 41, .75, .16*att, bus);
+        this.noise(.48, 'lowpass', 260, .7, .12*att, bus);
+        this.tone('sine', 125, 82, .45, .07*att, bus, .06);
+        break;
+      case 'gunner_thanix':
+        // Mass-effect liquid-metal pump and breech pressure.
+        this.tone('triangle', 120, 64, .44, .12*att, bus);
+        this.noise(.22, 'bandpass', 480, 1.1, .10*att, bus);
+        this.tone('sine', 59, 39, .55, .09*att, bus, .06);
+        break;
+      case 'gunner_glance':
+        // A subdued fire-control confirmation for a shallow hull strike.
+        this.tone('sine', 715, 540, .09, .025*att, bus);
         break;
       case 'gunner_charge':
         this.tone('triangle', 105, 195, .3, .07*att, bus);
