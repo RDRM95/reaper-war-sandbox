@@ -5,7 +5,7 @@ import * as THREE from 'three';
  * smooths toward them so switching modes produces a transition rather than a
  * cut. Positions are in render units.
  */
-export type CameraMode = 'tactical' | 'cinematic' | 'follow' | 'free' | 'projectile' | 'reaper' | 'command';
+export type CameraMode = 'tactical' | 'cinematic' | 'follow' | 'free' | 'projectile' | 'reaper' | 'command' | 'gunnery';
 
 export const CAMERA_MODE_LABELS: Record<CameraMode, string> = {
   tactical: 'Tactical',
@@ -15,6 +15,7 @@ export const CAMERA_MODE_LABELS: Record<CameraMode, string> = {
   projectile: 'Projectile',
   reaper: 'Reaper',
   command: 'Command',
+  gunnery: 'First-person gunnery',
 };
 
 export interface CameraSubject {
@@ -73,7 +74,8 @@ export class CameraRig {
       this.distance = 320;
     }
     this.mode = mode;
-    this.transition = 1;
+    // Optical gunnery must stay physically attached to the firing mount.
+    this.transition = mode === 'gunnery' ? 0 : 1;
   }
 
   addShake(amount: number): void {
@@ -111,7 +113,7 @@ export class CameraRig {
    * modes; `cinematic` supplies a framing pair; `projectile` is the tracked
    * round. Any may be undefined, in which case the rig falls back to tactical.
    */
-  update(dt: number, opts: { subject?: CameraSubject; cinematic?: CinematicFrame; projectile?: CameraSubject; fleetCentre: THREE.Vector3 }): void {
+  update(dt: number, opts: { subject?: CameraSubject; cinematic?: CinematicFrame; projectile?: CameraSubject; gunnery?: { position: THREE.Vector3; aim: THREE.Vector3 }; fleetCentre: THREE.Vector3 }): void {
     const cam = this.camera;
     let instant = false;
     switch (this.mode) {
@@ -124,6 +126,14 @@ export class CameraRig {
       case 'command': {
         this.desiredLook.copy(this.focus);
         this.desiredPos.copy(this.focus).add(new THREE.Vector3(Math.sin(this.yaw) * 0.08, 1, Math.cos(this.yaw) * 0.08).normalize().multiplyScalar(Math.max(this.distance, 1200)));
+        break;
+      }
+      case 'gunnery': {
+        const station = opts.gunnery;
+        if (!station) return this.fallback(dt, opts.fleetCentre);
+        this.desiredPos.copy(station.position);
+        this.desiredLook.copy(station.aim);
+        instant = true;
         break;
       }
       case 'follow': {
@@ -224,9 +234,9 @@ export class CameraRig {
       this.shake = Math.max(0, this.shake - dt * 2.5);
     }
     cam.lookAt(this.currentLook);
-    // Near plane scales with distance to focus for depth precision.
+    // Gun cameras sit immediately at the muzzle and need a close near plane.
     const d = cam.position.distanceTo(this.currentLook);
-    cam.near = THREE.MathUtils.clamp(d * 0.002, 0.2, 50);
+    cam.near = this.mode === 'gunnery' ? 0.06 : THREE.MathUtils.clamp(d * 0.002, 0.2, 50);
     cam.updateProjectionMatrix();
   }
 
