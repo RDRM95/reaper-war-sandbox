@@ -567,6 +567,28 @@ export const WEAPONS: Record<string, WeaponDef> = {
       note: 'Fictional simulation weapon. Power, range and 12-round magazine are AU estimates; no canonical specification.'
     },
   },
+  ascendant_main_beam: {
+    id: 'ascendant_main_beam',
+    name: 'Ascendant axial magnetohydrodynamic emitter (AU)',
+    kind: 'reaper_beam',
+    damageType: 'reaper_beam',
+    damage: 17500,
+    cooldown: 9,
+    range: 165,
+    projectileSpeed: Infinity,
+    accuracy: .92,
+    penetration: 2,
+    heat: 0,
+    beamDuration: 3,
+    antiSmall: false,
+    antiCapital: true,
+    arc: 38,
+    provenance: {
+      value: 'Fictional 2885 CE extragalactic Ascendant-scale Reaper weapon.',
+      provenance: 'AU_MODIFIED',
+      note: 'No canon range, energy yield or recharge figures exist.'
+    }
+  },
   apex_hyper_ma: {
     id: 'apex_hyper_ma',
     name: 'Hyper-mass accelerator (HADES rounds)',
