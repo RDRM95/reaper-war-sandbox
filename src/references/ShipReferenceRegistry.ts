@@ -61,8 +61,16 @@ const frozenRefs=source.ships.map(record=>{
   const refs=Object.freeze([...record.primary_source_ids]);
   return Object.freeze({...record,primary_source_ids:refs}) as ShipReference;
 });
-export const ShipReferenceRegistry:ReadonlyMap<string,ShipReference>=
-  new Map(frozenRefs.map(r=>[r.id,r]));
+// A frozen Map still permits .set() at runtime. Keep the Map private and
+// expose only read methods, so provenance cannot be overwritten by callers.
+const referenceIndex=new Map(frozenRefs.map(r=>[r.id,r] as const));
+export const ShipReferenceRegistry=Object.freeze({
+  get:(id:string):ShipReference|undefined=>referenceIndex.get(id),
+  has:(id:string):boolean=>referenceIndex.has(id),
+  values:():IterableIterator<ShipReference>=>referenceIndex.values(),
+  entries:():IterableIterator<readonly [string,ShipReference]>=>referenceIndex.entries(),
+  get size():number{return referenceIndex.size;}
+});
 
 export function auditShipReferences():ShipReferenceMatch[]{
   return frozenRefs.map(reference=>{
