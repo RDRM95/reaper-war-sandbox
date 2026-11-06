@@ -113,6 +113,30 @@ function buildAllianceGunship(L: number, kind: 'dreadnought' | 'omaha' | 'cruise
 export const buildAllianceDreadnought = (): BuiltShip => buildAllianceGunship(8.88, 'dreadnought');
 export const buildAllianceOmaha = (): BuiltShip => buildAllianceGunship(18, 'omaha');
 
+/** Serial-production Apex AU command capital ship.
+ * Shares Alliance structural construction, but adds a broad bridge spine and
+ * paired spinal bracing rails. Distinct from the named Valkyrie prototype.
+ */
+export const buildAllianceAegis = (): BuiltShip => {
+  const hull = buildAllianceGunship(16.5, 'omaha');
+  const p = paletteFor('alliance');
+  const parts = newParts();
+  for(const side of [-1, 1]){
+    parts.hull.push(at(taperedBox(.53,.38,7.8,.3,.88,{frontHeight:.27}),side*1.53,-.16,.42));
+    parts.hullDark.push(at(taperedBox(.30,.23,5.4,.44,.9),side*2.14,-.18,-1.65));
+    parts.accent.push(at(new THREE.BoxGeometry(.075,.045,4.8),side*1.75,.23,-.24));
+  }
+  parts.hull.push(at(taperedBox(1.40,.34,4.4,.41,.95),0,.83,1.1));
+  parts.windows.push(at(new THREE.BoxGeometry(.88,.045,.95),0,1.02,1.82));
+  const extra = assemble(parts,'alliance',[],16.5);
+  // Keep batch geometry cheap: five additional existing material classes.
+  for(const mesh of [...extra.group.children])hull.group.add(mesh);
+  hull.muzzle = new THREE.Vector3(0,-.38,8.03);
+  hull.group.name = 'Aegis-pattern command dreadnought (Apex AU)';
+  return hull;
+};
+
+
 /** Alliance carrier: dreadnought-sized hull with a flight deck and hangar mouths. */
 export function buildAllianceCarrier(): BuiltShip {
   const L = 9.0;
