@@ -91,7 +91,7 @@ test('Reaper limbs and aperture animate independently without moving hull root',
         id:destroyer?'destroyer-1':'capital-1',faction:'reaper',
         role:destroyer?'reaper_destroyer':'reaper_capital',maxSpeed:1,
         vel:{x:.4,y:0,z:0},targetId:'contact',weapons:[{
-          cooldown:.3,beamRemaining:0,def:{kind:'reaper_beam',damage:1900,antiSmall:false,arc:60}
+          index:0,hardpointIndex:0,mount:0,facing:0,cooldown:.3,beamRemaining:0,def:{kind:'reaper_beam',damage:1900,antiCapital:true,antiSmall:false,arc:60}
         }]
       } as unknown as Parameters<typeof animateReaperRig>[1];
       const worldBefore=built.group.position.toArray();
