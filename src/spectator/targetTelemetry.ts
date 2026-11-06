@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { BattleSimulation } from '@/simulation/battle';
 import type { ShipState, BattleEvent } from '@/simulation/types';
-import { primaryGunneryMount } from '@/rendering/gunnery';
+import { primaryGunneryMount,isMainGunShot } from '@/rendering/gunnery';
 import { inWeaponArc } from '@/simulation/fireControl';
 import type { BattleView } from '@/rendering/battleView';
 import { KM } from '@/rendering/geometry';
@@ -25,16 +25,20 @@ export class TargetTelemetry {
   private lastShotTime=-100;
   private lastImpactTime=-100;
   private lastShotLabel='FIRE CONTROL STANDBY';
+  private signalLossUntilMs=0;
+  private readonly warning:HTMLDivElement;
+
   private target3=new THREE.Vector3();
   enabled=false;
   constructor(private stage:HTMLElement){
     const root=document.createElement('div');
     root.className='target-telemetry';
     root.hidden=true;
-    root.innerHTML='<div class="target-scope"><span class="scope-top">FIRST-PERSON GUNNERY // DIRECT LIVE FIRE CONTROL</span><div class="scope-center">+</div><span class="scope-bottom">WEAPONS ARE AUTONOMOUS · NO SYNTHETIC FIRING</span></div><div class="gunnery-line" role="status"></div><div class="charge-track"><i class="charge-fill"></i></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="target-panel"></div><div class="fire-readout"></div>';
+    root.innerHTML='<div class="target-scope"><span class="scope-top">FIRST-PERSON GUNNERY // DIRECT LIVE FIRE CONTROL</span><div class="scope-center">+</div><span class="scope-bottom">WEAPONS ARE AUTONOMOUS · NO SYNTHETIC FIRING</span></div><div class="gunnery-line" role="status"></div><div class="gunnery-warning" aria-live="polite"></div><div class="charge-track"><i class="charge-fill"></i></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="target-panel"></div><div class="fire-readout"></div>';
     stage.append(root);
     this.root=root;
     this.line=root.querySelector('.gunnery-line') as HTMLDivElement;
+    this.warning=root.querySelector('.gunnery-warning') as HTMLDivElement;
     this.charge=root.querySelector('.charge-fill') as HTMLElement;
     this.marker=root.querySelector('.target-marker') as HTMLDivElement;
     this.panel=root.querySelector('.target-panel') as HTMLDivElement;
@@ -42,19 +46,35 @@ export class TargetTelemetry {
   }
   show(on:boolean){this.enabled=on;this.root.hidden=!on;}
   /** Called only for actual simulation events. No visual timers fire weapons. */
-  notify(event:BattleEvent,shipId:string|undefined):void{
+  notify(event:BattleEvent,shipId:string|undefined,sim?:BattleSimulation):void{
     if(!shipId)return;
+    if(event.type==='ship_destroyed'&&event.shipId===shipId){
+      this.signalLossUntilMs=performance.now()+1150;
+      return;
+    }
     if(event.type==='weapon_fired'&&event.shipId===shipId){
+      const shooter=sim?.getShip(event.shipId);
+      if(!shooter||!isMainGunShot(shooter,event.weaponIndex))return;
       this.lastShotTime=event.t;
-      this.lastShotLabel='SHOT CONFIRMED · '+event.kind.replaceAll('_',' ').toUpperCase();
+      this.lastShotLabel='MAIN BATTERY DISCHARGED';
     }
-    if(event.type==='projectile_impact'&&event.shipId===shipId){
+    if(event.type==='projectile_impact'&&event.shipId===shipId)
       this.lastImpactTime=event.t;
-    }
   }
 
   update(sim:BattleSimulation,view:BattleView,shipId:string|undefined){
     if(!this.enabled)return;
+    const lost=performance.now()<this.signalLossUntilMs || view.gunnerySignalLost;
+    this.root.classList.toggle('signal-lost',lost);
+    if(lost){
+      this.marker.hidden=true;
+      this.warning.textContent='';
+      this.line.textContent='SIGNAL LOST · AUTO-REACQUIRING';
+      this.panel.textContent='TELEMETRY LINK INTERRUPTED';
+      this.readout.textContent='STANDBY';
+      this.charge.style.width='0%';
+      return;
+    }
     const source=shipId?sim.shipById.get(shipId):undefined;
     if(!source||!source.alive||source.escaped){
       this.panel.textContent='SELECT A LIVING VESSEL TO ACCESS ITS GUNNERY TELEMETRY';
@@ -68,8 +88,13 @@ export class TargetTelemetry {
     this.root.classList.toggle('reaper-hud',source.faction==='reaper');
     this.root.classList.toggle('cerberus-hud',source.faction==='cerberus');
     const target=source.targetId?sim.shipById.get(source.targetId):undefined;
-    const primary= view.gunneryWeaponIndex===undefined ? primaryGunneryMount(source) :
-      (source.weapons[view.gunneryWeaponIndex] ?? primaryGunneryMount(source));
+    const primary=primaryGunneryMount(source);
+    const cautions:string[]=[];
+    if(source.hull/Math.max(1,source.maxHull)<.26)cautions.push('HULL CRITICAL');
+    if(source.subsystems.engines<.24)cautions.push('PROPULSION CRITICAL');
+    if(source.subsystems.weapons<.22)cautions.push('WEAPON SYSTEM DAMAGED');
+    if(source.barriers/Math.max(1,source.maxBarriers)<.08)cautions.push('BARRIERS DOWN');
+    this.warning.textContent=cautions.slice(0,2).join(' · ');
     const weaponLabel=primary?.def.name??'NO OFFENSIVE BATTERY';
     const cooldown=Math.max(0,primary?.cooldown??0);
     const charge=pct(Math.max(0,(primary?.def.cooldown??0)-cooldown),primary?.def.cooldown??0);
