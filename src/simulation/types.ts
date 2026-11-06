@@ -158,6 +158,10 @@ export interface ShipState {
   pos: Vec3;
   prevPos: Vec3;
   vel: Vec3;
+  /** Engine output requested by motion control, 0 = idle or failed. Render-only telemetry. */
+  engineThrust?: number;
+  /** Inertial unpowered drift is not disguised as engine propulsion. */
+  inertialCoast?: boolean;
   heading: Vec3;
   prevHeading: Vec3;
   lengthKm: number;
