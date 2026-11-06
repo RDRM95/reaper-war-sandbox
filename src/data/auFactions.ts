@@ -34,6 +34,18 @@ export const SANDBOX_FACTIONS: Record<SandboxFactionId, FactionDef> = {
   player_civ: faction('player_civ', 'Player civilization — AU charter', 'Player civilization', '#91c6ee', 0x74baff,
     'A real selectable fleet faction for the civilization sandbox. Its charter, politics, production and research determine the ships and per-fleet modifiers it can actually deploy.',
     { preferredRangeFactor: 0.84, protectCapitals: 0.85 }, 'Charter fleet, stand ready. Our choices brought us here.'),
+  axiom_guard: faction('axiom_guard', 'Axiom Guard — Dissident Reaper AU', 'Axiom Guard', '#a8dfea', 0x74e3ef,
+    'Axiom is a remorseful ancient Reaper protecting organics. A small grey-hulled autonomous escort force rejects the harvest. Entirely original Apex AU; no canon defection implied.',
+    {preferredRangeFactor:0.75,withdrawThreshold:0.05,focusFire:0.95,cohesion:0.93,protectCapitals:0.95,aggression:0.85},
+    'Axiom Guard, hold fire until threat identification is confirmed. Protect the organic flotilla.'),
+  exile_hegemony: faction('exile_hegemony', 'Exile Hegemony — Return of the Ancients', 'The Exiles', '#beafed', 0xc3b2ff,
+    'Descendants of a civilisation that escaped an earlier harvest return in armed exile arks to reclaim their ancestral systems. Original alternate-history faction, not established canon.',
+    {preferredRangeFactor:0.93,withdrawThreshold:0.08,focusFire:0.9,cohesion:0.95,aggression:0.73},
+    'Ancestral territory identified. Our arks will not yield to the younger powers.'),
+  terminus_compact: faction('terminus_compact', 'Terminus Compact — United Frontier AU', 'Compact', '#e3ad63', 0xffb36b,
+    'An alternate wartime union of batarian survivors, independent colonies and Aria-aligned private navies. Armoured gunships and modular siege vessels, built using original AU designs.',
+    {preferredRangeFactor:0.72,withdrawThreshold:0.19,focusFire:0.7,cohesion:0.65,aggression:0.82},
+    'Terminus task groups, keep the convoy lanes clear. All batteries engage.'),
 };
 export const SKYNET_FACTION = faction('skynet', 'Skynet — orbital extrapolation', 'Skynet', '#dc7678', 0xff4234,
   'Terminator-inspired AU extrapolation. These autonomous orbital Hunter-Killers are invented spacefaring designs, not established film spacecraft. Armoured machine hulls have no energy shields and can be overwhelmed by Reaper fire.',
@@ -48,6 +60,29 @@ const orbitalWeapon = (id: string, name: string, p: Partial<WeaponDef>): WeaponD
   ...p, provenance: au(name, `${AU_DESIGN_NOTE} This is not a canonical cross-universe yield or equivalence.`),
 });
 export const SANDBOX_WEAPONS: Record<string, WeaponDef> = {
+  axiom_cleansing_beam: weapon('axiom_cleansing_beam','Axiom focused MHD beam (AU)',{
+    kind:'reaper_beam',damageType:'reaper_beam',damage:2700,cooldown:8.3,range:52,
+    projectileSpeed:Infinity,accuracy:0.93,penetration:1.15,beamDuration:2.8,
+    heat:0,arc:55,provenance:au('Axiom main emitter; retains Reaper MHD physics, original AU tuning.')
+  }),
+  axiom_interceptor: weapon('axiom_interceptor','Guardian interceptor emitter (AU)',{
+    kind:'reaper_beam',damageType:'reaper_beam',damage:850,cooldown:6.6,range:37,
+    projectileSpeed:Infinity,accuracy:0.86,beamDuration:2,heat:0,arc:100,
+  }),
+  exile_ark_lance: weapon('exile_ark_lance','Exile ancestral spinal lance (AU)',{
+    kind:'thanix',damageType:'thanix_stream',damage:1950,cooldown:8,range:78,
+    projectileSpeed:Infinity,accuracy:0.86,penetration:1.15,beamDuration:2.2,heat:27,arc:18,
+  }),
+  exile_cruiser_rail: weapon('exile_cruiser_rail','Exile long-range accelerator (AU)',{
+    damage:510,cooldown:3.5,range:58,accuracy:0.82,penetration:.90,heat:15,arc:28,
+  }),
+  terminus_siege_round: weapon('terminus_siege_round','Terminus compact siege cannon (AU)',{
+    damage:1450,cooldown:6.7,range:43,accuracy:0.68,penetration:1,heat:24,arc:16,
+  }),
+  terminus_torpedo: weapon('terminus_torpedo','Compact breaching torpedo (AU)',{
+    kind:'disruptor_torpedo',damageType:'warhead',damage:360,cooldown:9.2,range:24,
+    projectileSpeed:3,missileHp:25,magazine:14,accuracy:.79,penetration:1.0,heat:6,arc:160,
+  }),
   au_cruiser_accelerator: weapon('au_cruiser_accelerator', 'Charter-pattern cruiser accelerator (AU)', { damage: 350, cooldown: 4, range: 52, penetration: 0.85, arc: 24 }),
   au_capital_accelerator: weapon('au_capital_accelerator', 'Charter-pattern capital accelerator (AU)', { damage: 1100, cooldown: 5, range: 66, penetration: 1.1, heat: 20, arc: 12 }),
   au_auxiliary_lance: weapon('au_auxiliary_lance', 'Auxiliary directed-plasma lance (AU)', { kind: 'thanix', damageType: 'thanix_stream', damage: 350, cooldown: 8, beamDuration: 1.5, range: 54, projectileSpeed: Infinity, penetration: 0.95, heat: 17, arc: 30 }),
@@ -78,6 +113,30 @@ function hull(p: HullInput): ShipClassDef {
   };
 }
 export const SANDBOX_SHIPS: Record<string, ShipClassDef> = {
+  axiom_ancient: hull({id:'axiom_ancient',name:'Axiom — Benevolent Capital Reaper (AU)',faction:'axiom_guard',role:'reaper_capital',lengthM:4200,
+    hull:48000,armour:520,barriers:33000,barrierRegen:210,maxSpeed:.53,acceleration:.047,turnRate:2.0,sensorRange:250,pointValue:7400,
+    hardpoints:[hp('axiom_cleansing_beam',[0,-85,980]),hp('axiom_interceptor',[80,-20,280],25,3),hp('reaper_point_defence',[0,20,0],0,14)],
+    description:'Axiom: a pale, weathered 4.2 km capital Reaper with protective doctrine and anti-harvest optics. Mass-effect-inducing morale behaviour is narrative only; combat statistics remain ordinary damage/barriers.'}),
+  axiom_warden: hull({id:'axiom_warden',name:'Axiom Guard sentinel (AU)',faction:'axiom_guard',role:'reaper_destroyer',lengthM:280,
+    hull:3400,armour:110,barriers:2300,barrierRegen:33,maxSpeed:1.25,acceleration:.23,turnRate:16,sensorRange:115,pointValue:210,
+    hardpoints:[hp('axiom_interceptor',[0,-8,108]),hp('reaper_point_defence',[0,5,0],0,3)],
+    description:'A pale-grey sentinel Reaper, original protective derivative, with shorter attack beams and anti-fighter emitters.'}),
+  exile_ark: hull({id:'exile_ark',name:'Exile ancestral war-ark (AU)',faction:'exile_hegemony',role:'dreadnought',lengthM:2600,
+    hull:26000,armour:270,barriers:19000,barrierRegen:145,maxSpeed:.37,acceleration:.032,turnRate:2.8,sensorRange:180,pointValue:2600,
+    hardpoints:[hp('exile_ark_lance',[0,-28,1160]),hp('exile_cruiser_rail',[85,25,250],75,6),hp('au_point_defence',[0,70,0],0,12)],
+    description:'Heavily protected colony-ark refitted as a siege dreadnought; extremely powerful forward lance but slow manoeuvres.'}),
+  exile_raider: hull({id:'exile_raider',name:'Exile hegemon intercept cruiser (AU)',faction:'exile_hegemony',role:'cruiser',lengthM:730,
+    hull:3800,armour:70,barriers:3100,barrierRegen:45,maxSpeed:1.07,acceleration:.2,turnRate:11,sensorRange:130,pointValue:155,
+    hardpoints:[hp('exile_cruiser_rail',[0,0,310]),hp('au_auxiliary_lance',[18,-7,90],30,2),hp('au_point_defence',[0,15,0],0,3)],
+    description:'Long-nosed deep-range raider with offset plasma projectors and advanced sensors; original exile silhouette.'}),
+  compact_siege: hull({id:'compact_siege',name:'Terminus Compact siege dreadnought (AU)',faction:'terminus_compact',role:'dreadnought',lengthM:1120,
+    hull:11600,armour:190,barriers:5400,barrierRegen:55,maxSpeed:.51,acceleration:.065,turnRate:4.1,sensorRange:102,pointValue:500,
+    hardpoints:[hp('terminus_siege_round',[0,0,515]),hp('terminus_torpedo',[30,-15,170],35,4),hp('au_point_defence',[0,30,0],0,8)],
+    description:'Modular siege hull assembled by batarian survivors and frontier dockyards; a slow main slug backed by torpedo racks.'}),
+  compact_gunship: hull({id:'compact_gunship',name:'Terminus Compact breacher (AU)',faction:'terminus_compact',role:'frigate',lengthM:260,
+    hull:990,armour:40,barriers:720,barrierRegen:20,maxSpeed:1.5,acceleration:.37,turnRate:19,sensorRange:72,pointValue:58,
+    hardpoints:[hp('exile_cruiser_rail',[0,0,115]),hp('terminus_torpedo',[10,-5,45],25,2),hp('au_point_defence',[0,8,0],0,1)],
+    description:'Cheap compact assault escort with a locally produced breaching rack; effective as a close-range wolfpack.'}),
   player_civ_cruiser: hull({ id: 'player_civ_cruiser', name: 'Charter cruiser', faction: 'player_civ', role: 'cruiser', lengthM: 700,
     hull: 3900, armour: 75, barriers: 2800, barrierRegen: 30, maxSpeed: 0.9, acceleration: 0.15, turnRate: 9, sensorRange: 100, pointValue: 280,
     hardpoints: [hp('au_cruiser_accelerator', [0, 0, 310]), hp('au_auxiliary_lance', [0, 25, 260]), hp('au_point_defence', [0, 30, 0], 0, 4)],
