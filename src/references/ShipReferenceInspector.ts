@@ -140,6 +140,20 @@ function showInspector():void{
     const center=bounds.getCenter(new THREE.Vector3());
     const size=bounds.getSize(new THREE.Vector3());
     const extent=Math.max(size.x,size.y,size.z,1);
+    // A single temporary WebGL renderer produces all six static orthographic
+    // shots. No six-context GPU allocation and no idle render loop.
+    const scratch=document.createElement('canvas');
+    scratch.width=768;scratch.height=520;
+    const renderer=new THREE.WebGLRenderer({canvas:scratch,alpha:false,antialias:true});
+    renderer.setSize(768,520,false);
+    renderer.outputColorSpace=THREE.SRGBColorSpace;
+    renderer.setClearColor(0x050b13);
+    const scene=new THREE.Scene();
+    const clone=original.clone(true);
+    scene.add(clone);
+    scene.add(new THREE.AmbientLight(0xb9cde3,1.2));
+    const directional=new THREE.DirectionalLight(0xffffff,2);
+    directional.position.set(extent,extent,extent);scene.add(directional);
     for(const v of views){
       const cell=make('article','shipref-cell'),head=make('header');
       const heading=make('strong');heading.textContent=v.name;
@@ -169,22 +183,13 @@ function showInspector():void{
       grid.append(cell);
       const prior=sessionStorage.getItem(key(ref.id,v.name));
       if(prior){status.textContent=prior.toUpperCase()+' · LOCAL REVIEW';status.className=prior==='pass'?'shipref-pass':'shipref-unverified';}
-      const renderer=new THREE.WebGLRenderer({canvas,alpha:false,antialias:true,preserveDrawingBuffer:true});
-      renderer.setSize(768,520,false);
-      renderer.outputColorSpace=THREE.SRGBColorSpace;
-      renderer.setClearColor(0x050b13);
-      const scene=new THREE.Scene();
-      const clone=original.clone(true);
-      scene.add(clone);
-      scene.add(new THREE.AmbientLight(0xb9cde3,1.2));
-      const directional=new THREE.DirectionalLight(0xffffff,2);
-      directional.position.set(extent,extent,extent);scene.add(directional);
       const camera=new THREE.OrthographicCamera(-extent*.95,extent*.95,extent*.64,-extent*.64,.001,extent*10);
       camera.position.copy(new THREE.Vector3(v.pos[0],v.pos[1],v.pos[2])).multiplyScalar(extent*2).add(center);
       camera.up.set(v.up[0],v.up[1],v.up[2]);camera.lookAt(center);
       camera.updateProjectionMatrix();renderer.render(scene,camera);
-      disposers.push(()=>{scene.remove(clone);renderer.dispose();renderer.forceContextLoss();});
+      canvas.getContext('2d')?.drawImage(scratch,0,0);
     }
+    scene.remove(clone);renderer.dispose();renderer.forceContextLoss();
     const applyAlpha=()=>grid.querySelectorAll<HTMLImageElement>('.shipref-stage img').forEach(image=>image.style.opacity=String(Number(alpha.value)/100));
     alpha.oninput=applyAlpha;applyAlpha();
   }
