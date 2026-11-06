@@ -1041,7 +1041,12 @@ export class BattleSimulation implements AiContext {
         const enemies = this.enemiesOf(s.side);
         let nearest = Infinity;
         for (const e of enemies) nearest = Math.min(nearest, distance(e.pos, s.pos));
-        if (nearest > 80 * S) s.escaped = true;
+        // Crossing the physical rear disengagement corridor also counts as
+        // exiting the arena. A pursuer cannot hold a withdrawing fleet in the
+        // simulation forever simply by matching its speed at close range.
+        // Requires *travel*: no instant despawn or teleport.
+        const travelledRearward = dot(sub(s.pos,f.spec.position),scale(f.spec.heading,-1));
+        if (nearest > 80 * S || travelledRearward > 80 * S) s.escaped = true;
       }
     }
   }
