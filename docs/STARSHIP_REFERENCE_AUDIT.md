@@ -11,7 +11,7 @@ Source: user-supplied `Mass_Effect_Starship_Reference_Pack_v1(1).zip` and `CODEX
 ## P0 matching inventory
 | Registry | Evidence target | Simulator class association | Current approval |
 |---|---|---|---|
-| ALL-001 | Normandy SR-1 | **Missing dedicated SR-1 hull** | MISSING |
+| ALL-001 | Normandy SR-1 | alliance_normandy_sr1 (**new distinct procedural candidate**) | NOT REVIEWED |
 | ALL-002 | Normandy SR-2, Alliance | alliance_frigate_thanix (approximation) | NOT REVIEWED |
 | ALL-003 | ME3 Alliance cruiser | alliance_cruiser (procedural) | NOT REVIEWED |
 | ALL-004 | ME3 Alliance dreadnought | alliance_dreadnought (procedural) | NOT REVIEWED |
@@ -25,7 +25,7 @@ Source: user-supplied `Mass_Effect_Starship_Reference_Pack_v1(1).zip` and `CODEX
 | REP-002 | Harbinger | harbinger (procedural) | NOT REVIEWED |
 | REP-003 | Reaper destroyer | reaper_destroyer (procedural) | NOT REVIEWED |
 
-Association means the current model is used as a starting inspection target, **not** that its silhouette matches the game. The registry has 21 entries with no direct class association in the shared mapping. The full QA function independently checks actual installed model availability: different builds may legitimately have different working classes.
+Association means the current model is used as a starting inspection target, **not** that its silhouette matches the game. The registry has 20 entries with no direct class association in the shared mapping. The full QA function independently checks actual installed model availability: different builds may legitimately have different working classes.
 
 ## Verified geometry data, not sim instructions
 The source pack lists **2,000 m for Sovereign-class capital Reapers and 160 m for destroyers**, also 196 m for SR-2, 707 m Alliance ME3 cruiser, 700 m Cerberus cruiser, 500 m turian cruiser, 643 m quarian ring cruiser, 700 m geth cruiser, 1,190 m geth dreadnought. Other lengths are **unknown**, not to be invented. Render scaling is not silently changed.
@@ -43,3 +43,6 @@ Use **SHIP REFERENCES · 6 VIEWS** inside the game. Select a ship; top, bottom, 
 
 ## Asset policy
 The reference pack links to third-party material; no external images or official game meshes are bundled. Only use legal screenshots and appropriately licensed user-supplied 3D models. Keep `source_visibility` and `geometry_status` frozen and separate from local inspector review notes.
+
+## Candidate added: Normandy SR-1
+The `alliance_normandy_sr1` **new, optional** frigate has a separately modelled narrow nose, swept root panels and four actual aft nozzle markers. Its 170 m gameplay length is an explicit **estimate**, not an official dimension; the uploaded pack has `length_m: null`. It is available for optional custom battles and QA, but the existing working SR-2 and stock frigate are unchanged. Source geometry approval remains pending six-view plus three-quarter human comparison.
