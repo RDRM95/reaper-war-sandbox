@@ -110,7 +110,9 @@ export class TargetTelemetry {
     const flash=sim.time-this.lastShotTime<=1.1 ? this.lastShotLabel :
       (cooling?'MAIN GUN RECHARGING':inRange&&linedUp?'FIRING SOLUTION READY':lock);
     this.line.textContent=flash+' · '+lock;
-    this.panel.innerHTML='<strong>'+tidy(source.name)+'</strong><small>'+tidy(weaponLabel)+'</small><div>WEAPON READY <b>'+charge+'%</b> · HEAT <b>'+heat+'%</b></div><div>AMMUNITION <b>'+(primary?.ammo===undefined?'UNLIMITED':String(primary.ammo))+'</b> · KILLS <b>'+source.stats.kills+'</b></div>';
+    const motion=source.inertialCoast?'INERTIAL COAST':
+      (source.engineThrust??0)>.09?'MAIN THRUST '+Math.round((source.engineThrust??0)*100)+'%':'RCS HOLD';
+    this.panel.innerHTML='<strong>'+tidy(source.name)+'</strong><small>'+tidy(weaponLabel)+'</small><div>WEAPON READY <b>'+charge+'%</b> · HEAT <b>'+heat+'%</b></div><div>AMMUNITION <b>'+(primary?.ammo===undefined?'UNLIMITED':String(primary.ammo))+'</b> · KILLS <b>'+source.stats.kills+'</b></div><div>PROPULSION <b>'+motion+'</b></div>';
     this.readout.innerHTML=target&&target.alive?
       '<div>TRACK <b>'+tidy(target.name)+'</b></div><div>RANGE <b>'+metres(range)+'</b> · '+(inRange?'WITHIN BATTERY RANGE':'OUTSIDE BATTERY RANGE')+'</div><div>TARGET BARRIERS <b>'+pct(target.barriers,target.maxBarriers)+'%</b> · HULL <b>'+pct(target.hull,target.maxHull)+'%</b></div>':
       '<div>NO LOCKED TARGET</div><div>AUTONOMOUS FIRE CONTROL SEARCHING</div>';
