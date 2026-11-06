@@ -1,0 +1,557 @@
+{
+  "version": "1.0",
+  "generated": "2026-11-06",
+  "units": "metres",
+  "notes": "Compact non-lossless source-derived index from user-supplied Mass Effect Starship Reference Pack v1. Original silhouette/modelling notes live in the supplied pack; never promote fan reconstructions to official geometry.",
+  "ships": [
+    {
+      "id": "ALL-001",
+      "name": "SSV Normandy SR-1",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": null,
+      "source_visibility": "ME1 cinematic, model ship, key art",
+      "primary_source_ids": [
+        "model_ships",
+        "art1"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-002",
+      "name": "SSV Normandy SR-2 (Alliance)",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 196,
+      "source_visibility": "ME2/ME3 cinematic + officially licensed replica",
+      "primary_source_ids": [
+        "model_ships",
+        "art2",
+        "normandy_replica"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-003",
+      "name": "Alliance cruiser — ME3 hull",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 707,
+      "source_visibility": "ME3 fleet scenes, ship collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "starships"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-004",
+      "name": "Alliance dreadnought — ME3 hull",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": null,
+      "source_visibility": "ME3 fleet/cutscenes, ship collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "orth_dread",
+        "codex_dread"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-005",
+      "name": "F-61 Trident fighter",
+      "geometry_status": "on_screen",
+      "build_priority": "P1",
+      "length_m": null,
+      "source_visibility": "ME3 fighter scenes, ship collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "alliance_navy"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-006",
+      "name": "UT-47 Kodiak",
+      "geometry_status": "on_screen",
+      "build_priority": "P1",
+      "length_m": null,
+      "source_visibility": "ME2/ME3 missions, ship collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "alliance_navy"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-007",
+      "name": "Alliance carrier (generic)",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Codex and named ships only",
+      "primary_source_ids": [
+        "codex_carriers",
+        "alliance_navy"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-008",
+      "name": "Everest-class dreadnought",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "ME1 codex lists class/names",
+      "primary_source_ids": [
+        "codex_dread",
+        "ships_list",
+        "reconstruct"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-009",
+      "name": "Early Alliance cruiser — ME1 variant",
+      "geometry_status": "on_screen",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "ME1 appearances and later fan reconstruction",
+      "primary_source_ids": [
+        "art1",
+        "reconstruct"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ALL-A01",
+      "name": "SSV Omaha — Apex heavy dreadnought",
+      "geometry_status": "apex_original",
+      "build_priority": "APEX",
+      "length_m": null,
+      "source_visibility": "User-created Mass Effect: Apex lore",
+      "primary_source_ids": [
+        "codex",
+        "art1"
+      ],
+      "apex_original": true
+    },
+    {
+      "id": "CER-001",
+      "name": "Cerberus cruiser — ME3",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 700,
+      "source_visibility": "ME3 cutscenes, fan faithful model re-creation",
+      "primary_source_ids": [
+        "cerberus_page",
+        "cerberus_navy"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "CER-002",
+      "name": "Normandy SR-2 — Cerberus",
+      "geometry_status": "on_screen",
+      "build_priority": "P1",
+      "length_m": 196,
+      "source_visibility": "ME2 cinematic, official replica",
+      "primary_source_ids": [
+        "art2",
+        "normandy_replica"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "CER-003",
+      "name": "Cerberus dreadnought",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "ME3 Cerberus references",
+      "primary_source_ids": [
+        "cerberus_navy"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "CER-A01",
+      "name": "Black Fleet stealth dreadnought",
+      "geometry_status": "apex_original",
+      "build_priority": "APEX",
+      "length_m": null,
+      "source_visibility": "Apex AU original",
+      "primary_source_ids": [
+        "art1",
+        "cerberus_page"
+      ],
+      "apex_original": true
+    },
+    {
+      "id": "CER-A02",
+      "name": "Black Fleet autonomous strike carrier",
+      "geometry_status": "apex_original",
+      "build_priority": "APEX",
+      "length_m": null,
+      "source_visibility": "Apex AU original",
+      "primary_source_ids": [
+        "codex_carriers",
+        "cerberus_page"
+      ],
+      "apex_original": true
+    },
+    {
+      "id": "TUR-001",
+      "name": "Turian cruiser",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 500,
+      "source_visibility": "ME1/ME3 appearances, model collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "art1"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "TUR-002",
+      "name": "Turian dreadnought",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Referenced in trilogy; named dreadnoughts",
+      "primary_source_ids": [
+        "ships_list",
+        "starships"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "TUR-003",
+      "name": "Turian fighter / fleet escort",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Fleet-role lore",
+      "primary_source_ids": [
+        "art1",
+        "codex"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ASA-001",
+      "name": "Destiny Ascension",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": null,
+      "source_visibility": "ME1 and ME3 cinematic, ship collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "art1"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ASA-002",
+      "name": "Asari cruiser — fleet archetype",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Art-book visual language, fan chart examples",
+      "primary_source_ids": [
+        "art1",
+        "asari_fan"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "ASA-003",
+      "name": "Asari escort/frigate",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Non-final reconstruction",
+      "primary_source_ids": [
+        "art1",
+        "asari_fan"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "SAL-001",
+      "name": "Salarian warship — concept archetype",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "BioWare art-book species language",
+      "primary_source_ids": [
+        "art1"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "SAL-A01",
+      "name": "STG deep-space stealth corvette",
+      "geometry_status": "apex_original",
+      "build_priority": "APEX",
+      "length_m": null,
+      "source_visibility": "Apex original based on salarian language",
+      "primary_source_ids": [
+        "art1",
+        "codex"
+      ],
+      "apex_original": true
+    },
+    {
+      "id": "QUR-001",
+      "name": "Quarian ring cruiser",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 643,
+      "source_visibility": "ME3 Rannoch fleet cinematic, ship collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "quarian"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "QUR-002",
+      "name": "Quarian liveship",
+      "geometry_status": "on_screen",
+      "build_priority": "P1",
+      "length_m": null,
+      "source_visibility": "ME3 model collectible and Rannoch lore",
+      "primary_source_ids": [
+        "model_ships",
+        "quarian"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "QUR-003",
+      "name": "Idenna — converted Hensa-class",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Mass Effect: Ascension text, listed in ship index",
+      "primary_source_ids": [
+        "ships_list",
+        "quarian"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "QUR-004",
+      "name": "Armed migrant freighter",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Fleet background lore",
+      "primary_source_ids": [
+        "quarian",
+        "starships"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "GET-001",
+      "name": "Geth cruiser",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 700,
+      "source_visibility": "ME1/ME2/ME3, ship collectible",
+      "primary_source_ids": [
+        "model_ships",
+        "starships"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "GET-002",
+      "name": "Geth dreadnought — Rannoch",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 1190,
+      "source_visibility": "ME3 Priority: Geth Dreadnought; original developer portfolio",
+      "primary_source_ids": [
+        "artist_geth",
+        "geth_dread",
+        "geth_replica"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "GET-003",
+      "name": "Geth fighter",
+      "geometry_status": "on_screen",
+      "build_priority": "P1",
+      "length_m": null,
+      "source_visibility": "ME3, miniature collectible",
+      "primary_source_ids": [
+        "model_ships"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "GET-004",
+      "name": "Geth transporter",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "ME1 model source distinctions discussed by fans",
+      "primary_source_ids": [
+        "starships"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "REP-001",
+      "name": "Sovereign-class capital Reaper",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 2000,
+      "source_visibility": "ME1/ME3 cinematics, in-game codex",
+      "primary_source_ids": [
+        "reapers"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "REP-002",
+      "name": "Harbinger",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": null,
+      "source_visibility": "ME3 finale, on-screen",
+      "primary_source_ids": [
+        "reapers"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "REP-003",
+      "name": "Reaper destroyer",
+      "geometry_status": "on_screen",
+      "build_priority": "P0",
+      "length_m": 160,
+      "source_visibility": "ME3 Rannoch and Earth scenes, codex",
+      "primary_source_ids": [
+        "reapers"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "REP-004",
+      "name": "Reaper troop transport",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "ME3 codex",
+      "primary_source_ids": [
+        "reapers"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "REP-005",
+      "name": "Reaper processor",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "ME3 codex",
+      "primary_source_ids": [
+        "reapers"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "REP-A01",
+      "name": "Axiom",
+      "geometry_status": "apex_original",
+      "build_priority": "APEX",
+      "length_m": 4200,
+      "source_visibility": "Apex original",
+      "primary_source_ids": [
+        "reapers"
+      ],
+      "apex_original": true
+    },
+    {
+      "id": "COL-001",
+      "name": "Collector cruiser / ship",
+      "geometry_status": "on_screen",
+      "build_priority": "P1",
+      "length_m": null,
+      "source_visibility": "ME2 collector cruiser and artist commentary",
+      "primary_source_ids": [
+        "art2",
+        "collector_art"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "BAT-001",
+      "name": "Hensa-class cruiser",
+      "geometry_status": "text_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "Mass Effect: Ascension text",
+      "primary_source_ids": [
+        "ships_list"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "BAT-002",
+      "name": "Batarian dreadnought — conceptual",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "BioWare concept adapted by Paul Kiesling",
+      "primary_source_ids": [
+        "cerberus_page"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "VOL-001",
+      "name": "Volus dreadnought — Kwunu",
+      "geometry_status": "concept_only",
+      "build_priority": "P2",
+      "length_m": null,
+      "source_visibility": "ME3 still and fan reconstruction",
+      "primary_source_ids": [
+        "cerberus_page",
+        "ships_list"
+      ],
+      "apex_original": false
+    },
+    {
+      "id": "TER-A01",
+      "name": "Terminus armoured heavy cruiser",
+      "geometry_status": "apex_original",
+      "build_priority": "APEX",
+      "length_m": null,
+      "source_visibility": "Apex expansion",
+      "primary_source_ids": [
+        "codex"
+      ],
+      "apex_original": true
+    },
+    {
+      "id": "KRO-A01",
+      "name": "Krogan assault barge",
+      "geometry_status": "apex_original",
+      "build_priority": "APEX",
+      "length_m": null,
+      "source_visibility": "Apex original",
+      "primary_source_ids": [
+        "codex"
+      ],
+      "apex_original": true
+    }
+  ]
+}
