@@ -1,14 +1,18 @@
 import './spectator.css';
 import { installShipReferenceInspector } from '@/references/ShipReferenceInspector';
 import { BattleSimulation, SIM_DT } from '@/simulation/battle';
+import { ShipKillScoreboard } from '@/simulation/killScoreboard';
 import { resolveQuickBattle, type QuickBattleReport } from '@/simulation/quickBattle';
 import { BattleView } from '@/rendering/battleView';
+import { primaryGunneryMount,isMainGunShot } from '@/rendering/gunnery';
 import type { CameraMode } from '@/rendering/cameras';
 import type { BattleEvent, FormationType, ShipState, Side } from '@/simulation/types';
 import { buildCustomBattle } from '@/scenarios';
 import { SHIP_CLASS_LIST } from '@/data/ships';
 import { MASS_EFFECT_FACTION_IDS, SANDBOX_FACTION_IDS, type FactionId } from '@/data/types';
 import { EXPANDED_BATTLES } from '@/scenarios/expandedBattles';
+import { AU_CHAPTERS } from '@/scenarios/auLibrary';
+import { PRESETS } from '@/timelines/presets';
 import { FACTIONS } from '@/data/factions';
 import { audio } from '@/audio/engine';
 import { FleetMap2D } from './spectator/flatView';
@@ -48,10 +52,14 @@ let viewError:string|undefined;
 let gunnery=false;
 let lastGunneryTarget:string|undefined;
 let lastReady=false;
+let lastCritical=false;
 let graphics:GraphicsPreset = 'high';
 let fpsCounter=0,fpsLast=0,fpsValue=0,simWorkMs=0;
 const frameTimes:number[]=[];
 const feed:{time:number;message:string;side?:Side}[]=[];
+const killScoreboard=new ShipKillScoreboard();
+let killScoreVisible=true;
+let lastScoreDraw=-1;
 const app=document.getElementById('app')!;
 app.innerHTML=`
 <header class="rw-header"><div class="brand"><small>MASS EFFECT / FAN-MADE SIMULATION</small><strong>REAPER WAR <span>— SPECTATOR</span></strong></div>
@@ -92,6 +100,12 @@ app.innerHTML=`
   <aside class="pane rw-data"><div class="pane-heading">ENGAGEMENT TELEMETRY <span>02</span></div>
     <div class="team"><div class="team-title">SIDE A <strong id="aliveA">—</strong></div><div class="meter"><i id="meterA"></i></div><div class="pair">HULLS LOST <b id="lostA">—</b></div></div>
     <div class="team red-team"><div class="team-title">SIDE B <strong id="aliveB">—</strong></div><div class="meter"><i id="meterB"></i></div><div class="pair">HULLS LOST <b id="lostB">—</b></div></div>
+    <div class="pane-heading with-border">KILLS BY SHIP TYPE <button id="score-toggle" class="score-toggle" aria-expanded="true" title="Show or hide class kill scoreboard">HIDE</button></div>
+    <section id="kill-scoreboard" class="kill-scoreboard" aria-label="Destroyed ship types">
+      <div class="kill-totals"><span>SIDE A LOST <b id="score-total-A">0</b></span><span>SIDE B LOST <b id="score-total-B">0</b></span></div>
+      <div class="kill-columns"><div><strong>SIDE A · DESTROYED</strong><div id="score-A" class="kill-list">No losses</div></div>
+        <div><strong>SIDE B · DESTROYED</strong><div id="score-B" class="kill-list">No losses</div></div></div>
+    </section>
     <div class="pane-heading with-border">SHIP INSPECTION <span>03</span></div>
     <div id="selection" class="selection">Click a vessel in either spectator camera to inspect its condition.</div>
     <button id="follow" class="plain full">FOLLOW SELECTED</button>
@@ -102,14 +116,24 @@ app.innerHTML=`
   </aside>
 </div><footer>INDEPENDENT NON-COMMERCIAL FAN PROJECT · ORIGINAL SOURCE-BASED 3D ENGINE · BUILD 0.3 DEVELOPMENT</footer>
 `;
-for(const chapter of EXPANDED_BATTLES){
+const selectableChapters=[...EXPANDED_BATTLES,...AU_CHAPTERS];
+// Every scenario can be tested under an AU ruleset, including late-cycle AUs.
+for(const preset of PRESETS){
+  const options=$<HTMLSelectElement>('rules');
+  if(![...options.options].some(opt=>opt.value===preset.id)){
+    const option=document.createElement('option');option.value=preset.id;option.textContent=preset.name.toUpperCase();options.append(option);
+  }
+}
+for(const chapter of selectableChapters){
   scenarios[chapter.id]={
     a:{...chapter.a,counts:{...chapter.a.counts}},
     b:{...chapter.b,counts:{...chapter.b.counts}},
     environment:chapter.environment,rules:chapter.rules,range:chapter.distance
   };
   const option=document.createElement('option');
-  option.value=chapter.id;option.textContent=chapter.name.toUpperCase()+' / AU';
+  option.value=chapter.id;
+  option.title=chapter.description;
+  option.textContent=(('era' in chapter)?chapter.era+' / ':'')+chapter.name.toUpperCase()+(chapter.mathRecommended?' · INSTANT MATH RECOMMENDED':'');
   $<HTMLSelectElement>('scenario').append(option);
 }
 const factionSelect=$<HTMLSelectElement>('faction');
@@ -117,6 +141,29 @@ factionSelect.innerHTML=([...MASS_EFFECT_FACTION_IDS,...SANDBOX_FACTION_IDS] as 
 const third=$<HTMLCanvasElement>('scene3d'),second=$<HTMLCanvasElement>('scene2d');
 flat=new FleetMap2D(second);
 const telemetry=new TargetTelemetry($('stage'));
+$('score-toggle').addEventListener('click',()=>{
+  killScoreVisible=!killScoreVisible;
+  $('kill-scoreboard').hidden=!killScoreVisible;
+  $('score-toggle').textContent=killScoreVisible?'HIDE':'SHOW';
+  $('score-toggle').setAttribute('aria-expanded',String(killScoreVisible));
+});
+function updateKillScoreboard(force=false):void{
+  if(!sim)return;
+  const changed=killScoreboard.sync(sim.events);
+  if(!force&&!changed||(!killScoreVisible&&!force))return;
+  const total=killScoreboard.totalDestroyed;
+  if(total===lastScoreDraw&&!force)return;
+  lastScoreDraw=total;
+  for(const side of ['A','B'] as Side[]){
+    $('score-total-'+side).textContent=fmt(killScoreboard.total(side));
+    const rows=killScoreboard.rows(side);
+    $('score-'+side).innerHTML=rows.length?rows.map(row=>
+      '<div class="kill-row"><span title="'+escapeHtml(row.faction+' / '+row.classId)+'">'+
+      escapeHtml(row.className)+'</span><b>'+fmt(row.destroyed)+'</b></div>'
+    ).join(''):'<span class="kill-empty">No losses</span>';
+  }
+}
+
 flat.onPick=s=>select(s);
 function rowTally(f:Fleet){return Object.values(f.counts).reduce((a,b)=>a+Math.max(0,b),0);}
 function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelect.value=f.faction;$<HTMLSelectElement>('formation').value=f.formation;
@@ -135,7 +182,7 @@ function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelec
 }
 function applyScenario(id:string){const p=scenarios[id];selectedScenario=id;fleets={A:copyFleet(p.a),B:copyFleet(p.b)};waves={A:freshWave(),B:freshWave()};
   $<HTMLSelectElement>('rules').value=p.rules;$<HTMLInputElement>('distance').value=String(p.range);$('battle-name').textContent=$<HTMLSelectElement>('scenario').selectedOptions[0].textContent??'BATTLE';
-  $('resolve').textContent=EXPANDED_BATTLES.find(c=>c.id===id)?.mathRecommended?'Σ INSTANT RESULTS — RECOMMENDED':'Σ INSTANT BATTLE RESULTS';
+  $('resolve').textContent=selectableChapters.find(c=>c.id===id)?.mathRecommended?'Σ INSTANT RESULTS — RECOMMENDED':'Σ INSTANT BATTLE RESULTS';
   editor();
 }
 /** Opt-in benchmark roster: preserves faction and relative composition while
@@ -180,6 +227,7 @@ function inspect(){if(!sim||!selectedShip){$('selection').textContent='Click a v
 }
 function updateHud(){if(!sim)return;
   $('clock').textContent=clock(sim.time);
+  updateKillScoreboard();
   if(feed.length)$('log').innerHTML=feed.slice(0,22).map(item=>`<div class="entry ${item.side==='A'?'a':'b'}"><time>${clock(item.time)}</time>${escapeHtml(item.message)}</div>`).join('');
   for(const side of ['A','B'] as Side[]){const ships=sim.ships.filter(s=>s.side===side&&s.role!=='fighter');
     const alive=ships.filter(s=>s.alive&&!s.escaped).length;
@@ -193,16 +241,16 @@ function updateHud(){if(!sim)return;
 }
 function pushEvent(e:BattleEvent){
   if(gunnery&&selectedShip){
-    telemetry.notify(e,selectedShip);
+    telemetry.notify(e,selectedShip,sim??undefined);
     if(audioEnabled && e.type==='weapon_fired'&&e.shipId===selectedShip){
-      const shooter=sim?.getShip(e.shipId),weapon=shooter?.weapons[e.weaponIndex];
-      const id=e.kind==='reaper_beam'?'reaper_beam':e.kind==='thanix'?'thanix':
-        e.kind==='mass_accelerator'?(weapon && weapon.def.damage>=550?'ma_large':'ma_small'):
-        e.kind==='gardian'?'gardian':'torpedo';
-      audio.play(id,0,0.55);
+      const shooter=sim?.getShip(e.shipId);
+      if(shooter&&isMainGunShot(shooter,e.weaponIndex))
+        audio.play('gunner_spinal',0,.65);
     }
-    if(audioEnabled&&e.type==='projectile_impact'&&e.shipId===selectedShip)
-      audio.play(e.hullDamage>0?'impact_hull':'impact_barrier',0,0.45);
+    if(audioEnabled&&e.type==='projectile_impact'&&e.targetId===selectedShip)
+      audio.play(e.hullDamage>0?'impact_hull':'impact_barrier',0,.23);
+    if(audioEnabled&&e.type==='ship_destroyed'&&e.shipId===selectedShip)
+      audio.play('gunner_signal',0,.7);
   }
   if(e.type==='ship_destroyed'){
     const killer=e.killerId?sim?.shipById.get(e.killerId)?.name:'Unknown';feed.unshift({time:e.t,message:e.name+' destroyed'+(killer?' · '+killer:''),side:e.side});
@@ -253,9 +301,15 @@ function currentConfig(){
     startingDistanceKm:Math.max(10,Math.min(600,Number($<HTMLInputElement>('distance').value)||110)),
     maxDuration:650,
     sideA:{...copyFleet(fleets.A)},sideB:{...copyFleet(fleets.B)},
-    extraA:rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[],
-    extraB:rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[]});
-  const chapter=EXPANDED_BATTLES.find(c=>c.id===selectedScenario);
+    extraA:[
+      ...(AU_CHAPTERS.find(ch=>ch.id===selectedScenario)?.extraA??[]).map(e=>({...e,techOverride:e.tech})),
+      ...(rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[])
+    ],
+    extraB:[
+      ...(AU_CHAPTERS.find(ch=>ch.id===selectedScenario)?.extraB??[]).map(e=>({...e,techOverride:e.tech})),
+      ...(rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[])
+    ]});
+  const chapter=selectableChapters.find(c=>c.id===selectedScenario);
   if(chapter){
     config.id=chapter.id+'-'+config.rules.id+'-'+config.seed;
     config.name=chapter.name;
@@ -268,6 +322,9 @@ function currentConfig(){
     for(const fleet of config.fleets){
       if(fleet.id==='custom-a'&&chapter.a.tech)fleet.techOverride={...chapter.a.tech};
       if(fleet.id==='custom-b'&&chapter.b.tech)fleet.techOverride={...chapter.b.tech};
+      // buildCustomBattle() already copies technology overrides for coalition
+      // extras. Keep those IDs and faction doctrines intact.
+
     }
   }
   return config;
@@ -276,17 +333,30 @@ function launch(){try{
   $('quick-report').hidden=true;
   $('error').hidden=true;viewError=undefined;
   const config=currentConfig();
+  const requestedHullCount=config.fleets.reduce((n,f)=>n+
+    f.ships.reduce((sum,c)=>sum+c.count,0),0);
+  // Truly strategic AU chapters have their own calculator: avoid hanging the
+  // browser by accidentally constructing 75,100 real-time vessel objects.
+  if(requestedHullCount>12000 && parameters.get('forceLive')!=='1'){
+    quickReport=resolveQuickBattle(config);
+    renderQuickReport(quickReport);
+    $('state').textContent='STRATEGIC ESTIMATE';
+    $('message').textContent=requestedHullCount.toLocaleString('en-GB')+
+      ' SHIPS · LIVE PLAY REQUIRES forceLive=1';
+    return;
+  }
+  killScoreboard.reset();lastScoreDraw=-1;
   view?.dispose();view=null;
   sim=new BattleSimulation(config);
   if(referenceMode){
     for(let i=0;i<Math.round(referenceSeconds/SIM_DT)&&!sim.finished;i++)sim.step();
   }
-  flat!.reset();selectedShip=undefined;following=false;gunnery=false;lastGunneryTarget=undefined;lastReady=false;telemetry.show(false);$('gunner').classList.remove('active');$('stage').classList.remove('gunnery-active');feed.length=0;accum=0;paused=referenceMode;
+  flat!.reset();selectedShip=undefined;following=false;gunnery=false;lastGunneryTarget=undefined;lastReady=false;lastCritical=false;telemetry.show(false);$('gunner').classList.remove('active');$('stage').classList.remove('gunnery-active');feed.length=0;accum=0;paused=referenceMode;
   if(referenceMode)$('pause').textContent='▶';
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
   if(audioEnabled){audio.init();}
-  if(mode==='3d')createView();switchMode();updateHud();
+  if(mode==='3d')createView();switchMode();updateKillScoreboard(true);updateHud();
 }catch(e){reportError(e);}}
 let quickReport: QuickBattleReport | null=null;
 function reportCounts(side:Side,report:QuickBattleReport):string{
@@ -442,9 +512,17 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
           if(target&&audioEnabled)audio.play('target_lock',0,0.65);
           lastGunneryTarget=target;
         }
-        const ready=!!vessel?.weapons.some(w=>!w.def.antiSmall&&w.cooldown<=0.02);
-        if(ready&&!lastReady&&audioEnabled)audio.play('battery_ready',0,0.32);
+        const main=vessel?primaryGunneryMount(vessel):undefined;
+        const ready=!!main&&main.cooldown<=.03;
+        if(ready&&!lastReady&&audioEnabled)audio.play('gunner_charge',0,.22);
         lastReady=ready;
+        const critical=!!vessel&&vessel.alive&&(
+          vessel.hull/Math.max(1,vessel.maxHull)<.26||
+          vessel.subsystems.engines<.24||
+          vessel.subsystems.weapons<.22
+        );
+        if(critical&&!lastCritical&&audioEnabled)audio.play('gunner_warning',0,.28);
+        lastCritical=critical;
       }
     }
     if(mode==='2d'){if(following&&selectedShip){const ship=sim.shipById.get(selectedShip);if(ship&&ship.alive)flat!.focus(ship);}flat!.draw(sim);}

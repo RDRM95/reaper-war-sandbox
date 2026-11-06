@@ -4,12 +4,16 @@
  * starts only after a user gesture, per browser policy.
  */
 export type SoundId =
+  | 'gunner_spinal'
+  | 'gunner_charge'
+  | 'gunner_signal'
+  | 'gunner_warning'
+  | 'target_lock'
+  | 'battery_ready'
   | 'ui_click'
   | 'ui_hover'
   | 'ui_confirm'
   | 'alert'
-  | 'target_lock'
-  | 'battery_ready'
   | 'ma_small'
   | 'ma_large'
   | 'hades_internal'
@@ -127,7 +131,7 @@ export class AudioEngine {
       this.budgetTime = now;
       this.budget = 0;
     }
-    if (this.budget > 10) return;
+    if (this.budget > 10 && !id.startsWith('gunner_')) return;
     const last = this.lastPlay.get(id) ?? -1;
     const minGap = id.startsWith('ui') ? 0.03 : id === 'gardian' ? 0.08 : 0.05;
     if (now - last < minGap) return;
@@ -158,6 +162,26 @@ export class AudioEngine {
         break;
       case 'battery_ready':
         this.tone('triangle', 420, 760, 0.15, 0.06 * att, bus);
+        break;
+      case 'gunner_spinal':
+        // Heard INSIDE the hull: dense actuator click, pressure pulse,
+        // low-frequency structure-borne rumble. No sharp external explosion.
+        this.tone('triangle', 75, 36, .46, .24*att, bus);
+        this.noise(.16, 'lowpass', 240, .8, .25*att, bus);
+        this.tone('sine', 48, 33, .82, .13*att, bus, .07);
+        break;
+      case 'gunner_charge':
+        this.tone('triangle', 105, 195, .3, .07*att, bus);
+        this.tone('sine', 230, 330, .17, .03*att, bus, .19);
+        break;
+      case 'gunner_signal':
+        this.noise(.18,'bandpass',980,1.3,.13*att,bus);
+        this.tone('triangle',640,170,.5,.11*att,bus);
+        this.noise(.3,'highpass',2400,1,.025*att,bus,.15);
+        break;
+      case 'gunner_warning':
+        this.tone('sine',560,560,.12,.047*att,bus);
+        this.tone('sine',560,560,.12,.037*att,bus,.19);
         break;
       case 'ma_small':
         this.noise(0.12, 'bandpass', 1800, 1.2, 0.25 * att, bus);

@@ -4,7 +4,7 @@ import { buildReaperCapital, buildReaperDestroyer } from './reaper';
 import { buildPastCycleCruiser, buildPastCycleDreadnought } from './auHumanity';
 import { buildAllianceCruiser, buildAllianceDreadnought } from './alliance';
 
-interface Style { hull:number; trim:number; engine:number; scale:number; family:'axiom'|'exile'|'compact' }
+interface Style { hull:number; trim:number; engine:number; lengthM:number; family:'axiom'|'exile'|'compact' }
 
 /**
  * Procedural, original AU silhouettes built from proven hull geometry.
@@ -55,22 +55,30 @@ function styleBuilt(built: BuiltShip, style: Style): BuiltShip {
     const spine=new THREE.Mesh(new THREE.BoxGeometry(L*.04,L*.12,L*.34),mat);
     spine.position.set(0,L*.095,-L*.035);group.add(spine);
   }
-  group.scale.multiplyScalar(style.scale);
-  return { ...built, lengthUnits: built.lengthUnits*style.scale,
+  // Catalogue length is authoritative for simulation placement. Compute
+  // the visual scale from the real donor template rather than an approximate
+  // multiplier (previously some silhouettes mismatched their metre metadata).
+  // Donor templates sometimes have a few percent of extra geometry beyond
+  // their nominal lengthUnits. Measure *actual* visible bounds to keep class
+  // silhouette size consistent with the simulation's metre datum.
+  const actualLength=new THREE.Box3().setFromObject(group).getSize(new THREE.Vector3()).z;
+  const scale = (style.lengthM / 100) / Math.max(1e-6,actualLength);
+  group.scale.multiplyScalar(scale);
+  return { ...built, lengthUnits: style.lengthM / 100,
     glowColor:style.engine,
-    engineNodes:built.engineNodes.map(v=>v.clone().multiplyScalar(style.scale)),
-    muzzle:built.muzzle?.clone().multiplyScalar(style.scale) };
+    engineNodes:built.engineNodes.map(v=>v.clone().multiplyScalar(scale)),
+    muzzle:built.muzzle?.clone().multiplyScalar(scale) };
 }
 
 export const buildAxiomAncient=():BuiltShip=>styleBuilt(buildReaperCapital(),
-  {hull:0x8d9fa8,trim:0xc5d0d5,engine:0x66e0ee,scale:2.1,family:'axiom'});
+  {hull:0x8d9fa8,trim:0xc5d0d5,engine:0x66e0ee,lengthM:4200,family:'axiom'});
 export const buildAxiomWarden=():BuiltShip=>styleBuilt(buildReaperDestroyer(),
-  {hull:0x70828f,trim:0xa9d1d5,engine:0x70e9e0,scale:1.75,family:'axiom'});
+  {hull:0x70828f,trim:0xa9d1d5,engine:0x70e9e0,lengthM:280,family:'axiom'});
 export const buildExileArk=():BuiltShip=>styleBuilt(buildPastCycleDreadnought(),
-  {hull:0x46546a,trim:0xa095bb,engine:0xb1a2ff,scale:1.3,family:'exile'});
+  {hull:0x46546a,trim:0xa095bb,engine:0xb1a2ff,lengthM:2600,family:'exile'});
 export const buildExileRaider=():BuiltShip=>styleBuilt(buildPastCycleCruiser(),
-  {hull:0x526c78,trim:0xb7aecf,engine:0xaaa8ff,scale:1.15,family:'exile'});
+  {hull:0x526c78,trim:0xb7aecf,engine:0xaaa8ff,lengthM:730,family:'exile'});
 export const buildCompactSiege=():BuiltShip=>styleBuilt(buildAllianceDreadnought(),
-  {hull:0x715643,trim:0xbf8751,engine:0xffa25e,scale:1.26,family:'compact'});
+  {hull:0x715643,trim:0xbf8751,engine:0xffa25e,lengthM:1120,family:'compact'});
 export const buildCompactGunship=():BuiltShip=>styleBuilt(buildAllianceCruiser(),
-  {hull:0x645348,trim:0xc29259,engine:0xffb06c,scale:.50,family:'compact'});
+  {hull:0x645348,trim:0xc29259,engine:0xffb06c,lengthM:260,family:'compact'});

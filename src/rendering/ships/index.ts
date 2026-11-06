@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { buildNormandySR1 } from './normandySR1';
-import { buildAllianceCarrier, buildAllianceCruiser, buildAllianceDreadnought, buildAllianceFighter, buildAllianceFrigate, buildAllianceOmaha, buildAllianceValkyrie } from './alliance';
+import { buildAllianceCarrier, buildAllianceCruiser, buildAllianceDreadnought, buildAllianceFighter, buildAllianceFrigate, buildAllianceAegis, buildAllianceOmaha, buildAllianceValkyrie } from './alliance';
 import { buildAsariCruiser, buildAsariDreadnought, buildDestinyAscension } from './asari';
 import { buildCerberusCruiser, buildCerberusDreadnought, buildCerberusFighter, buildCerberusFrigate } from './cerberus';
 import { buildGethCruiser, buildGethDreadnought, buildGethFighter, buildGethFrigate } from './geth';
 import { buildQuarianCruiser, buildQuarianFighter, buildQuarianHeavy, buildQuarianLiveship } from './quarian';
-import { buildHarbinger, buildReaperCapital, buildReaperDestroyer } from './reaper';
+import { buildHarbinger, buildReaperAscendant, buildReaperCapital, buildReaperDestroyer } from './reaper';
 import { buildSalarianCruiser, buildSalarianDreadnought, buildSalarianFighter, buildStgFrigate } from './salarian';
 import { buildTurianCruiser, buildTurianDreadnought, buildTurianFighter, buildTurianFrigate } from './turian';
 import type { BuiltShip } from './types';
@@ -25,6 +25,7 @@ const BUILDERS: Record<string, () => BuiltShip> = {
   alliance_normandy_sr1: buildNormandySR1,
   alliance_dreadnought: buildAllianceDreadnought,
   alliance_omaha: buildAllianceOmaha,
+  alliance_aegis_command: buildAllianceAegis,
   alliance_valkyrie: buildAllianceValkyrie,
   alliance_carrier: buildAllianceCarrier,
   alliance_cruiser: buildAllianceCruiser,
@@ -55,6 +56,7 @@ const BUILDERS: Record<string, () => BuiltShip> = {
   quarian_cruiser: buildQuarianCruiser,
   quarian_fighter: buildQuarianFighter,
   reaper_capital: buildReaperCapital,
+  reaper_ascendant: buildReaperAscendant,
   reaper_destroyer: buildReaperDestroyer,
   harbinger: buildHarbinger,
   unsc_marathon: buildUnscMarathon,

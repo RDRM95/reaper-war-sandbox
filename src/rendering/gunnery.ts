@@ -18,3 +18,13 @@ export function primaryGunneryMount(ship: ShipState): WeaponState | undefined {
   }
   return best ?? ship.weapons[0];
 }
+
+/** Fire-control event check for the selected spinal/axial MAIN battery only.
+ * Identical hardpoint barrels may qualify; flak, torpedoes and broadsides do not.
+ */
+export function isMainGunShot(ship: ShipState,weaponIndex:number): boolean {
+  const main=primaryGunneryMount(ship);
+  const actual=ship.weapons[weaponIndex];
+  return !!(main&&actual&&!actual.def.antiSmall&&
+    actual.def.id===main.def.id&&actual.def.kind===main.def.kind);
+}

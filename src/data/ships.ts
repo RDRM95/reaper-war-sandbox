@@ -253,6 +253,38 @@ export const SHIP_CLASSES: Record<string, ShipClassDef> = {
     pointValue: 6400,
     description: 'Apex super-dreadnought. A rare NOVA spinal strike can overwhelm intact Reaper kinetic barriers and penetrate the core; long recharge, narrow firing arc and limited ammunition prevent rapid repeat fire.',
   },
+  alliance_aegis_command: {
+    id: 'alliance_aegis_command',
+    name: 'Aegis-pattern command dreadnought (Apex AU)',
+    shortName: 'Aegis Command',
+    faction: 'alliance',
+    role: 'dreadnought',
+    designProvenance: {
+      value: 'Serial-production successor to the Valkyrie super-dreadnought programme; an original alternate-universe Alliance command ship, not a named or canonical vessel.',
+      provenance: 'AU_MODIFIED',
+      note: 'Designed to be deployed in multiple independent battle groups. All specifications are fictional.'
+    },
+    lengthM: auEstimate(1650),
+    hull: auEstimate(15700),
+    armour: auEstimate(215),
+    barriers: auEstimate(10600),
+    barrierRegen: auEstimate(92),
+    maxSpeed: auEstimate(0.51),
+    acceleration: auEstimate(0.067),
+    turnRate: auEstimate(3.2),
+    sensorRange: auEstimate(175),
+    signature: 3.0,
+    ecm: 0.28,
+    crewQuality: 1.18,
+    hardpoints: [
+      { weaponId: 'aegis_nova_command', offset: [0, -38, 760], facing: 0, count: 1 },
+      { weaponId: 'alliance_broadside', offset: [51, 9, 145], facing: 90, count: 6 },
+      { weaponId: 'alliance_broadside', offset: [-51, 9, 145], facing: -90, count: 6 },
+      { weaponId: 'gardian', offset: [0, 38, 250], facing: 0, count: 10 },
+    ],
+    pointValue: 2750,
+    description: 'Repeatable mass-production Apex command dreadnought: Valkyrie-derived spinal system, reinforced armour, long-range sensors and modestly higher fleet coordination. Configure 1, 10, 50 or more; the named Normandy Valkyrie remains a separate experimental ship.',
+  },
   alliance_carrier: {
     id: 'alliance_carrier',
     name: 'Alliance carrier',
@@ -980,6 +1012,37 @@ export const SHIP_CLASSES: Record<string, ShipClassDef> = {
     pointValue: 2600,
     description:
       'Two-kilometre harvester with barriers that held off an entire fleet at the Citadel. Its magnetohydrodynamic weapon yields hundreds of kilotons per shot and can destroy a dreadnought.',
+  },
+  reaper_ascendant: {
+    id: 'reaper_ascendant',
+    name: 'Ascendant-class extragalactic Reaper (2885 CE AU)',
+    shortName: 'Ascendant Reaper',
+    faction: 'reaper',
+    role: 'reaper_capital',
+    designProvenance: {
+      value: 'A 30-km extragalactic Reaper classification encountered in the post-Destroy 2885 CE AU.',
+      provenance: 'AU_MODIFIED',
+      note: 'Original Mass Effect alternate history. This is a speculative evolution of Sovereign anatomy, not official game canon.'
+    },
+    lengthM: auEstimate(30000),
+    hull: auEstimate(260000),
+    armour: auEstimate(1050),
+    barriers: auEstimate(340000),
+    barrierRegen: auEstimate(980),
+    maxSpeed: auEstimate(.63),
+    acceleration: auEstimate(.075),
+    turnRate: auEstimate(1.7),
+    sensorRange: auEstimate(240),
+    signature: 9.5,
+    ecm: .55,
+    crewQuality: 1.65,
+    hardpoints: [
+      {weaponId:'ascendant_main_beam',offset:[0,-500,9400],facing:0,count:1},
+      {weaponId:'reaper_capital_beam',offset:[350,-160,4200],facing:35,count:6},
+      {weaponId:'reaper_point_defence',offset:[0,0,0],facing:0,count:28}
+    ],
+    pointValue: 29000,
+    description: 'An extremely rare extragalactic command Reaper: oversized cuttlefish-shaped carapace, independently actuated limbs and sophisticated field systems. All specifications are fictional AU estimates.'
   },
   harbinger: {
     id: 'harbinger',
