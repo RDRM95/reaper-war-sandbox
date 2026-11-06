@@ -363,4 +363,76 @@ export const AU_CHAPTERS:readonly AUChapter[]=[
     b:f('geth','Heretic breakaway fleet','capital_column','geth_dreadnought=8,geth_cruiser=27,geth_frigate=42')
   },
 
+  {
+    id:'prime_citadel_spear_hammer_2183',
+    name:'PRIME — Citadel Spear, Hammer and Shield',
+    subtitle:'Saren stopped early; the Council and Destiny Ascension survive',
+    era:'2183 CE · Prime successful-trilogy AU',category:'apex',rules:'prime_apex',
+    environment:'citadel',distance:85,maxDuration:450,
+    description:'In the perfect-run opening, Shepard reaches Saren before the full Citadel lockout. Jenkins and Nihlus survive; the Council and most of the Fifth Fleet can be saved. Personnel outcomes are story choices outside naval simulation. Three mutually supporting flotillas intercept Sovereign before it can secure the station.',
+    objective:'Keep the Citadel and Council defence formation intact while defeating Sovereign’s escort.',
+    a:f('alliance','Spear — Fifth Fleet axial guns','strike_wedge','alliance_dreadnought=5,alliance_cruiser=12,alliance_frigate_thanix=20'),
+    extraA:[f('turian','Shield — Turian Citadel defence','defensive_screen','turian_dreadnought=3,turian_cruiser=10,turian_frigate=20',undefined,25),
+      f('asari','Hammer — Council reserve','line_abreast','asari_dreadnought=2,asari_cruiser=8',undefined,45)],
+    b:f('reaper','Sovereign Citadel thrust','capital_column','reaper_capital=1,reaper_destroyer=8')
+  },
+  {
+    id:'apex_bahak_second_intercept',
+    name:'APEX — Second-System Intercept',
+    subtitle:'The survivors of Bahak are ambushed before planetfall',
+    era:'2186 CE · Apex relay-denial AU',category:'apex',rules:'prime_apex',
+    environment:'deep_space',distance:180,maxDuration:590,
+    description:'After the Alpha Relay trap has destroyed roughly a quarter of the invasion fleet, surviving Reaper elements enter the next system expecting exposed colonies. Prepared Alliance and unindoctrinated Cerberus squadrons intercept well before orbital descent. This is a representative flotilla, not the whole surviving armada.',
+    objective:'Prevent the Reaper spearhead from crossing into the settled orbital approach.',
+    a:f('alliance','Prepared second-system screen','line_abreast','alliance_aegis_command=7,alliance_omaha=3,alliance_dreadnought=28,alliance_cruiser=68,alliance_frigate_thanix=130'),
+    extraA:[f('cerberus','HADES Black Fleet penetration wing','strike_wedge','cerberus_dreadnought=12,cerberus_cruiser=28',undefined,28)],
+    b:f('reaper','Bahak-survivor thrust','capital_column','reaper_capital=24,reaper_destroyer=110')
+  },
+  {
+    id:'apex_colony_300_hulls',
+    name:'APEX — The Colony with 300 Warships',
+    subtitle:'Sovereign’s intelligence never anticipated this level of defence',
+    era:'2186 CE · Fortified colony AU',category:'apex',rules:'prime_apex',
+    environment:'deep_space',distance:130,maxDuration:530,
+    description:'A heavily militarised human colony has exactly 300 deployed hulls, including 60 dreadnought-class vessels. The 60 comprise 50 conventional Alliance dreadnoughts plus 10 mass-produced Aegis command hulls. Two carriers, 40 cruisers and 198 frigates complete its defence; Reapers encounter a fortified navy rather than a helpless settlement.',
+    objective:'Hold the fortified colony approach and preserve the main dreadnought line.',
+    a:f('alliance','Colony defence: exactly 300 ships','defensive_screen','alliance_dreadnought=50,alliance_aegis_command=10,alliance_carrier=2,alliance_cruiser=40,alliance_frigate=198'),
+    b:f('reaper','Unexpected colony contact','capital_column','reaper_capital=14,reaper_destroyer=48')
+  },
+  {
+    id:'iron_dawn_twelve_reapers',
+    name:'IRON DAWN — Twelve Reapers',
+    subtitle:'A hostile first contact meets an independent military superpower',
+    era:'2186 CE · Iron Dawn Humanity AU',category:'humanity',rules:'iron_dawn',
+    environment:'deep_space',distance:125,maxDuration:580,
+    description:'Humanity won the First Contact War, remains outside Citadel strategic restrictions, and built its own defensive navy. This distinct continuity records twelve Reapers destroyed and twenty-seven of fifty-six Alliance ships lost as narrative history, never a scripted simulator result.',
+    objective:'Defeat all twelve initial Reapers with a single independent Alliance battlegroup.',
+    a:f('alliance','Independent Alliance 56-hull group','capital_column','alliance_dreadnought=12,alliance_cruiser=16,alliance_frigate_thanix=28'),
+    b:f('reaper','First twelve Reaper attackers','strike_wedge','reaper_capital=4,reaper_destroyer=8')
+  },
+  {
+    id:'cerberus_spectre_early_destroy',
+    name:'CERBERUS SPECTRE — The Early Pact',
+    subtitle:'Shepard joins an unindoctrinated Cerberus after Mass Effect 1',
+    era:'2184 CE · Separate Cerberus-Spectre AU',category:'cerberus',rules:'cerberus_reformed',
+    environment:'relay',distance:110,maxDuration:530,
+    description:'Following the original Citadel engagement, Shepard remains N7/Alliance-legitimate while also shaping a Destroy-aligned, unindoctrinated Cerberus after Mass Effect 1. The union intercepts a covert Reaper reconnaissance force. Unlike Prime/Apex, this branch explicitly makes Shepard a Cerberus-Spectre.',
+    objective:'Preserve the Alliance and Cerberus joint fleet while eliminating the reconnaissance ships.',
+    a:f('alliance','Alliance liaison and N7 screening group','defensive_screen','alliance_omaha=1,alliance_dreadnought=5,alliance_cruiser=18,alliance_frigate_thanix=24'),
+    extraA:[f('cerberus','Spectre-aligned Black Fleet','strike_wedge','cerberus_dreadnought=5,cerberus_cruiser=19,cerberus_frigate=33',undefined,15)],
+    b:f('reaper','Covert Reaper deep scouts','capital_column','reaper_capital=5,reaper_destroyer=29')
+  },
+  {
+    id:'apex_bahak_30000_survivors_variant',
+    name:'APEX — Thirty Thousand Survivors',
+    subtitle:'The 40,000-ship invasion-force estimate after the Alpha Relay',
+    era:'2186 CE · Alternate force-count variant',category:'apex',rules:'prime_apex',
+    environment:'deep_space',distance:270,maxDuration:900,mathRecommended:true,
+    description:'An alternate Apex strategic estimate starts with 40,000 Reapers. The Bahak trap destroys 10,000 (approximately 2,000 capitals and 8,000 destroyers), leaving 30,000 survivors. This does not replace the separate 52,500-survivor estimate. Surviving class composition is a fictional stress-test roster, not established canon. Use numbers-only combat.',
+    objective:'Compare an Alliance–Cerberus theatre defence against a fictional 30,000-vessel Reaper concentration.',
+    a:f('alliance','Apex coalition strategic defence','line_abreast','alliance_aegis_command=100,alliance_omaha=120,alliance_dreadnought=700,alliance_cruiser=3400,alliance_frigate_thanix=9000'),
+    extraA:[f('cerberus','Fully mobilised Black Fleet','strike_wedge','cerberus_dreadnought=80,cerberus_cruiser=320,cerberus_frigate=550',undefined,170)],
+    b:f('reaper','30,000 Bahak survivors','capital_column','reaper_capital=2500,reaper_destroyer=27500')
+  },
+
 ];
