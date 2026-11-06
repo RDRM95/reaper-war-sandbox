@@ -851,8 +851,6 @@ export class BattleSimulation implements AiContext {
           w.beamGlance = glanceMultiplier(sub(w.beamEnd, origin), w.beamEnd, target);
         } else {
           w.beamGlance = undefined;
-        }
-        else {
           const dir = normalize(sub(target.pos, origin));
           let perp = cross(dir, v3(0, 1, 0));
           if (lengthSq(perp) < 1e-6) perp = v3(1, 0, 0);
