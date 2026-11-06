@@ -141,8 +141,10 @@ test('fullscreen and first-person gunnery keep the same battle alive',async({pag
   const before=await page.evaluate(()=>window.__reaperDiagnostics?.()?.shipCount);
   await page.locator('#fullscreen').click();
   await expect.poll(async()=>page.evaluate(()=>document.fullscreenElement?.id??null)).toBe('stage');
-  await page.keyboard.press('Escape');
-  await expect.poll(async()=>page.evaluate(()=>document.fullscreenElement)).toBeNull();
+  // Headless Chromium does not reliably exit fullscreen on Escape.
+  // Use the same on-screen Fullscreen control a user can click.
+  await page.locator('#fullscreen').click();
+  await expect.poll(async()=>page.evaluate(()=>document.fullscreenElement?.id??null)).toBeNull();
   const after=await page.evaluate(()=>window.__reaperDiagnostics?.()?.shipCount);
   expect(after).toBe(before);
 });
