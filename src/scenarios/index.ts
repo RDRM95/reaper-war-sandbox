@@ -619,7 +619,7 @@ SCENARIOS.push(...EXPANDED_BATTLES.map(expanded => ({
       formation:f.formation,
       ships:Object.entries(f.counts).filter(([,n])=>n>0).map(([classId,count])=>({classId,count})),
       position:v3(0,0,z),heading:v3(0,0,heading),
-      playerControlled:side==='A'
+      playerControlled:side==='A',techOverride:f.tech
     }))
   })
 })));
