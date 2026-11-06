@@ -238,12 +238,15 @@ export class BattleView {
     this.tmpA.set(s.prevHeading.x + (s.heading.x - s.prevHeading.x) * alpha, s.prevHeading.y + (s.heading.y - s.prevHeading.y) * alpha, s.prevHeading.z + (s.heading.z - s.prevHeading.z) * alpha).normalize();
     this.tmpQ.setFromUnitVectors(this.fwd, this.tmpA);
     g.quaternion.copy(this.tmpQ);
-    // Subtle bank for small ships based on lateral velocity.
-    if (s.role === 'fighter' || s.role === 'frigate') {
-      const right = this.tmpB.set(this.tmpA.z, 0, -this.tmpA.x);
-      const lat = s.vel.x * right.x + s.vel.z * right.z;
-      g.rotateZ(-lat * (s.role === 'fighter' ? 0.5 : 0.25));
-    }
+    // Match GPU-instanced animation: agile fighter attack banking, subtle
+    // escort roll, and heavy capital hulls remaining level during slow turns.
+    const turn = s.prevHeading.x * s.heading.z - s.prevHeading.z * s.heading.x;
+    const right = this.tmpB.set(this.tmpA.z, 0, -this.tmpA.x);
+    const lat = s.vel.x * right.x + s.vel.z * right.z;
+    const factor = s.role === 'fighter' ? 0.36 : s.role === 'frigate' ? 0.12 :
+      s.role === 'cruiser' ? 0.025 : s.role === 'reaper_destroyer' ? 0.015 : 0;
+    const bank = THREE.MathUtils.clamp(turn * 3.5 + lat * factor * 0.12, -factor, factor);
+    if (bank) g.rotateZ(bank);
   }
 
   // ------------------------------------------------------------- per frame
