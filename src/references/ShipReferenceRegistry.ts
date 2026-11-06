@@ -33,6 +33,7 @@ export interface ShipReferenceMatch {
 // Explicit, reviewable associations. No automatic fuzzy matches: they risk
 // implying that a procedural cruiser is a faithful Normandy or Sovereign mesh.
 export const REFERENCE_CLASS_MAP:Readonly<Record<string,string>>=Object.freeze({
+  'ALL-001':'alliance_normandy_sr1',
   'ALL-002':'alliance_frigate_thanix',
   'ALL-003':'alliance_cruiser',
   'ALL-004':'alliance_dreadnought',
