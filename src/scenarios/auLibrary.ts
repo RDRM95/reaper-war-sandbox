@@ -291,5 +291,76 @@ export const AU_CHAPTERS:readonly AUChapter[]=[
     objective:'Compare the two machine-war doctrines in a closed engagement.',
     a:f('skynet','Machine extermination flotilla','strike_wedge','skynet_harvester=16,skynet_hunter=125'),
     b:f('reaper','Harvester Reaper task group','capital_column','reaper_capital=12,reaper_destroyer=50')
-  }
+  },
+  {
+    id:'apex_object_rho_two_day_warning',
+    name:'APEX — Object Rho: Two Days to Escape',
+    subtitle:'Shepard leaks the warning before Arrival',
+    era:'2185 CE · Apex AU',category:'apex',rules:'prime_apex',environment:'relay',distance:125,maxDuration:480,
+    description:'Shepard uses Batarian military channels and Alliance intelligence to provide an early warning before the Alpha Relay trap. The evacuation itself is narrative; this engagement represents the screening force covering departing ships, without simulating civilians as targets.',
+    objective:'Keep the transit corridor open until the last evacuation wave clears.',
+    a:f('alliance','Bahak evacuation escort','defensive_screen','alliance_normandy_sr1=1,alliance_cruiser=9,alliance_frigate=26'),
+    extraA:[f('cerberus','Covert interception reserve','strike_wedge','cerberus_cruiser=6,cerberus_frigate=12',undefined,70)],
+    b:f('reaper','Object Rho harvest advance','capital_column','reaper_capital=6,reaper_destroyer=22')
+  },
+  {
+    id:'apex_52500_final_offensive',
+    name:'APEX — Harbinger: All Remaining Reapers',
+    subtitle:'The 52,500-vessel first-strike response to Bahak',
+    era:'2186 CE · Apex strategic AU',category:'apex',rules:'prime_apex',environment:'deep_space',
+    distance:280,maxDuration:800,mathRecommended:true,
+    description:'After losing about 25% of the original 70,000-strong Reaper force at Bahak, Harbinger mass-concentrates the 52,500 survivors against coalition naval infrastructure. This strategic scenario is intentionally colossal: use Instant Battle Results or a reduced representative live engagement; it does not script a historical victory.',
+    objective:'Survive the harvest armada and protect coalition naval infrastructure.',
+    a:f('alliance','Coalition conventional fleet','line_abreast','alliance_aegis_command=80,alliance_omaha=100,alliance_dreadnought=500,alliance_cruiser=3200,alliance_frigate=16000,alliance_carrier=90'),
+    extraA:[f('cerberus','Black Fleet HADES battery reserve','strike_wedge','cerberus_dreadnought=230,cerberus_cruiser=1300,cerberus_frigate=1100',undefined,180)],
+    b:f('reaper','Harbinger concentrated harvest force','capital_column','harbinger=1,reaper_capital=9999,reaper_destroyer=42500')
+  },
+  {
+    id:'control_au_tim_twenty_years',
+    name:'CONTROL — The Illusive Man Returns',
+    subtitle:'Twenty years after Shepard fell',
+    era:'2206 CE · Control branch only',category:'cerberus',rules:'cerberus_ascendant',
+    environment:'citadel',distance:190,maxDuration:580,
+    description:'In this divergent AU Shepard died in the Collector campaign. The Illusive Man eventually controls Reapers and spends two decades restoring the galaxy. This confrontation represents Reaper-aligned enforcers opposed by independent survivor navies. It is not the Apex successful-Refuse timeline.',
+    objective:'Defend self-determination against a restored, centrally commanded Reaper formation.',
+    a:f('alliance','Independent reconstruction defence','line_abreast','alliance_dreadnought=19,alliance_cruiser=55,alliance_frigate=89'),
+    extraA:[f('geth','Autonomous Geth alliance','defensive_screen','geth_dreadnought=6,geth_cruiser=22',undefined,60)],
+    b:f('reaper','Controller-aligned Reaper patrol','capital_column','reaper_capital=14,reaper_destroyer=51')
+  },
+  {
+    id:'crucible_last_anchor',
+    name:'THE LAST ANCHOR — Crucible Defence',
+    subtitle:'A final-universe transmission reaches the past',
+    era:'2186 CE / heat death · Temporal Anchor AU',category:'postwar',rules:'prepared_galaxy',
+    environment:'citadel',distance:170,maxDuration:600,
+    description:'A separate hypothetical timeline: the Crucible is only an enormous past anchor, connected to an unknowable future civilisation at the end of the universe. This tactical battle protects the receiving structure; the engine does not pretend to model causal loops, a future civilisation, or time travel physics.',
+    objective:'Hold a protected Citadel corridor long enough for the anchor project to complete its fictional narrative stage.',
+    a:f('alliance','Citadel anchor defence','defensive_screen','alliance_aegis_command=4,alliance_dreadnought=22,alliance_cruiser=63,alliance_frigate_thanix=76'),
+    extraA:[f('asari','Republics containment screen','line_abreast','asari_dreadnought=7,asari_cruiser=40',undefined,95)],
+    b:f('reaper','Reaper interdiction formation','capital_column','reaper_capital=18,reaper_destroyer=62')
+  },
+  {
+    id:'harbinger_last_perfect_loop',
+    name:'REAPER LOOP — Harbinger Remembers',
+    subtitle:'One final atom-perfect cycle with retained memory',
+    era:'2186 CE · Non-canonical simulation-loop AU',category:'reaper',rules:'reaper_escalation',
+    environment:'earth_orbit',distance:180,maxDuration:580,
+    description:'In the final loop, the galaxy is an atom-for-atom simulation indistinguishable from reality. Harbinger alone retains the events of Mass Effect 3 until the Crucible activates. Reapers remain fully operational. The battle tests superior coordination; it does not fake time travel or predetermine the winner.',
+    objective:'Withstand a Reaper opening attack that has foreknowledge of the defenders.',
+    a:f('alliance','Unaware Sol defenders','line_abreast','alliance_dreadnought=15,alliance_cruiser=48,alliance_frigate=95'),
+    b:f('reaper','Harbinger foreknowledge spearhead','capital_column','harbinger=1,reaper_capital=18,reaper_destroyer=76',
+      {sensors:1.45,accuracy:1.25})
+  },
+  {
+    id:'quarian_geth_early_peace',
+    name:'2183 — The First Geth Accord',
+    subtitle:'Shepard distinguishes heretics from the Geth',
+    era:'2183 CE · Early reconciliation AU',category:'apex',rules:'prime_apex',environment:'rannoch_orbit',distance:120,maxDuration:470,
+    description:'After learning the distinction between Geth consensus and Reaper-aligned heretics, Quarian and Geth fleets cooperate years earlier. The opposing Geth share existing hull geometry; their heretic allegiance is a scenario label, not a claim of unique rendered models.',
+    objective:'Preserve the first joint Quarian–Geth fleet through the heretic interdiction.',
+    a:f('quarian','Migrant Fleet early peace escort','defensive_screen','quarian_liveship=2,quarian_cruiser=13,quarian_heavy=6'),
+    extraA:[f('geth','Consensus machine flotilla','strike_wedge','geth_dreadnought=4,geth_cruiser=15',undefined,30)],
+    b:f('geth','Heretic breakaway fleet','capital_column','geth_dreadnought=8,geth_cruiser=27,geth_frigate=42')
+  },
+
 ];
