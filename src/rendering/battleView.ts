@@ -401,7 +401,7 @@ export class BattleView {
       }
     }
     this.effects.setBeams(beams);
-    this.effects.setPointDefence(sim.flashes.map((f) => ({ from: new THREE.Vector3(f.from.x * KM, f.from.y * KM, f.from.z * KM), to: new THREE.Vector3(f.to.x * KM, f.to.y * KM, f.to.z * KM), reaper: f.kind === 'reaper_pd' })));
+    this.effects.setPointDefence(sim.flashes, KM);
     this.effects.update(dt);
 
     // Camera.
