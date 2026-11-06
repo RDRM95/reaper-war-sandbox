@@ -14,7 +14,7 @@ test('shared AU catalogue validates all references and registers strategic-scale
     return {...audit,valid};
   });
   expect(output.issues).toEqual([]);
-  expect(output.chapters).toBeGreaterThanOrEqual(37);
+  expect(output.chapters).toBeGreaterThanOrEqual(43);
   expect(output.valid).toBe(true);
 });
 
@@ -57,4 +57,34 @@ test('live kill scoreboard and new Aegis roster are available without resetting 
   });
   expect(state.className).toContain('Aegis');
   expect(state.weapon).toContain('NOVA');
+});
+
+test('hull impacts vary with barrel and shot number; Reaper beams stay on rotating hulls',async({page})=>{
+  await page.goto('/?reference=sol-42&t=0');
+  const result=await page.evaluate(async()=>{
+    const {BattleSimulation}=await import('/src/simulation/battle.ts');
+    const {buildCustomBattle}=await import('/src/scenarios/index.ts');
+    const {beamContactLocal,worldHullContact,spreadProjectileAim,glanceMultiplier}
+      =await import('/src/simulation/impactGeometry.ts');
+    const {distance,v3}=await import('/src/core/vec3.ts');
+    const sim=new BattleSimulation(buildCustomBattle({
+      seed:27,rulesId:'prime_apex',environment:'deep_space',startingDistanceKm:55,
+      sideA:{faction:'alliance',name:'Main gun',formation:'capital_column',counts:{alliance_aegis_command:1}},
+      sideB:{faction:'reaper',name:'Capital',formation:'capital_column',counts:{reaper_capital:1}}
+    }));
+    const a=sim.ships.find(s=>s.side==='A')!,b=sim.ships.find(s=>s.side==='B')!;
+    const p1=spreadProjectileAim(b.pos,a.pos,b,1,0);
+    const p2=spreadProjectileAim(b.pos,a.pos,b,2,0);
+    const local=beamContactLocal(b,a,3,0);
+    const first=worldHullContact(a,local);
+    a.heading=v3(1,0,0);
+    const rotated=worldHullContact(a,local);
+    return {different:distance(p1,p2)>.01,within:distance(p1,b.pos)<b.radiusKm,
+      moving:distance(first,rotated)>.1,
+      glance:glanceMultiplier(v3(0,0,1),v3(b.pos.x+b.radiusKm,b.pos.y,b.pos.z),b)};
+  });
+  expect(result.different).toBe(true);
+  expect(result.within).toBe(true);
+  expect(result.moving).toBe(true);
+  expect(result.glance).toBeLessThan(1);
 });
