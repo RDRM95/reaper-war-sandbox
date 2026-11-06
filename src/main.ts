@@ -333,6 +333,18 @@ function launch(){try{
   $('quick-report').hidden=true;
   $('error').hidden=true;viewError=undefined;
   const config=currentConfig();
+  const requestedHullCount=config.fleets.reduce((n,f)=>n+
+    f.ships.reduce((sum,c)=>sum+c.count,0),0);
+  // Truly strategic AU chapters have their own calculator: avoid hanging the
+  // browser by accidentally constructing 75,100 real-time vessel objects.
+  if(requestedHullCount>12000 && parameters.get('forceLive')!=='1'){
+    quickReport=resolveQuickBattle(config);
+    renderQuickReport(quickReport);
+    $('state').textContent='STRATEGIC ESTIMATE';
+    $('message').textContent=requestedHullCount.toLocaleString('en-GB')+
+      ' SHIPS · LIVE PLAY REQUIRES forceLive=1';
+    return;
+  }
   killScoreboard.reset();lastScoreDraw=-1;
   view?.dispose();view=null;
   sim=new BattleSimulation(config);
