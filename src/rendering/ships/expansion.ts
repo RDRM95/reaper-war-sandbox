@@ -58,8 +58,8 @@ function styleBuilt(built: BuiltShip, style: Style): BuiltShip {
   group.scale.multiplyScalar(style.scale);
   return { ...built, lengthUnits: built.lengthUnits*style.scale,
     glowColor:style.engine,
-    engineNodes:built.engineNodes.map(v=>v.clone()),
-    muzzle:built.muzzle?.clone() };
+    engineNodes:built.engineNodes.map(v=>v.clone().multiplyScalar(style.scale)),
+    muzzle:built.muzzle?.clone().multiplyScalar(style.scale) };
 }
 
 export const buildAxiomAncient=():BuiltShip=>styleBuilt(buildReaperCapital(),
