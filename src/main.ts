@@ -1,5 +1,6 @@
 import './spectator.css';
 import { BattleSimulation, SIM_DT } from '@/simulation/battle';
+import { resolveQuickBattle, type QuickBattleReport } from '@/simulation/quickBattle';
 import { BattleView } from '@/rendering/battleView';
 import type { CameraMode } from '@/rendering/cameras';
 import type { BattleEvent, FormationType, ShipState, Side } from '@/simulation/types';
@@ -74,14 +75,14 @@ app.innerHTML=`
     <label>FORMATION</label><select id="formation"><option value="line_abreast">Broad battle line</option><option value="strike_wedge">Strike wedge</option><option value="defensive_screen">Defensive screen</option><option value="capital_column">Capital ship column</option><option value="fighter_screen">Fighter screen</option><option value="dispersed">Dispersed</option></select>
     <label class="wave-time">REINFORCEMENTS ARRIVE AFTER (S) <input id="wave-time" type="number" min="1" max="600" value="120"></label>
     <div class="roster-header">VESSEL CLASS <span>START / WAVE</span></div><div class="fleet-roster" id="roster"></div>
-    <div class="left-footer"><p>Pure Battle: fleets choose their own movement and targets. Optional focus orders below never guarantee hits.</p><button id="launch" class="primary">▶  LAUNCH BATTLE</button></div>
+    <div class="left-footer"><p>Pure Battle: fleets choose their own movement and targets. Optional focus orders below never guarantee hits.</p><button id="launch" class="primary">▶ LAUNCH BATTLE</button><button id="resolve" class="plain full" title="Calculate an aggregate estimate without running combat">Σ INSTANT BATTLE RESULTS</button></div>
   </aside>
   <main class="rw-middle">
     <div class="toolbar"><div class="seg"><button id="toggle3d" class="active">3D CINEMATIC</button><button id="toggle2d">2D FLEET VIEW</button></div>
        <div class="seg"><select id="graphics" aria-label="Graphics preset" title="Graphics quality"><option value="low">PERFORMANCE</option><option value="medium">BALANCED</option><option value="high" selected>HIGH</option><option value="ultra">RTX CINEMATIC</option></select><button id="clean">HUD OFF</button><button id="pause">Ⅱ</button><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="restart">↻</button></div></div>
     <div id="stage" class="stage"><canvas id="scene3d"></canvas><canvas id="scene2d"></canvas>
       <div class="stage-tag"><small>BATTLESPACE / AUTONOMOUS SIMULATION</small><strong id="battle-name">SOL DEFENCE</strong></div>
-      <div id="error" class="error" hidden></div>
+      <div id="error" class="error" hidden></div><section id="quick-report" class="quick-report" hidden aria-label="Aggregate battle report"><button type="button" id="quick-close" class="quick-close">✕ CLOSE REPORT</button><div id="quick-results"></div><button type="button" id="quick-export" class="plain">EXPORT REPORT JSON</button></section>
       <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY POV</button><button id="fullscreen" title="Fullscreen battle view (F)">⛶ FULLSCREEN</button></div>
       <div class="stage-foot"><div><small>ENGAGEMENT TIME</small><strong id="clock">00:00</strong></div><div id="message">AWAITING DEPLOYMENT</div><div class="stage-legend"><span class="dot blue"></span> ALLIED <span class="dot red"></span> OPPOSING</div></div></div>
     <div class="bottom-line"><span>ORIGINAL REAPER WAR SIMULATION CORE</span><span>NO TACTICAL ORDERS</span><span>ME3-ERA SHIP GENERATORS</span><span id="perf" aria-label="Renderer performance">— FPS</span></div>
@@ -233,15 +234,19 @@ function createView(preserveCamera=false){if(!sim)return;
     attachEvents();
   }catch(e){mode='2d';switchMode();reportError('3D renderer unavailable; switched to 2D: '+String(e));}
 }
-function launch(){try{
-  $('error').hidden=true;viewError=undefined;
-  const config=buildCustomBattle({seed:Math.max(1,Math.floor(Number($<HTMLInputElement>('seed').value)||42)),rulesId:$<HTMLSelectElement>('rules').value,
+function currentConfig(){
+  return buildCustomBattle({seed:Math.max(1,Math.floor(Number($<HTMLInputElement>('seed').value)||42)),rulesId:$<HTMLSelectElement>('rules').value,
     environment:scenarios[selectedScenario].environment as 'earth_orbit'|'palaven_orbit'|'deep_space',
     startingDistanceKm:Math.max(10,Math.min(600,Number($<HTMLInputElement>('distance').value)||110)),
     maxDuration:650,
     sideA:{...copyFleet(fleets.A)},sideB:{...copyFleet(fleets.B)},
     extraA:rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[],
     extraB:rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[]});
+}
+function launch(){try{
+  $('quick-report').hidden=true;
+  $('error').hidden=true;viewError=undefined;
+  const config=currentConfig();
   view?.dispose();view=null;
   sim=new BattleSimulation(config);
   if(referenceMode){
@@ -254,6 +259,51 @@ function launch(){try{
   if(audioEnabled){audio.init();}
   if(mode==='3d')createView();switchMode();updateHud();
 }catch(e){reportError(e);}}
+let quickReport: QuickBattleReport | null=null;
+function reportCounts(side:Side,report:QuickBattleReport):string{
+  const summary=report.battle.sides[side];
+  const items=Object.values(summary.lossesByClass)
+    .sort((a,b)=>b.lost-a.lost)
+    .map(row=>'<tr><td>'+escapeHtml(row.name)+'</td><td>'+fmt(row.deployed)+'</td><td>'+fmt(row.lost)+'</td><td>'+fmt(row.deployed-row.lost)+'</td></tr>')
+    .join('');
+  return '<article class="quick-side"><h3>SIDE '+side+'</h3>'+
+    '<strong>'+fmt(summary.survivors)+' SURVIVORS</strong>'+
+    '<p>'+fmt(summary.deployed)+' deployed · '+fmt(summary.destroyed)+' estimated losses · '+
+      summary.survivalPercent.toFixed(1)+'% survival</p>'+
+    '<p>'+fmt(summary.capitalLost)+' capital losses · '+
+      fmt(summary.pointsLost)+' fleet points lost</p>'+
+    '<table><thead><tr><th>CLASS</th><th>DEPLOYED</th><th>LOST</th><th>LEFT</th></tr></thead><tbody>'+items+'</tbody></table></article>';
+}
+function renderQuickReport(report:QuickBattleReport){
+  const b=report.battle;
+  const title=b.winner==='draw'?'INCONCLUSIVE / DRAW':'SIDE '+b.winner+' FAVOURED';
+  const summary='<header><small>AGGREGATE BATTLE MATHEMATICS · NOT A SIMULATION</small><h2>'+title+'</h2>'+
+    '<p>'+fmt(report.shipsAnalysed)+' hulls · '+fmt(Math.round(b.duration))+' seconds estimated engagement · '+
+    escapeHtml(b.rulesName)+'</p></header>';
+  const metrics='<div class="quick-metrics"><span>ALLIED POWER <b>'+fmt(Math.round(report.power.A))+'</b></span>'+
+    '<span>OPPOSING POWER <b>'+fmt(Math.round(report.power.B))+'</b></span>'+
+    '<span>DECISIVE TIME <b>'+fmt(Math.round(report.predictedDecisiveSeconds))+' S</b></span></div>';
+  $('quick-results').innerHTML=summary+metrics+'<div class="quick-sides">'+
+    reportCounts('A',report)+reportCounts('B',report)+'</div>'+
+    '<p class="quick-warning">'+report.warnings.map(escapeHtml).join(' ')+'</p>';
+  $('quick-report').hidden=false;
+}
+$('resolve').addEventListener('click',()=>{
+  try {
+    quickReport=resolveQuickBattle(currentConfig());
+    renderQuickReport(quickReport);
+    $('state').textContent='INSTANT BATTLE ESTIMATE';
+  }catch(error){reportError(error);}
+});
+$('quick-close').addEventListener('click',()=>{$('quick-report').hidden=true;});
+$('quick-export').addEventListener('click',()=>{
+  if(!quickReport)return;
+  const blob=new Blob([JSON.stringify(quickReport,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');link.href=url;link.download='reaper-war-instant-report.json';
+  document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);
+});
+
 function switchMode(){
   // Release the entire WebGL scene in 2D mode. Rebuild it on demand when returning to 3D.
   // Otherwise the inactive renderer keeps thousands of meshes and queued effects in memory.
