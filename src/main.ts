@@ -6,13 +6,14 @@ import type { CameraMode } from '@/rendering/cameras';
 import type { BattleEvent, FormationType, ShipState, Side } from '@/simulation/types';
 import { buildCustomBattle } from '@/scenarios';
 import { SHIP_CLASS_LIST } from '@/data/ships';
-import { MASS_EFFECT_FACTION_IDS, type MassEffectFactionId } from '@/data/types';
+import { MASS_EFFECT_FACTION_IDS, SANDBOX_FACTION_IDS, type FactionId } from '@/data/types';
+import { EXPANDED_BATTLES } from '@/scenarios/expandedBattles';
 import { FACTIONS } from '@/data/factions';
 import { audio } from '@/audio/engine';
 import { FleetMap2D } from './spectator/flatView';
 import { TargetTelemetry } from './spectator/targetTelemetry';
 
-type Fleet = { faction:MassEffectFactionId; name:string; formation:FormationType; counts:Record<string,number> };
+type Fleet = { faction:FactionId; name:string; formation:FormationType; counts:Record<string,number> };
 type ScreenMode = '3d'|'2d';
 type GraphicsPreset = 'low'|'medium'|'high'|'ultra';
 const parameters = new URLSearchParams(window.location.search);
@@ -100,8 +101,18 @@ app.innerHTML=`
   </aside>
 </div><footer>INDEPENDENT NON-COMMERCIAL FAN PROJECT · ORIGINAL SOURCE-BASED 3D ENGINE · BUILD 0.3 DEVELOPMENT</footer>
 `;
+for(const chapter of EXPANDED_BATTLES){
+  scenarios[chapter.id]={
+    a:{...chapter.a,counts:{...chapter.a.counts}},
+    b:{...chapter.b,counts:{...chapter.b.counts}},
+    environment:chapter.environment,rules:chapter.rules,range:chapter.distance
+  };
+  const option=document.createElement('option');
+  option.value=chapter.id;option.textContent=chapter.name.toUpperCase()+' / AU';
+  $<HTMLSelectElement>('scenario').append(option);
+}
 const factionSelect=$<HTMLSelectElement>('faction');
-factionSelect.innerHTML=MASS_EFFECT_FACTION_IDS.map(id=>`<option value="${id}">${escapeHtml(FACTIONS[id].name)}</option>`).join('');
+factionSelect.innerHTML=([...MASS_EFFECT_FACTION_IDS,...SANDBOX_FACTION_IDS] as FactionId[]).map(id=>`<option value="${id}">${escapeHtml(FACTIONS[id].name)}</option>`).join('');
 const third=$<HTMLCanvasElement>('scene3d'),second=$<HTMLCanvasElement>('scene2d');
 flat=new FleetMap2D(second);
 const telemetry=new TargetTelemetry($('stage'));
@@ -123,6 +134,7 @@ function editor(){const f=fleets[activeSide],wave=waves[activeSide];factionSelec
 }
 function applyScenario(id:string){const p=scenarios[id];selectedScenario=id;fleets={A:copyFleet(p.a),B:copyFleet(p.b)};waves={A:freshWave(),B:freshWave()};
   $<HTMLSelectElement>('rules').value=p.rules;$<HTMLInputElement>('distance').value=String(p.range);$('battle-name').textContent=$<HTMLSelectElement>('scenario').selectedOptions[0].textContent??'BATTLE';
+  $('resolve').textContent=EXPANDED_BATTLES.find(c=>c.id===id)?.mathRecommended?'Σ INSTANT RESULTS — RECOMMENDED':'Σ INSTANT BATTLE RESULTS';
   editor();
 }
 /** Opt-in benchmark roster: preserves faction and relative composition while
@@ -145,7 +157,7 @@ function scaleFleetForBenchmark(total:number):void{
 }
 $('sideA').addEventListener('click',()=>{activeSide='A';editor();});
 $('sideB').addEventListener('click',()=>{activeSide='B';editor();});
-factionSelect.addEventListener('change',()=>{const f=fleets[activeSide];f.faction=factionSelect.value as MassEffectFactionId;f.counts={};waves[activeSide]=freshWave();f.name=FACTIONS[f.faction].name+' task force';editor();});
+factionSelect.addEventListener('change',()=>{const f=fleets[activeSide];f.faction=factionSelect.value as FactionId;f.counts={};waves[activeSide]=freshWave();f.name=FACTIONS[f.faction].name+' task force';editor();});
 $('wave-time').addEventListener('change',()=>{waves[activeSide].delay=Math.min(600,Math.max(1,Math.floor(Number($<HTMLInputElement>('wave-time').value)||120)));});
 $('formation').addEventListener('change',()=>{fleets[activeSide].formation=$<HTMLSelectElement>('formation').value as FormationType;});
 $('scenario').addEventListener('change',()=>applyScenario($<HTMLSelectElement>('scenario').value));
@@ -235,13 +247,23 @@ function createView(preserveCamera=false){if(!sim)return;
   }catch(e){mode='2d';switchMode();reportError('3D renderer unavailable; switched to 2D: '+String(e));}
 }
 function currentConfig(){
-  return buildCustomBattle({seed:Math.max(1,Math.floor(Number($<HTMLInputElement>('seed').value)||42)),rulesId:$<HTMLSelectElement>('rules').value,
+  const config=buildCustomBattle({seed:Math.max(1,Math.floor(Number($<HTMLInputElement>('seed').value)||42)),rulesId:$<HTMLSelectElement>('rules').value,
     environment:scenarios[selectedScenario].environment as 'earth_orbit'|'palaven_orbit'|'deep_space',
     startingDistanceKm:Math.max(10,Math.min(600,Number($<HTMLInputElement>('distance').value)||110)),
     maxDuration:650,
     sideA:{...copyFleet(fleets.A)},sideB:{...copyFleet(fleets.B)},
     extraA:rowTally({...fleets.A,counts:waves.A.counts})>0?[{...copyFleet(fleets.A),name:fleets.A.name+' reinforcements',counts:{...waves.A.counts},arrivalTime:waves.A.delay}]:[],
     extraB:rowTally({...fleets.B,counts:waves.B.counts})>0?[{...copyFleet(fleets.B),name:fleets.B.name+' reinforcements',counts:{...waves.B.counts},arrivalTime:waves.B.delay}]:[]});
+  const chapter=EXPANDED_BATTLES.find(c=>c.id===selectedScenario);
+  if(chapter){
+    config.id=chapter.id+'-'+config.rules.id+'-'+config.seed;
+    config.name=chapter.name;
+    config.scenarioId=chapter.id;
+    config.alternateHistory=true;
+    config.objective=chapter.objective;
+    config.maxDuration=chapter.maxDuration;
+  }
+  return config;
 }
 function launch(){try{
   $('quick-report').hidden=true;
