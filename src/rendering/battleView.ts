@@ -20,6 +20,7 @@ import { DETAIL_MESH_NAMES, lodLevel, type LodLevel } from './lod';
 import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
 import { weaponWorldOffset } from '@/simulation/fireControl';
 import { primaryGunneryMount } from './gunnery';
+import { animateReaperRig, captureReaperRig, isArticulatedReaper, type ReaperRig } from './reaperMotion';
 
 /**
  * Binds a BattleSimulation to a Three.js scene. The simulation owns all
@@ -37,6 +38,8 @@ export interface ShipVisual {
   tinted: boolean;
   /** Current level of detail. */
   lod: LodLevel;
+  /** Per-vessel skeletal pivots, only allocated for nearby/selected Reapers. */
+  reaperRig?: ReaperRig;
 }
 
 export interface GraphicsSettings {
@@ -221,7 +224,8 @@ export class BattleView {
     built.group.name = ship.id;
     built.group.userData.shipId = ship.id;
     this.scene.add(built.group);
-    v = { ship, built, glows, removed: false, tinted: false, lod: 'full' };
+    v = { ship, built, glows, removed: false, tinted: false, lod: 'full',
+      reaperRig: isArticulatedReaper(ship) ? captureReaperRig(built.group, ship.id) : undefined };
     this.visuals.set(ship.id, v);
     this.placeVisual(v, 1);
     return v;
@@ -322,6 +326,7 @@ export class BattleView {
         const v = existing ?? this.ensureVisual(ship);
         if (v.removed) continue;
         this.placeVisual(v, alpha);
+        if (v.reaperRig) animateReaperRig(v.reaperRig, ship, sim.time, dt);
         this.applyLod(v, level);
         v.built.group.visible = true;
         nearVisuals++;
