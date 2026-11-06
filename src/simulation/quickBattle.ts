@@ -1,6 +1,6 @@
 import { SHIP_CLASSES } from '@/data/ships';
-import { WEAPONS, BARRIER_EFFICIENCY } from '@/data/weapons';
-import { applyRulesToShip, applyRulesToWeapon } from '@/timelines/rules';
+import { WEAPONS } from '@/data/weapons';
+import { applyRulesToShip, applyRulesToWeapon, cloneRules } from '@/timelines/rules';
 import type { BattleConfig, BattleResult, SideSummary, Side } from './types';
 
 /**
@@ -79,19 +79,25 @@ export function resolveQuickBattle(config: BattleConfig): QuickBattleReport {
     'Losses, hit counts and duration are approximate and should not be compared directly with the 20 Hz battle replay.'
   ];
   for (const fleet of config.fleets) {
+    // Mirror BattleSimulation.rulesFor: fleet-specific AU technology overrides
+    // must affect the numerical solver as well as full combat.
+    const rules=fleet.techOverride?cloneRules(config.rules):config.rules;
+    if(fleet.techOverride)rules.factionOverrides[fleet.faction]={
+      ...(rules.factionOverrides[fleet.faction]??{}),...fleet.techOverride
+    };
     for (const spec of fleet.ships) {
       const count=Math.max(0,Math.floor(spec.count));
       if (!count)continue;
       const cls=SHIP_CLASSES[spec.classId];
       if (!cls)throw new Error('Unknown ship class in quick resolver: '+spec.classId);
       if (cls.faction!==fleet.faction)throw new Error('Fleet/class faction mismatch: '+spec.classId);
-      const stats=applyRulesToShip(cls,config.rules);
+      const stats=applyRulesToShip(cls,rules);
       let damagePerSecond=0;
       let shotsPerSecond=0;
       for(const hp of cls.hardpoints){
         const base=WEAPONS[hp.weaponId];
         if(!base)throw new Error('Unknown hardpoint weapon: '+hp.weaponId);
-        const w=applyRulesToWeapon(base,fleet.faction,cls,config.rules,WEAPONS);
+        const w=applyRulesToWeapon(base,fleet.faction,cls,rules,WEAPONS);
         // Forward firing opportunities + weapon range, not arbitrary fire every tick.
         const arc=clamp(w.arc/160,0.28,1);
         const beams=w.beamDuration??1;
