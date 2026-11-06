@@ -1,4 +1,4 @@
-import { add, addScaled, length, scale, sub, v3, type Vec3 } from '@/core/vec3';
+import { add, addScaled, dot, length, scale, sub, v3, type Vec3 } from '@/core/vec3';
 import type { MovementGoal } from './ai';
 import type { ShipState } from './types';
 
@@ -37,9 +37,27 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
     const combined = length(force);
     if (combined > acceleration) force = scale(force, acceleration / combined);
   }
-  // Engine visuals respond to actual control force, rather than to speed.
-  // A fast coasting ship must not have the same exhaust as a powered turn.
-  ship.engineThrust = Math.max(0, Math.min(1, length(force) / acceleration));
+  // Visual and physical honesty: capital hulls cannot magically translate
+  // sideways as fast as their powerful rear main engines accelerate forward.
+  // Side RCS can still align formations, turn under fire and avoid collisions.
+  // Fighters retain near-full vector thrust. These are class-wide AU/cutscene
+  // manoeuvre parameters, not random per-ship animation.
+  const facing = ship.heading;
+  const axial = dot(force, facing);
+  const forward = scale(facing, axial);
+  const lateral = sub(force, forward);
+  const lateralFraction = ship.role === 'fighter' ? 0.85 :
+    ship.role === 'frigate' ? 0.68 :
+    ship.role === 'reaper_destroyer' ? 0.62 :
+    ship.role === 'cruiser' ? 0.46 :
+    ship.role === 'carrier' ? 0.24 :
+    ship.role === 'dreadnought' || ship.role === 'reaper_capital' ? 0.28 : 0.42;
+  // Slowing/braking is allowed through forward-facing RCS. Only forward
+  // acceleration lights the dominant aft engine; inertia alone does not.
+  force = add(forward,scale(lateral,lateralFraction));
+  const actual = length(force);
+  if(actual > acceleration) force = scale(force,acceleration/actual);
+  ship.engineThrust = Math.max(0,Math.min(1,Math.max(0,dot(force,facing))/acceleration));
   ship.inertialCoast = ship.engineThrust < 0.065 && length(ship.vel) > ship.maxSpeed * 0.04;
   const before = ship.vel;
   let velocity = addScaled(before, force, dt);
