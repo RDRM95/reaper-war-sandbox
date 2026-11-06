@@ -8,12 +8,21 @@ import type { ShipState } from './types';
  * waypoint. Catalogue acceleration/speed remain the authoritative class limits.
  */
 export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): void {
-  const engine = 0.25 + 0.75 * ship.subsystems.engines;
+  if (dt <= 0) return;
+  const health = Math.max(0,Math.min(1,ship.subsystems.engines));
+  // No thrust means zero commanded acceleration — conserve inertial velocity.
+  // Damaged but functional engines keep limited RCS capability.
+  if (health <= 0.025 || ship.acceleration <= 0) {
+    ship.engineThrust = 0;
+    ship.inertialCoast = length(ship.vel) > 0.0001;
+    ship.pos = addScaled(ship.pos, ship.vel, dt);
+    return;
+  }
+  const engine = 0.25 + 0.75 * health;
   const maxSpeed = ship.maxSpeed * engine * Math.max(0, Math.min(1, goal.speedFraction));
   const acceleration = ship.acceleration * engine;
   const error = sub(goal.position, ship.pos);
   const dist = length(error);
-  if (acceleration <= 0 || dt <= 0) return;
 
   // A full-speed hull needs v/a seconds to stop. Choose damping on that
   // timescale and retain a small numerical settling zone, not a hull-size dead
@@ -28,6 +37,10 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
     const combined = length(force);
     if (combined > acceleration) force = scale(force, acceleration / combined);
   }
+  // Engine visuals respond to actual control force, rather than to speed.
+  // A fast coasting ship must not have the same exhaust as a powered turn.
+  ship.engineThrust = Math.max(0, Math.min(1, length(force) / acceleration));
+  ship.inertialCoast = ship.engineThrust < 0.065 && length(ship.vel) > ship.maxSpeed * 0.04;
   const before = ship.vel;
   let velocity = addScaled(before, force, dt);
   const speed = length(velocity);
@@ -42,6 +55,8 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
   if (dist < 0.002 && length(velocity) < acceleration * dt && (!goal.avoidanceAcceleration || length(goal.avoidanceAcceleration) < acceleration * 0.01)) {
     ship.pos = { ...goal.position };
     ship.vel = v3();
+    ship.engineThrust = 0;
+    ship.inertialCoast = false;
   } else {
     ship.vel = velocity;
     ship.pos = add(ship.pos, scale(add(before, velocity), dt * 0.5));
