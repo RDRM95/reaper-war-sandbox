@@ -22,6 +22,7 @@ export class InstancedFleet {
   private readonly matrix = new THREE.Matrix4();
   private readonly fwd = new THREE.Vector3(0, 0, 1);
   private readonly bankQuat = new THREE.Quaternion();
+  private readonly trailScale = new THREE.Vector3(1,1,1);
   private trailsEnabled = true;
   configure(quality: 'low'|'medium'|'high'|'ultra'): void { this.trailsEnabled = quality !== 'low'; }
 
@@ -151,8 +152,8 @@ export class InstancedFleet {
     if (this.trailsEnabled && batch.trail && lod !== 'point' && !ship.inertialCoast && thrust>.09) {
       const i=batch.trail.count++;
       // Reuse the current hull transform but lengthen exhaust only under thrust.
-      const scale=new THREE.Vector3(1,1,.2+.8*thrust);
-      this.matrix.compose(this.pos,this.quat,scale);
+      this.trailScale.z=.2+.8*thrust;
+      this.matrix.compose(this.pos,this.quat,this.trailScale);
       batch.trail.setMatrixAt(i,this.matrix);
     }
   }
