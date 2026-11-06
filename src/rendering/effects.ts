@@ -377,25 +377,31 @@ export class EffectsSystem {
     }
   }
 
-  setPointDefence(lines: { from: THREE.Vector3; to: THREE.Vector3; reaper: boolean }[]): void {
-    let n = 0;
-    for (const l of lines) {
-      if (n >= this.pdMax) break;
-      const i = n * 6;
-      this.pdPositions[i] = l.from.x;
-      this.pdPositions[i + 1] = l.from.y;
-      this.pdPositions[i + 2] = l.from.z;
-      this.pdPositions[i + 3] = l.to.x;
-      this.pdPositions[i + 4] = l.to.y;
-      this.pdPositions[i + 5] = l.to.z;
-      const c = l.reaper ? [1, 0.25, 0.15] : [0.5, 0.95, 1];
-      this.pdColors.set(c, i);
-      this.pdColors.set(c, i + 3);
-      n++;
+  /** Read fixed-tick GARDIAN/Reaper PD vectors directly; no GPU-frame
+   * THREE.Vector3 allocations or array mapping per shot. Optional scale
+   * converts km into render units. Uniform sampling retains all battle wings.
+   */
+  setPointDefence(lines: readonly { from: {x:number;y:number;z:number}; to: {x:number;y:number;z:number}; kind?: 'gardian'|'reaper_pd'; reaper?:boolean }[], positionScale = 1): void {
+    let n=0;
+    const capacity=this.pdMax;
+    const stride=Math.max(1,Math.ceil(lines.length/capacity));
+    for(let index=0;index<lines.length&&n<capacity;index+=stride){
+      const l=lines[index];
+      const i=n++*6;
+      this.pdPositions[i]=l.from.x*positionScale;
+      this.pdPositions[i+1]=l.from.y*positionScale;
+      this.pdPositions[i+2]=l.from.z*positionScale;
+      this.pdPositions[i+3]=l.to.x*positionScale;
+      this.pdPositions[i+4]=l.to.y*positionScale;
+      this.pdPositions[i+5]=l.to.z*positionScale;
+      const reaper=l.reaper??(l.kind==='reaper_pd');
+      const r=reaper?1:.5, g=reaper?.25:.95, b=reaper?.15:1;
+      this.pdColors[i]=r;this.pdColors[i+1]=g;this.pdColors[i+2]=b;
+      this.pdColors[i+3]=r;this.pdColors[i+4]=g;this.pdColors[i+5]=b;
     }
-    this.pdGeometry.setDrawRange(0, n * 2);
-    (this.pdGeometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (this.pdGeometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+    this.pdGeometry.setDrawRange(0,n*2);
+    (this.pdGeometry.attributes.position as THREE.BufferAttribute).needsUpdate=true;
+    (this.pdGeometry.attributes.color as THREE.BufferAttribute).needsUpdate=true;
   }
 
   update(dt: number): void {
