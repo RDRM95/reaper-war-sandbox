@@ -283,7 +283,8 @@ export class EffectsSystem {
     const stride=Math.max(1,Math.ceil(items.length/this.tracerMax));
     for (let i=0;i<items.length;i+=stride) {
       const it=items[i];
-      const big=it.big??((it.weapon?.damage??0)>=600);
+      const calibre=it.weapon?.damage??(it.big?900:50);
+      const big=calibre>=600;
       if (n >= this.tracerMax) break;
       const px = (it.pos.x + it.vel.x * alpha * dt) * KM;
       const py = (it.pos.y + it.vel.y * alpha * dt) * KM;
@@ -293,8 +294,13 @@ export class EffectsSystem {
       dir.normalize();
       this.tracerDummy.position.set(px, py, pz);
       this.tracerDummy.lookAt(px + dir.x, py + dir.y, pz + dir.z);
-      const len = Math.max(1.5, speed * 0.06) * (big ? 1.3 : 0.7);
-      const w = big ? 1.1 : 0.45;
+      // Subtle calibre-dependent visual thickness: large HADES/NOVA
+      // projectiles read as heavy axial slugs, not a global bloom flash.
+      // Projectile origin, timing, trajectory and impact remain sim-owned.
+      const superHeavy=calibre>=10000?
+        Math.min(2.7,1.6+Math.log10(calibre/10000)*0.55):1;
+      const len = Math.max(1.5, speed * 0.06) * (big ? 1.3 : 0.7) * Math.sqrt(superHeavy);
+      const w = (big ? 1.1 : 0.45)*superHeavy;
       this.tracerDummy.scale.set(w, w, len);
       this.tracerDummy.updateMatrix();
       this.tracerMesh.setMatrixAt(n++, this.tracerDummy.matrix);
