@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getShipTemplate } from '@/rendering/ships';
 import { auditShipReferences, ShipReferenceRegistry, type ShipReferenceMatch } from './ShipReferenceRegistry';
+import visualReferences from './visual_references.json';
 
 const views=[
   {name:'TOP',pos:[0,1,0],up:[0,0,1]},
@@ -98,6 +99,19 @@ function showInspector():void{
     provenance.textContent='Sources: '+ref.primary_source_ids.join(', ')+
       ' · MESH: '+(match.modelAvailable?'PROCEDURAL / NOT VERIFIED':'NO MATCHED MESH');
     context.append(provenance);
+    const supported=visualReferences.filter(entry=>entry.ship===ref.id);
+    if(supported.length){
+      const references=make('div');references.style.width='100%';
+      text(references,'REFERENCE LINKS · ');
+      for(const item of supported){
+        const link=document.createElement('a');
+        link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';
+        link.textContent=item.id+' ('+item.type+')';
+        link.style.cssText='margin-right:14px;color:#94c8f4;text-decoration:underline';
+        references.append(link);
+      }
+      context.append(references);
+    }
     if(!match.modelAvailable){
       const missing=make('p','shipref-unverified');
       missing.textContent='Dedicated reference model missing. No substitute has been invented.';
