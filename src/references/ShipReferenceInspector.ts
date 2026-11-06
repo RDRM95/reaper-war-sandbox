@@ -147,7 +147,7 @@ function showInspector():void{
       const directional=new THREE.DirectionalLight(0xffffff,2);
       directional.position.set(extent,extent,extent);scene.add(directional);
       const camera=new THREE.OrthographicCamera(-extent*.95,extent*.95,extent*.64,-extent*.64,.001,extent*10);
-      camera.position.copy(new THREE.Vector3(...v.pos)).multiplyScalar(extent*2).add(center);
+      camera.position.copy(new THREE.Vector3(v.pos[0],v.pos[1],v.pos[2])).multiplyScalar(extent*2).add(center);
       camera.up.set(...v.up);camera.lookAt(center);
       camera.updateProjectionMatrix();renderer.render(scene,camera);
       disposers.push(()=>{scene.remove(clone);renderer.dispose();renderer.forceContextLoss();});
