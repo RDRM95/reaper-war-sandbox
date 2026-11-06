@@ -4,6 +4,7 @@ import { BattleSimulation, SIM_DT } from '@/simulation/battle';
 import { ShipKillScoreboard } from '@/simulation/killScoreboard';
 import { resolveQuickBattle, type QuickBattleReport } from '@/simulation/quickBattle';
 import { BattleView } from '@/rendering/battleView';
+import { primaryGunneryMount,isMainGunShot } from '@/rendering/gunnery';
 import type { CameraMode } from '@/rendering/cameras';
 import type { BattleEvent, FormationType, ShipState, Side } from '@/simulation/types';
 import { buildCustomBattle } from '@/scenarios';
@@ -51,6 +52,7 @@ let viewError:string|undefined;
 let gunnery=false;
 let lastGunneryTarget:string|undefined;
 let lastReady=false;
+let lastCritical=false;
 let graphics:GraphicsPreset = 'high';
 let fpsCounter=0,fpsLast=0,fpsValue=0,simWorkMs=0;
 const frameTimes:number[]=[];
@@ -239,16 +241,16 @@ function updateHud(){if(!sim)return;
 }
 function pushEvent(e:BattleEvent){
   if(gunnery&&selectedShip){
-    telemetry.notify(e,selectedShip);
+    telemetry.notify(e,selectedShip,sim??undefined);
     if(audioEnabled && e.type==='weapon_fired'&&e.shipId===selectedShip){
-      const shooter=sim?.getShip(e.shipId),weapon=shooter?.weapons[e.weaponIndex];
-      const id=e.kind==='reaper_beam'?'reaper_beam':e.kind==='thanix'?'thanix':
-        e.kind==='mass_accelerator'?(weapon && weapon.def.damage>=550?'ma_large':'ma_small'):
-        e.kind==='gardian'?'gardian':'torpedo';
-      audio.play(id,0,0.55);
+      const shooter=sim?.getShip(e.shipId);
+      if(shooter&&isMainGunShot(shooter,e.weaponIndex))
+        audio.play('gunner_spinal',0,.65);
     }
-    if(audioEnabled&&e.type==='projectile_impact'&&e.shipId===selectedShip)
-      audio.play(e.hullDamage>0?'impact_hull':'impact_barrier',0,0.45);
+    if(audioEnabled&&e.type==='projectile_impact'&&e.targetId===selectedShip)
+      audio.play(e.hullDamage>0?'impact_hull':'impact_barrier',0,.23);
+    if(audioEnabled&&e.type==='ship_destroyed'&&e.shipId===selectedShip)
+      audio.play('gunner_signal',0,.7);
   }
   if(e.type==='ship_destroyed'){
     const killer=e.killerId?sim?.shipById.get(e.killerId)?.name:'Unknown';feed.unshift({time:e.t,message:e.name+' destroyed'+(killer?' · '+killer:''),side:e.side});
@@ -337,7 +339,7 @@ function launch(){try{
   if(referenceMode){
     for(let i=0;i<Math.round(referenceSeconds/SIM_DT)&&!sim.finished;i++)sim.step();
   }
-  flat!.reset();selectedShip=undefined;following=false;gunnery=false;lastGunneryTarget=undefined;lastReady=false;telemetry.show(false);$('gunner').classList.remove('active');$('stage').classList.remove('gunnery-active');feed.length=0;accum=0;paused=referenceMode;
+  flat!.reset();selectedShip=undefined;following=false;gunnery=false;lastGunneryTarget=undefined;lastReady=false;lastCritical=false;telemetry.show(false);$('gunner').classList.remove('active');$('stage').classList.remove('gunnery-active');feed.length=0;accum=0;paused=referenceMode;
   if(referenceMode)$('pause').textContent='▶';
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
@@ -498,9 +500,17 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
           if(target&&audioEnabled)audio.play('target_lock',0,0.65);
           lastGunneryTarget=target;
         }
-        const ready=!!vessel?.weapons.some(w=>!w.def.antiSmall&&w.cooldown<=0.02);
-        if(ready&&!lastReady&&audioEnabled)audio.play('battery_ready',0,0.32);
+        const main=vessel?primaryGunneryMount(vessel):undefined;
+        const ready=!!main&&main.cooldown<=.03;
+        if(ready&&!lastReady&&audioEnabled)audio.play('gunner_charge',0,.22);
         lastReady=ready;
+        const critical=!!vessel&&vessel.alive&&(
+          vessel.hull/Math.max(1,vessel.maxHull)<.26||
+          vessel.subsystems.engines<.24||
+          vessel.subsystems.weapons<.22
+        );
+        if(critical&&!lastCritical&&audioEnabled)audio.play('gunner_warning',0,.28);
+        lastCritical=critical;
       }
     }
     if(mode==='2d'){if(following&&selectedShip){const ship=sim.shipById.get(selectedShip);if(ship&&ship.alive)flat!.focus(ship);}flat!.draw(sim);}
