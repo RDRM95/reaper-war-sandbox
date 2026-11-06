@@ -1,4 +1,5 @@
 import './spectator.css';
+import { installShipReferenceInspector } from '@/references/ShipReferenceInspector';
 import { BattleSimulation, SIM_DT } from '@/simulation/battle';
 import { resolveQuickBattle, type QuickBattleReport } from '@/simulation/quickBattle';
 import { BattleView } from '@/rendering/battleView';
@@ -474,6 +475,6 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
     lodCounts:view.lodCounts,quality:graphics
   }:null
 });
-applyScenario('sol');if(requestedShips>0)scaleFleetForBenchmark(requestedShips);switchMode();launch();requestAnimationFrame(frame);
+applyScenario('sol');if(requestedShips>0)scaleFleetForBenchmark(requestedShips);switchMode();launch();installShipReferenceInspector();requestAnimationFrame(frame);
 window.addEventListener('error',e=>{if(e.error)reportError(e.error);});
 window.addEventListener('unhandledrejection',e=>reportError(e.reason));

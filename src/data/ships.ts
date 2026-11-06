@@ -71,6 +71,35 @@ export const SHIP_CLASSES: Record<string, ShipClassDef> = {
     description:
       'Fast escort built for reconnaissance and screening. Frigate wolfpacks harass larger ships with disruptor torpedoes while GARDIAN lasers cover the fleet against fighters.',
   },
+  alliance_normandy_sr1: {
+    id: 'alliance_normandy_sr1',
+    name: 'SSV Normandy SR-1 — candidate reconstruction',
+    shortName: 'Normandy SR-1',
+    faction: 'alliance',
+    role: 'frigate',
+    designProvenance: inferred('The SR-1 is an on-screen canon ship; this distinct geometry is an unapproved procedural reconstruction.'),
+    // Gameplay estimate, NOT a canonical length datum. The reference pack
+    // deliberately leaves the SR-1 length_m unknown.
+    lengthM: inferred(170, 'Gameplay-scale estimate only; reference length_m is unknown.'),
+    hull: estimate(520),
+    armour: estimate(12),
+    barriers: estimate(460),
+    barrierRegen: estimate(15),
+    maxSpeed: estimate(1.53),
+    acceleration: estimate(0.35),
+    turnRate: estimate(24),
+    sensorRange: estimate(75),
+    signature: 0.28,
+    ecm: 0.42,
+    crewQuality: 1.15,
+    hardpoints: [
+      { weaponId: 'alliance_frigate_main', offset: [0, -5, 82], facing: 0, count: 1 },
+      { weaponId: 'disruptor_torpedo', offset: [0, -5, 20], facing: 0, count: 2 },
+      { weaponId: 'gardian', offset: [0, 7, 0], facing: 0, count: 2 },
+    ],
+    pointValue: 24,
+    description: 'SR-1 deep reconnaissance prototype. Distinct swept-wing stealth hull with independently housed rear nacelles. Procedural candidate awaiting reference silhouette approval.',
+  },
   alliance_frigate_thanix: {
     id: 'alliance_frigate_thanix',
     name: 'Normandy SR-2 (Thanix-armed frigate)',
