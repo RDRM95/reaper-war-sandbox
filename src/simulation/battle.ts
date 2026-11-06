@@ -28,6 +28,7 @@ import { assignSlots } from './formations';
 import { summarise } from './results';
 import { BATTLESPACE_SCALE as S } from './constants';
 import { advanceMotion } from './motion';
+import { beamContactLocal, glanceMultiplier, spreadProjectileAim, worldHullContact } from './impactGeometry';
 import { SeparationField } from './separation';
 import { CombatSpatialIndex } from './spatialIndex';
 import { HadesVolleyCoordinator } from './volleys';
@@ -659,8 +660,8 @@ export class BattleSimulation implements AiContext {
         const target = w.beamTargetId ? this.shipById.get(w.beamTargetId) : undefined;
         w.beamStart = this.weaponWorldOffset(ship, w);
         if (target && target.alive && !target.escaped && distance(w.beamStart, target.pos) <= w.def.range && this.inArc(ship, w, target.pos) && w.beamHit) {
-          w.beamEnd = clone(target.pos);
-          const dmg = w.def.damage * dt;
+          w.beamEnd = w.beamLocalHit ? worldHullContact(target, w.beamLocalHit) : clone(target.pos);
+          const dmg = w.def.damage * dt * (w.beamGlance ?? 1);
           const out = applyDamage(target, dmg, w.def, this.rng, this.time);
           ship.stats.damageDealt += out.hullDamage + out.barrierDamage;
           if (out.barriersCollapsed) this.emit({ t: this.time, type: 'barriers_down', shipId: target.id });
@@ -675,6 +676,8 @@ export class BattleSimulation implements AiContext {
           w.beamTargetId = undefined;
           w.beamEnd = undefined;
           w.beamStart = undefined;
+          w.beamLocalHit = undefined;
+          w.beamGlance = undefined;
         }
         continue;
       }
@@ -807,8 +810,8 @@ export class BattleSimulation implements AiContext {
     switch (def.kind) {
       case 'mass_accelerator': {
         const aim = interceptPoint(origin, target.pos, target.vel, def.projectileSpeed);
-        let aimPoint = aim;
         const hit = this.rng.chance(p);
+        let aimPoint = hit ? spreadProjectileAim(aim, origin, target, ship.stats.shotsFired, w.index) : aim;
         if (!hit) {
           // Deliberate miss offset larger than the target's bounding sphere.
           const dir = normalize(sub(aim, origin));
@@ -842,7 +845,13 @@ export class BattleSimulation implements AiContext {
         w.beamHit = hit;
         if (hit) ship.stats.hits++;
         w.beamStart = origin;
-        if (hit) w.beamEnd = clone(target.pos);
+        w.beamLocalHit = hit ? beamContactLocal(ship, target, ship.stats.shotsFired, w.index) : undefined;
+        if (hit && w.beamLocalHit) {
+          w.beamEnd = worldHullContact(target, w.beamLocalHit);
+          w.beamGlance = glanceMultiplier(sub(w.beamEnd, origin), w.beamEnd, target);
+        } else {
+          w.beamGlance = undefined;
+        }
         else {
           const dir = normalize(sub(target.pos, origin));
           let perp = cross(dir, v3(0, 1, 0));
@@ -883,7 +892,7 @@ export class BattleSimulation implements AiContext {
     }
   }
 
-  private applyHit(shooter: ShipState, target: ShipState, weapon: EffectiveWeapon, damage: number, pos: Vec3): void {
+  private applyHit(shooter: ShipState, target: ShipState, weapon: EffectiveWeapon, damage: number, pos: Vec3, glancing = false): void {
     const out = applyProjectileDamage(target, damage, weapon, this.rng, this.time);
     shooter.stats.hits++;
     shooter.stats.damageDealt += out.hullDamage + out.barrierDamage;
@@ -897,6 +906,7 @@ export class BattleSimulation implements AiContext {
       barrierDamage: out.barrierDamage,
       hullDamage: out.hullDamage,
       pos,
+      glancing,
     });
     if (out.internalDetonated) this.emit({ t: this.time, type: 'hades_detonation', shipId: shooter.id, targetId: target.id, weaponId: weapon.id,
       internalDamage: out.internalWarheadDamage ?? 0, payloadDamage: damage * (weapon.internalWarheadFraction ?? 0), pos: clone(target.pos) });
@@ -943,7 +953,10 @@ export class BattleSimulation implements AiContext {
       }
       if (hitShip && hitPoint) {
         const shooter = this.shipById.get(p.shooterId);
-        if (shooter) this.applyHit(shooter, hitShip, p.weapon, p.weapon.damage, hitPoint);
+        if (shooter) {
+          const fraction = glanceMultiplier(p.vel, hitPoint, hitShip);
+          this.applyHit(shooter, hitShip, p.weapon, p.weapon.damage * fraction, hitPoint, fraction < 0.999);
+        }
         continue;
       }
       if (p.ttl > 0) survivors.push(p);
@@ -995,6 +1008,8 @@ export class BattleSimulation implements AiContext {
       w.beamTargetId = undefined;
       w.beamEnd = undefined;
       w.beamStart = undefined;
+      w.beamLocalHit = undefined;
+      w.beamGlance = undefined;
     }
     this.emit({
       t: this.time,
