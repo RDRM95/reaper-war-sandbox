@@ -52,7 +52,7 @@ export function buildShipQAAudit():ShipQAMetadata[]{
       lengthMismatchM:reference!==null&&long!==null?Math.round((long-reference)*100)/100:null,
       hardpoints:cls?.hardpoints.map(h=>({weaponId:h.weaponId,offsetM:[...h.offset],facingDegrees:h.facing,mounts:h.count}))??[],
       thrusters:model?.engineNodes.length??null,damageZones:'not_authored',
-      animationRig:cls&&(cls.faction==='reaper'||cls.faction==='axiom_guard')?'reaper_joints':'static',
+      animationRig:cls&&(cls.faction==='reaper'||String(cls.faction)==='axiom_guard')?'reaper_joints':'static',
       lod:{reduced:model?(small?FIGHTER_REDUCED_DISTANCE:model.lengthUnits*REDUCED_FACTOR):null,
         point:model?(small?FIGHTER_POINT_DISTANCE:model.lengthUnits*POINT_FACTOR):null,units:'render_units'},
       silhouetteTarget:P0_SILHOUETTES[m.reference.id]?.visualTest,
