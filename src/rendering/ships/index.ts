@@ -5,7 +5,7 @@ import { buildAsariCruiser, buildAsariDreadnought, buildDestinyAscension } from 
 import { buildCerberusCruiser, buildCerberusDreadnought, buildCerberusFighter, buildCerberusFrigate } from './cerberus';
 import { buildGethCruiser, buildGethDreadnought, buildGethFighter, buildGethFrigate } from './geth';
 import { buildQuarianCruiser, buildQuarianFighter, buildQuarianHeavy, buildQuarianLiveship } from './quarian';
-import { buildHarbinger, buildReaperCapital, buildReaperDestroyer } from './reaper';
+import { buildHarbinger, buildReaperAscendant, buildReaperCapital, buildReaperDestroyer } from './reaper';
 import { buildSalarianCruiser, buildSalarianDreadnought, buildSalarianFighter, buildStgFrigate } from './salarian';
 import { buildTurianCruiser, buildTurianDreadnought, buildTurianFighter, buildTurianFrigate } from './turian';
 import type { BuiltShip } from './types';
@@ -56,6 +56,7 @@ const BUILDERS: Record<string, () => BuiltShip> = {
   quarian_cruiser: buildQuarianCruiser,
   quarian_fighter: buildQuarianFighter,
   reaper_capital: buildReaperCapital,
+  reaper_ascendant: buildReaperAscendant,
   reaper_destroyer: buildReaperDestroyer,
   harbinger: buildHarbinger,
   unsc_marathon: buildUnscMarathon,
