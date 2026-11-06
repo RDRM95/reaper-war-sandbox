@@ -34,17 +34,25 @@ export class TargetTelemetry {
     const root=document.createElement('div');
     root.className='target-telemetry';
     root.hidden=true;
-    root.innerHTML='<div class="target-scope"><span class="scope-top">FIRST-PERSON GUNNERY // DIRECT LIVE FIRE CONTROL</span><div class="scope-center">+</div><span class="scope-bottom">WEAPONS ARE AUTONOMOUS · NO SYNTHETIC FIRING</span></div><div class="gunnery-line" role="status"></div><div class="gunnery-warning" aria-live="polite"></div><div class="charge-track"><i class="charge-fill"></i></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="target-panel"></div><div class="fire-readout"></div>';
+    root.innerHTML='<div class="target-scope"><span class="scope-top">FIRST-PERSON GUNNERY // DIRECT LIVE FIRE CONTROL</span><div class="scope-center">+</div><span class="scope-bottom">WEAPONS ARE AUTONOMOUS · NO SYNTHETIC FIRING</span></div><div class="gunnery-line" role="status"></div><div class="gunnery-warning" aria-live="polite"></div><div class="charge-track"><i class="charge-fill"></i></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="gunner-readout-panel"></div><div class="fire-readout"></div>';
     stage.append(root);
     this.root=root;
     this.line=root.querySelector('.gunnery-line') as HTMLDivElement;
     this.warning=root.querySelector('.gunnery-warning') as HTMLDivElement;
     this.charge=root.querySelector('.charge-fill') as HTMLElement;
     this.marker=root.querySelector('.target-marker') as HTMLDivElement;
-    this.panel=root.querySelector('.target-panel') as HTMLDivElement;
+    this.panel=root.querySelector('.gunner-readout-panel') as HTMLDivElement;
     this.readout=root.querySelector('.fire-readout') as HTMLDivElement;
   }
-  show(on:boolean){this.enabled=on;this.root.hidden=!on;}
+  show(on:boolean){
+    if(on&&!this.enabled){
+      // Never replay previous vessel's firing animation on a new POV.
+      this.lastShotTime=-100;this.lastImpactTime=-100;
+      this.lastShotLabel='FIRE CONTROL STANDBY';
+      this.signalLossUntilMs=0;
+    }
+    this.enabled=on;this.root.hidden=!on;
+  }
   /** Called only for actual simulation events. No visual timers fire weapons. */
   notify(event:BattleEvent,shipId:string|undefined,sim?:BattleSimulation):void{
     if(!shipId)return;
@@ -58,8 +66,10 @@ export class TargetTelemetry {
       this.lastShotTime=event.t;
       this.lastShotLabel='MAIN BATTERY DISCHARGED';
     }
-    if(event.type==='projectile_impact'&&event.shipId===shipId)
+    if(event.type==='projectile_impact'&&event.shipId===shipId){
       this.lastImpactTime=event.t;
+      this.lastShotLabel=event.glancing?'GLANCING HULL CONTACT':'PROJECTILE IMPACT CONFIRMED';
+    }
   }
 
   update(sim:BattleSimulation,view:BattleView,shipId:string|undefined){
