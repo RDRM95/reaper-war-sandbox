@@ -86,3 +86,64 @@ footer{height:22px;background:#07111d;border-top:1px solid #1c3b53;font:9px 'Jet
 #graphics{width:116px;flex-shrink:0}
 #perf{font-variant-numeric:tabular-nums;color:#a7d5e9}
 @media(max-width:1100px){#graphics{width:88px}}
+
+/* Fullscreen uses the browser Fullscreen API; only the battle stage expands.
+   Combat controls, camera buttons and gunnery overlay stay accessible. */
+.stage:fullscreen,.stage:-webkit-full-screen{
+  width:100vw!important;height:100vh!important;min-height:100vh!important;
+  background:#000;position:relative;overflow:hidden;
+}
+.stage:fullscreen canvas,.stage:-webkit-full-screen canvas{width:100%;height:100%}
+.stage:fullscreen .camera-rail{z-index:5;max-width:85%;top:18px;right:18px}
+.stage:fullscreen .stage-tag{z-index:4}
+.stage:fullscreen .stage-foot{z-index:4}
+.stage:fullscreen .target-telemetry{z-index:3}
+.stage:fullscreen #fullscreen{border-color:#7bc4e9;background:#234c65}
+#fullscreen{min-width:85px}
+#gunner.active{color:#f4fbff;border-color:#72c3ed;background:#1c4f70}
+.stage.gunnery-active .target-scope .scope-center{
+  font-size:42px;opacity:.88;font-family:'JetBrains Mono',monospace;
+  color:#80d9ff;text-shadow:0 0 9px #17709b77;
+}
+.stage.gunnery-active .target-scope .scope-center::before{
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:132px;height:132px;border:1px solid #83c9ee49;border-radius:50%;
+  box-shadow:0 0 10px #103b4a40;
+}
+.stage.gunnery-active .scope-top{top:70px}
+.stage.gunnery-active .target-telemetry .gunnery-line{
+  position:absolute;top:120px;left:50%;transform:translateX(-50%);
+  letter-spacing:1px;color:#addfff;font-size:10px;white-space:nowrap;text-align:center;
+}
+.stage.gunnery-active .target-telemetry .gunnery-line b{color:#effaff}
+.stage.gunnery-active .target-telemetry .charge-track{
+  position:absolute;bottom:73px;left:calc(50% - 120px);width:240px;height:4px;
+  background:#16384a88;border:1px solid #6bb9e955;
+}
+.stage.gunnery-active .target-telemetry .charge-fill{
+  display:block;height:100%;background:#77cfff;width:0%;
+  transition:width 120ms linear;
+}
+.stage.gunnery-active .target-telemetry.firing .scope-center{
+  animation:gunnery-shot 0.24s ease-out;
+}
+.stage.gunnery-active .target-telemetry.impact .target-marker{
+  animation:gunnery-impact 0.35s ease-out;
+}
+@keyframes gunnery-shot{
+  0%{transform:translate(-50%,-50%) scale(1.22);color:#fff;text-shadow:0 0 18px #b3e8ff}
+  100%{transform:translate(-50%,-50%) scale(1);color:#80d9ff}
+}
+@keyframes gunnery-impact{
+  0%{box-shadow:0 0 35px #eaf7ff;border-color:white}
+  100%{box-shadow:0 0 12px #2fa6e055;border-color:#90ccf4}
+}
+.stage.gunnery-active .target-telemetry.reaper-hud .scope-center,
+.stage.gunnery-active .target-telemetry.reaper-hud .charge-fill{color:#ff718b;background-color:#ad4058}
+.stage.gunnery-active .target-telemetry.cerberus-hud .scope-center,
+.stage.gunnery-active .target-telemetry.cerberus-hud .charge-fill{color:#ffc480;background-color:#bd7b39}
+.clean-recording .target-telemetry{display:none!important}
+@media(max-width:720px){
+  .stage:fullscreen .camera-rail{max-width:95%;top:18px;right:7px}
+  .stage.gunnery-active .target-telemetry .gunnery-line{top:115px}
+}
