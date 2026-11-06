@@ -1,4 +1,5 @@
 import { v3, type Vec3 } from '@/core/vec3';
+import { AU_CHAPTERS, type AUChapterFleet } from './auLibrary';
 import { EXPANDED_BATTLES } from './expandedBattles';
 import { getPreset } from '@/timelines/presets';
 import { TECH_KEYS, type RuleSet, type TechModifiers } from '@/timelines/rules';
@@ -622,6 +623,47 @@ SCENARIOS.push(...EXPANDED_BATTLES.map(expanded => ({
       playerControlled:side==='A',techOverride:f.tech
     }))
   })
+})));
+
+/** Shared AU content is authored once and registered in both engines.
+ * The existing BattleSimulation owns targeting, damage, casualties and results.
+ * Extra allied/hostile flotillas retain their own faction doctrines and arrival.
+ */
+SCENARIOS.push(...AU_CHAPTERS.map(chapter=>({
+  id:chapter.id,
+  name:chapter.name,
+  subtitle:chapter.subtitle,
+  environment:chapter.environment,
+  description:chapter.description,
+  recommendedRules:[chapter.rules],
+  auOnly:true,
+  objective:chapter.objective,
+  maxDuration:chapter.maxDuration,
+  briefing:[chapter.era, chapter.subtitle, chapter.description,
+    chapter.mathRecommended?'STRATEGIC SCALE: use instant results where available; live 3D battle may be costly.':'TACTICAL ENCOUNTER: outcome is determined by the active rules and fleets.'],
+  build:(rules:RuleSet,seed:number,worldState:Record<string,string>):BattleConfig=>{
+    const create=(spec:AUChapterFleet,side:Side,index:number):FleetSpec=>({
+      id:chapter.id+'-'+side+'-'+index,
+      name:spec.name, faction:spec.faction,side,
+      formation:spec.formation,
+      ships:Object.entries(spec.counts).map(([classId,count])=>({classId,count})),
+      position:v3((index%2===0?1:-1)*index*13,0,(side==='A'?-1:1)*(chapter.distance/2+index*8)),
+      heading:v3(0,0,side==='A'?1:-1),
+      arrivalTime:spec.arrivalTime,
+      techOverride:spec.tech,
+      playerControlled:side==='A'
+    });
+    return {
+      id:chapter.id+'-'+rules.id+'-'+seed,
+      name:chapter.name,scenarioId:chapter.id,alternateHistory:true,
+      seed,rules,environment:chapter.environment,maxDuration:chapter.maxDuration,
+      objective:chapter.objective,perspectiveSide:'A',worldState,
+      fleets:[
+        ...[chapter.a,...(chapter.extraA??[])].map((fleet,index)=>create(fleet,'A',index)),
+        ...[chapter.b,...(chapter.extraB??[])].map((fleet,index)=>create(fleet,'B',index))
+      ]
+    };
+  }
 })));
 
 export const getScenario = (id: string): ScenarioDef => {
