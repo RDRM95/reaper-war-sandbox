@@ -29,31 +29,80 @@ function styleBuilt(built: BuiltShip, style: Style): BuiltShip {
     });
     mesh.material=Array.isArray(mesh.material)?mapped:mapped[0];
   });
-  const mat=new THREE.MeshStandardMaterial({color:style.trim,metalness:.78,roughness:.3});
+  const mat=new THREE.MeshStandardMaterial({color:style.trim,metalness:.76,roughness:.36});
+  const shadow=new THREE.MeshStandardMaterial({color:style.hull,metalness:.81,roughness:.43});
   const L=built.lengthUnits;
+
+  // Tapered angular armour instead of box-shaped additions. Shared geometry
+  // signatures remain compatible with the GPU instancing/LOD path.
+  const wedge=(w:number,h:number,l:number,fore=.46):THREE.BufferGeometry=>{
+    const geometry=new THREE.BoxGeometry(w,h,l,1,1,1);
+    const p=geometry.attributes.position;
+    for(let i=0;i<p.count;i++){
+      const f=p.getZ(i)>0?fore:.94;
+      p.setXY(i,p.getX(i)*f,p.getY(i)*(.78+.22*f));
+    }
+    p.needsUpdate=true;
+    geometry.computeVertexNormals();
+    return geometry;
+  };
   if(style.family==='exile'){
-    // Swept paired lance vanes and a raised command keel: ark silhouette.
+    // The past-cycle Exiles use raised bridge armour and paired swept rails.
+    // These original AU pieces sit on the existing donor ship; main-gun
+    // orientation, sensor centre and external hull dimensions remain intact.
     for(const side of [-1,1]){
-      const vane=new THREE.Mesh(new THREE.BoxGeometry(L*.05,L*.04,L*.36),mat);
-      vane.position.set(side*L*.21,0,-L*.08);
-      vane.rotation.y=side*.36;
-      group.add(vane);
+      const rail=new THREE.Mesh(wedge(L*.048,L*.024,L*.36,.24),mat);
+      rail.position.set(side*L*.20,L*.004,-L*.085);
+      rail.rotation.y=side*.30;
+      rail.name='exile_lance_rail';
+      group.add(rail);
+      const inset=new THREE.Mesh(wedge(L*.013,L*.014,L*.22,.45),shadow);
+      inset.position.set(side*L*.175,L*.029,-L*.09);
+      inset.rotation.y=side*.30;
+      inset.name='exile_support_rib';
+      group.add(inset);
     }
-    const spine=new THREE.Mesh(new THREE.BoxGeometry(L*.04,L*.11,L*.45),mat);
-    spine.position.y=L*.08;group.add(spine);
+    const spine=new THREE.Mesh(wedge(L*.042,L*.09,L*.36,.42),mat);
+    spine.position.set(0,L*.075,-L*.015);
+    spine.name='exile_command_keel';
+    group.add(spine);
   }else if(style.family==='compact'){
-    // Boxy external magazine pods and reinforced dorsal armour.
+    // Improvised Terminus armour: unmistakably external angular magazines,
+    // bolted hardpoints and a reinforced central deck, not huge cuboids.
     for(const side of [-1,1]){
-      const pod=new THREE.Mesh(new THREE.BoxGeometry(L*.13,L*.10,L*.23),mat);
-      pod.position.set(side*L*.19,-L*.055,-L*.06);group.add(pod);
+      const pod=new THREE.Mesh(wedge(L*.12,L*.09,L*.24,.57),shadow);
+      pod.position.set(side*L*.185,-L*.055,-L*.065);
+      pod.name='compact_external_magazine';
+      group.add(pod);
+      const cover=new THREE.Mesh(wedge(L*.085,L*.016,L*.19,.39),mat);
+      cover.position.set(side*L*.185,L*.005,-L*.055);
+      cover.name='compact_magazine_armour';
+      group.add(cover);
+      for(let i=-1;i<=1;i++){
+        const rib=new THREE.Mesh(new THREE.BoxGeometry(L*.095,L*.018,L*.006),mat);
+        rib.position.set(side*L*.185,-L*.008,-L*.062+i*L*.057);
+        rib.name='compact_bolted_rib';
+        group.add(rib);
+      }
     }
-    const plate=new THREE.Mesh(new THREE.BoxGeometry(L*.15,L*.07,L*.38),mat);
-    plate.position.set(0,L*.11,0);group.add(plate);
+    const plate=new THREE.Mesh(wedge(L*.135,L*.054,L*.30,.44),mat);
+    plate.position.set(0,L*.085,0);plate.name='compact_armoured_spine';
+    group.add(plate);
   }else{
-    // Axiom's visible protective spine and calm cyan seams, contrasting
-    // the dark-red offensive Sovereign-family Reapers.
-    const spine=new THREE.Mesh(new THREE.BoxGeometry(L*.04,L*.12,L*.34),mat);
-    spine.position.set(0,L*.095,-L*.035);group.add(spine);
+    // Axiom keeps the real Sovereign-family cuttlefish hull/limbs.
+    // Five low scutes subtly identify an older protective command variant.
+    // No large secondary ship-like fuselage or unrelated Reaper silhouette.
+    for(let i=0;i<5;i++){
+      const z=(i-2)*L*.067;
+      const scute=new THREE.Mesh(wedge(L*.065,L*.014,L*.061,.52),mat);
+      scute.position.set(0,L*(.092+.005*Math.cos(i)),z);
+      scute.name='axiom_central_carapace_scute';
+      group.add(scute);
+    }
+    const keel=new THREE.Mesh(wedge(L*.018,L*.028,L*.30,.55),shadow);
+    keel.position.set(0,L*.097,-L*.028);
+    keel.name='axiom_dorsal_keel';
+    group.add(keel);
   }
   // Catalogue length is authoritative for simulation placement. Compute
   // the visual scale from the real donor template rather than an approximate
