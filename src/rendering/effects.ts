@@ -167,8 +167,17 @@ export class EffectsSystem {
   }
 
   /** Impact: barrier hit shimmer or hull hit sparks. */
-  impact(pos: THREE.Vector3, barrierDamage: number, hullDamage: number, targetRadiusUnits: number, targetPos: () => THREE.Vector3 | undefined, damageType: string): void {
+  impact(pos: THREE.Vector3, barrierDamage: number, hullDamage: number, targetRadiusUnits: number, targetPos: () => THREE.Vector3 | undefined, damageType: string, glancing = false): void {
     const total = barrierDamage + hullDamage;
+    if(glancing){
+      // Glancing rounds leave a short grazing flare. Avoid using the same
+      // large impact cloud as a direct HADES/NOVA penetration.
+      const size=Math.min(1.6,.24+Math.sqrt(total)*.016);
+      this.spark(pos,new THREE.Vector3(),.13,size*.4,size*1.1,
+        barrierDamage>hullDamage?this.blueTex:this.fireTex,
+        barrierDamage>hullDamage?0x86c7ff:0xe8a876);
+      return;
+    }
     const size = Math.min(8, 0.4 + Math.sqrt(total) * 0.09);
     if (barrierDamage > hullDamage && barrierDamage > 3) {
       this.spark(pos, new THREE.Vector3(), 0.2, size * 0.6, size * 1.4, this.blueTex, 0x9fd0ff);
