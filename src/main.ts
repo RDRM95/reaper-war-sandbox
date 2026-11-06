@@ -43,6 +43,8 @@ let sim:BattleSimulation|null=null,view:BattleView|null=null,flat: FleetMap2D|nu
 let selectedShip:string|undefined,following=false,accum=0,last=0,lastHud=0;
 let viewError:string|undefined;
 let gunnery=false;
+let lastGunneryTarget:string|undefined;
+let lastReady=false;
 let graphics:GraphicsPreset = 'high';
 let fpsCounter=0,fpsLast=0,fpsValue=0,simWorkMs=0;
 const frameTimes:number[]=[];
@@ -80,7 +82,7 @@ app.innerHTML=`
     <div id="stage" class="stage"><canvas id="scene3d"></canvas><canvas id="scene2d"></canvas>
       <div class="stage-tag"><small>BATTLESPACE / AUTONOMOUS SIMULATION</small><strong id="battle-name">SOL DEFENCE</strong></div>
       <div id="error" class="error" hidden></div>
-      <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY TRACK</button></div>
+      <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY POV</button><button id="fullscreen" title="Fullscreen battle view (F)">⛶ FULLSCREEN</button></div>
       <div class="stage-foot"><div><small>ENGAGEMENT TIME</small><strong id="clock">00:00</strong></div><div id="message">AWAITING DEPLOYMENT</div><div class="stage-legend"><span class="dot blue"></span> ALLIED <span class="dot red"></span> OPPOSING</div></div></div>
     <div class="bottom-line"><span>ORIGINAL REAPER WAR SIMULATION CORE</span><span>NO TACTICAL ORDERS</span><span>ME3-ERA SHIP GENERATORS</span><span id="perf" aria-label="Renderer performance">— FPS</span></div>
   </main>
@@ -151,6 +153,7 @@ function reportError(err:unknown){viewError=err instanceof Error?err.message:Str
   $('message').textContent='STARTUP FAILED';$('state').textContent='ERROR';console.error(err);
 }
 function select(ship:ShipState|undefined){selectedShip=ship?.id;following=false;flat!.selected=selectedShip;
+  if(gunnery&&view&&ship)view.followId=ship.id;
   if(view){view.selectedIds.clear();if(ship)view.selectedIds.add(ship.id);}
   inspect();
 }
@@ -174,7 +177,20 @@ function updateHud(){if(!sim)return;
   if(sim.finished){paused=true;$('state').textContent='BATTLE COMPLETE';
     $('message').textContent=sim.result?.winner==='draw'?'DRAW':`SIDE ${sim.result?.winner??'?'} VICTORIOUS`;}
 }
-function pushEvent(e:BattleEvent){if(e.type==='ship_destroyed'){
+function pushEvent(e:BattleEvent){
+  if(gunnery&&selectedShip){
+    telemetry.notify(e,selectedShip);
+    if(audioEnabled && e.type==='weapon_fired'&&e.shipId===selectedShip){
+      const shooter=sim?.getShip(e.shipId),weapon=shooter?.weapons[e.weaponIndex];
+      const id=e.kind==='reaper_beam'?'reaper_beam':e.kind==='thanix'?'thanix':
+        e.kind==='mass_accelerator'?(weapon && weapon.def.damage>=550?'ma_large':'ma_small'):
+        e.kind==='gardian'?'gardian':'torpedo';
+      audio.play(id,0,0.55);
+    }
+    if(audioEnabled&&e.type==='projectile_impact'&&e.shipId===selectedShip)
+      audio.play(e.hullDamage>0?'impact_hull':'impact_barrier',0,0.45);
+  }
+  if(e.type==='ship_destroyed'){
     const killer=e.killerId?sim?.shipById.get(e.killerId)?.name:'Unknown';feed.unshift({time:e.t,message:e.name+' destroyed'+(killer?' · '+killer:''),side:e.side});
     if(audioEnabled)audio.play(e.role==='dreadnought'||e.role==='reaper_capital'?'explosion_large':'explosion_small',150,.65);
   }else if(e.type==='comms'){feed.unshift({time:e.t,message:e.text,side:e.side});}
@@ -184,7 +200,7 @@ function pushEvent(e:BattleEvent){if(e.type==='ship_destroyed'){
   if(feed.length>50)feed.length=50;
   // DOM log is updated at HUD cadence, not once per combat event.
 }
-function attachEvents(){if(!sim)return;const previous=sim.onEvent;sim.onEvent=e=>{previous?.(e);pushEvent(e);};}
+function attachEvents(){if(!sim)return;sim.onEvent=e=>{view?.queueEvent(e);pushEvent(e);};}
 function createView(preserveCamera=false){if(!sim)return;
   const cameraState=preserveCamera&&view?{
     mode:view.rig.mode,focus:view.rig.focus.clone(),yaw:view.rig.yaw,
@@ -231,7 +247,7 @@ function launch(){try{
   if(referenceMode){
     for(let i=0;i<Math.round(referenceSeconds/SIM_DT)&&!sim.finished;i++)sim.step();
   }
-  flat!.reset();selectedShip=undefined;following=false;gunnery=false;telemetry.show(false);feed.length=0;accum=0;paused=referenceMode;
+  flat!.reset();selectedShip=undefined;following=false;gunnery=false;lastGunneryTarget=undefined;lastReady=false;telemetry.show(false);$('gunner').classList.remove('active');$('stage').classList.remove('gunnery-active');feed.length=0;accum=0;paused=referenceMode;
   if(referenceMode)$('pause').textContent='▶';
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
@@ -242,12 +258,38 @@ function switchMode(){
   // Release the entire WebGL scene in 2D mode. Rebuild it on demand when returning to 3D.
   // Otherwise the inactive renderer keeps thousands of meshes and queued effects in memory.
   if(mode==='2d'&&view){view.dispose();view=null;if(sim)sim.onEvent=pushEvent;}
+  if(mode==='2d'){gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');}
   third.style.display=mode==='3d'?'block':'none';second.style.display=mode==='2d'?'block':'none';
   $('toggle3d').classList.toggle('active',mode==='3d');$('toggle2d').classList.toggle('active',mode==='2d');
   $('stage').classList.toggle('flat',mode==='2d');
   telemetry.show(gunnery&&mode==='3d');
+  $('stage').classList.toggle('gunnery-active',gunnery&&mode==='3d');
   if(mode==='3d'&&view)view.resize(third.clientWidth||900,third.clientHeight||550);
 }
+const stage=$<HTMLElement>('stage');
+function resizeBattleViewport(){
+  if(view&&mode==='3d')view.resize(third.clientWidth||900,third.clientHeight||550);
+  if(flat&&mode==='2d')flat.reset();
+}
+function updateFullscreenUi(){
+  $('fullscreen').textContent=document.fullscreenElement===stage?'⤢ EXIT FULLSCREEN':'⛶ FULLSCREEN';
+  requestAnimationFrame(resizeBattleViewport);
+}
+async function toggleFullscreen(){
+  try {
+    if(document.fullscreenElement===stage)await document.exitFullscreen();
+    else if(!document.fullscreenElement)await stage.requestFullscreen();
+  } catch(err){reportError('Fullscreen unavailable: '+String(err));}
+}
+$('fullscreen').addEventListener('click',()=>void toggleFullscreen());
+document.addEventListener('fullscreenchange',updateFullscreenUi);
+document.addEventListener('keydown',e=>{
+  if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextAreaElement)return;
+  if(e.key.toLowerCase()==='f'&&!e.repeat){e.preventDefault();void toggleFullscreen();}
+  if(e.key.toLowerCase()==='g'&&!e.repeat){e.preventDefault();$('gunner').click();}
+  if(e.code==='Space'&&!e.repeat){e.preventDefault();$('pause').click();}
+});
+
 $('toggle3d').addEventListener('click',()=>{mode='3d';if(!view&&sim)createView();switchMode();});
 $('toggle2d').addEventListener('click',()=>{mode='2d';switchMode();});
 $('launch').addEventListener('click',launch);$('restart').addEventListener('click',launch);
@@ -256,10 +298,15 @@ $('speed').addEventListener('change',()=>{speed=Math.max(1,Number($<HTMLSelectEl
 $('graphics').addEventListener('change',()=>{graphics=$<HTMLSelectElement>('graphics').value as GraphicsPreset;if(mode==='3d'&&sim)createView(true);});
 $('sound').addEventListener('click',()=>{audioEnabled=!audioEnabled;if(audioEnabled)audio.init();audio.settings.muted=!audioEnabled;audio.applySettings();$('sound').textContent=audioEnabled?'SOUND ON':'SOUND OFF';});
 function camera(mode:CameraMode){if(!view||!sim)return;view.rig.setMode(mode);}
-$('cine').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('cinematic');});
-$('tactical').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('tactical');});
-$('reaper-cam').addEventListener('click',()=>{gunnery=false;telemetry.show(false);camera('reaper');});
-$('gunner').addEventListener('click',()=>{gunnery=true;mode='3d';switchMode();camera('follow');if(view&&selectedShip)view.followId=selectedShip;telemetry.show(true);});
+$('cine').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('cinematic');});
+$('tactical').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('tactical');});
+$('reaper-cam').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('reaper');});
+$('gunner').addEventListener('click',()=>{
+  gunnery=true;mode='3d';if(!view&&sim)createView();switchMode();
+  if(view){view.followId=selectedShip;view.gunneryWeaponIndex=undefined;view.rig.setMode('gunnery');}
+  if(audioEnabled)audio.init();
+  telemetry.show(true);$('gunner').classList.add('active');$('stage').classList.add('gunnery-active');
+});
 $('clean').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.toggle('clean-recording');});
 $('chase').addEventListener('click',()=>{$('follow').click();});
 $('follow').addEventListener('click',()=>{if(!selectedShip||!sim)return;following=!following;if(view){view.followId=following?selectedShip:undefined;view.rig.setMode(following?'follow':'cinematic');}$('follow').textContent=following?'RELEASE FOLLOW':'FOLLOW SELECTED';});
@@ -304,7 +351,23 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
       simWorkMs=performance.now()-started;
     }
     const alpha=paused?1:Math.min(1,accum/SIM_DT);
-    if(mode==='3d'&&view){view.update(dt,alpha);view.render();telemetry.update(sim,view,selectedShip);}
+    if(mode==='3d'&&view){
+      view.update(dt,alpha);view.render();
+      const activeId=gunnery?(view.followId??selectedShip):selectedShip;
+      telemetry.update(sim,view,activeId);
+      if(gunnery&&activeId){
+        if(selectedShip!==activeId){selectedShip=activeId;flat!.selected=activeId;}
+        const vessel=sim.getShip(activeId);
+        const target=vessel?.targetId;
+        if(target!==lastGunneryTarget){
+          if(target&&audioEnabled)audio.play('target_lock',0,0.65);
+          lastGunneryTarget=target;
+        }
+        const ready=!!vessel?.weapons.some(w=>!w.def.antiSmall&&w.cooldown<=0.02);
+        if(ready&&!lastReady&&audioEnabled)audio.play('battery_ready',0,0.32);
+        lastReady=ready;
+      }
+    }
     if(mode==='2d'){if(following&&selectedShip){const ship=sim.shipById.get(selectedShip);if(ship&&ship.alive)flat!.focus(ship);}flat!.draw(sim);}
     fpsCounter++;
     if(!fpsLast)fpsLast=now;
