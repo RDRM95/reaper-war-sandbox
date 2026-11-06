@@ -89,6 +89,8 @@ export class BattleSimulation implements AiContext {
   finished = false;
   result?: BattleResult;
   private nextId = 1;
+  /** Per-ship position at issuance of an explicit fleet retreat order. */
+  private readonly retreatOrigins = new Map<string, Vec3>();
   private shipCounter = new Map<string, number>();
   private readonly shipNames: ShipNameGenerator;
   private fleetRules = new Map<string, RuleSet>();
@@ -323,7 +325,15 @@ export class BattleSimulation implements AiContext {
       if (patch.primaryFire === 'hold') patch = { ...patch, primaryFire: 'free' };
     }
     const prevFormation = fleet.orders.formation;
+    const prevOrder=fleet.orders.order;
     fleet.orders = { ...fleet.orders, ...patch, ...(patch.position ? { position: scale(patch.position, S) } : {}) };
+    if(patch.order==='retreat' && prevOrder!=='retreat'){
+      for(const ship of this.ships)if(ship.fleetId===fleetId && ship.alive && !ship.escaped)
+        this.retreatOrigins.set(ship.id,clone(ship.pos));
+    }else if(patch.order && patch.order!=='retreat'){
+      for(const ship of this.ships)if(ship.fleetId===fleetId)
+        this.retreatOrigins.delete(ship.id);
+    }
     if (patch.formation && patch.formation !== prevFormation) this.reassignSlots(fleet);
     if (patch.order === 'attack_target' && patch.targetId) {
       fleet.focusTargetId = patch.targetId;
@@ -1045,13 +1055,17 @@ export class BattleSimulation implements AiContext {
         // exiting the arena. A pursuer cannot hold a withdrawing fleet in the
         // simulation forever simply by matching its speed at close range.
         // Requires *travel*: no instant despawn or teleport.
-        const travelledRearward = dot(sub(s.pos,f.spec.position),scale(f.spec.heading,-1));
-        // A formed task force can exit along its protected rear withdrawal
-        // corridor. A lone isolated cruiser still has to outrun interceptors:
-        // do not magically remove a vessel while a fast Reaper screen pursues.
-        const formedRetreat = f.startPoints > s.pointValue * 1.01;
-        if (nearest > 80 * S || (formedRetreat && travelledRearward > 80 * S))
-          s.escaped = true;
+        const origin=this.retreatOrigins.get(s.id);
+        const travelled=origin?distance(s.pos,origin):0;
+        // Formed task forces can disengage after actually moving beyond the
+        // rear staging corridor. Track position at the *order* instead of the
+        // fleet's initial deployment, since a battle may have changed course.
+        // An isolated ship still needs to lose a fast pursuing Reaper screen.
+        const formedRetreat=f.startPoints>s.pointValue*1.01;
+        if(nearest>80*S || (formedRetreat && travelled>35*S)){
+          s.escaped=true;
+          this.retreatOrigins.delete(s.id);
+        }
       }
     }
   }
