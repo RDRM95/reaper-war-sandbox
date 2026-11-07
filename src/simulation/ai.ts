@@ -1,3 +1,4 @@
+import { hardcoreReaperTargetFactor } from './reaperHardcore';
 import type { Rng } from '@/core/rng';
 import { add, clampLength, distance, dot, lengthSq, normalize, scale, sub, v3, type Vec3 } from '@/core/vec3';
 import { FACTIONS, type FactionDoctrine } from '@/data/factions';
@@ -134,6 +135,7 @@ export function scoreTarget(ctx: AiContext, shooter: ShipState, fleet: FleetStat
     const tgt = target.targetId ? ctx.getShip(target.targetId) : undefined;
     if (tgt && (tgt.role === 'dreadnought' || tgt.role === 'carrier') && tgt.side === shooter.side) score *= 1.8;
   }
+  score *= hardcoreReaperTargetFactor(ctx.rules, shooter, target, dist, mainRange);
   return score;
 }
 
