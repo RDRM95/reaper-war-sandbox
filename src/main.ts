@@ -17,6 +17,7 @@ import { FACTIONS } from '@/data/factions';
 import { audio } from '@/audio/engine';
 import { FleetMap2D } from './spectator/flatView';
 import { TargetTelemetry } from './spectator/targetTelemetry';
+import { DEFAULT_SCENE_SCRIPT, parseSceneScript, stageSceneConfig, type SceneBeat, type SceneScript } from './spectator/sceneScript';
 
 type Fleet = { faction:FactionId; name:string; formation:FormationType; counts:Record<string,number> };
 type ScreenMode = '3d'|'2d';
@@ -47,6 +48,7 @@ const freshWave=():Reinforcement=>({delay:120,counts:{}});
 let waves:Record<Side,Reinforcement>={A:freshWave(),B:freshWave()};
 let activeSide:Side='A',mode:ScreenMode='3d',speed=1,paused=false,audioEnabled=false;
 let sim:BattleSimulation|null=null,view:BattleView|null=null,flat: FleetMap2D|null=null;
+let activeScene:SceneScript|null=null, nextSceneBeat=0;
 let selectedShip:string|undefined,following=false,accum=0,last=0,lastHud=0;
 let viewError:string|undefined;
 let gunnery=false;
@@ -73,7 +75,7 @@ document.documentElement.style.setProperty('--rw-tv-scale', String(tvScale));
 const app=document.getElementById('app')!;
 app.innerHTML=`
 <header class="rw-header"><div class="brand"><small>MASS EFFECT / FAN-MADE SIMULATION</small><strong>REAPER WAR <span>— SPECTATOR</span></strong></div>
-  <div class="header-right"><span class="status" id="state">READY TO DEPLOY</span><label class="rw-scale-control" for="tv-scale">TV UI <select id="tv-scale" aria-label="TV interface scale"><option value="0.85">85%</option><option value="1">100%</option><option value="1.15">115%</option><option value="1.3">130%</option><option value="1.5">150%</option><option value="1.75">175%</option></select></label><button id="sound" class="plain">SOUND OFF</button></div></header>
+  <div class="header-right"><span class="status" id="state">READY TO DEPLOY</span><label class="rw-scale-control" for="tv-scale">TV UI <select id="tv-scale" aria-label="TV interface scale"><option value="0.85">85%</option><option value="1">100%</option><option value="1.15">115%</option><option value="1.3">130%</option><option value="1.5">150%</option><option value="1.75">175%</option></select></label><button id="scene-script" class="plain" title="Author a timed cinematic using actual combat">SCENE SCRIPT</button><button id="sound" class="plain">SOUND OFF</button></div></header>
 <div class="rw-layout">
   <aside class="pane rw-setup"><div class="pane-heading">FLEET BUILDER <span>01</span></div>
     <label>SCENARIO</label><select id="scenario">
@@ -100,7 +102,7 @@ app.innerHTML=`
   <main class="rw-middle">
     <div class="toolbar"><div class="seg"><button id="toggle3d" class="active">3D CINEMATIC</button><button id="toggle2d">2D FLEET VIEW</button></div>
        <div class="seg"><select id="graphics" aria-label="Graphics preset" title="Graphics quality"><option value="low">PERFORMANCE</option><option value="medium">BALANCED</option><option value="high" selected>HIGH</option><option value="ultra">RTX CINEMATIC</option></select><button id="clean">HUD OFF</button><button id="pause">Ⅱ</button><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select><button id="restart">↻</button></div></div>
-    <div id="stage" class="stage"><canvas id="scene3d"></canvas><canvas id="scene2d"></canvas>
+    <div id="stage" class="stage"><canvas id="scene3d"></canvas><canvas id="scene2d"></canvas><div id="scene-caption" class="scene-caption" aria-live="off" hidden></div>
       <div class="stage-tag"><small>BATTLESPACE / AUTONOMOUS SIMULATION</small><strong id="battle-name">SOL DEFENCE</strong></div>
       <div id="error" class="error" hidden></div><section id="quick-report" class="quick-report" hidden aria-label="Aggregate battle report"><button type="button" id="quick-close" class="quick-close">✕ CLOSE REPORT</button><div id="quick-results"></div><button type="button" id="quick-export" class="plain">EXPORT REPORT JSON</button></section>
       <div class="camera-rail"><button id="cine">CINEMATIC</button><button id="tactical">ORBIT CAMERA</button><button id="chase">FOLLOW</button><button id="reaper-cam">REAPER VIEW</button><button id="gunner">GUNNERY POV</button><button id="fullscreen" title="Fullscreen battle view (F)">⛶ FULLSCREEN</button></div>
@@ -124,7 +126,22 @@ app.innerHTML=`
     <button id="volley" class="plain full" disabled>FIRE READY SPINAL BATTERIES</button>
     <div class="pane-heading with-border">BATTLE LOG <span>04</span></div><div id="log" class="log">Waiting for engagement…</div>
   </aside>
-</div><footer>INDEPENDENT NON-COMMERCIAL FAN PROJECT · ORIGINAL SOURCE-BASED 3D ENGINE · BUILD 0.3 DEVELOPMENT</footer>
+</div>
+<section id="scene-panel" class="scene-panel" hidden aria-label="Scene director editor" role="dialog" aria-modal="true">
+  <div class="scene-dialog">
+    <header><div><small>REAPER WAR / CINEMATIC DIRECTOR</small><h2>SCENE SCRIPT MODE</h2></div><button type="button" id="scene-close">✕ CLOSE</button></header>
+    <p>Write a timed JSON shot list. WIDE, FOLLOW, REAPER and CINEMATIC views observe actual combat. Waves are real delayed fleets with authentic AI, weapons, losses and outcomes. No fake hits or scripted victories.</p>
+    <label for="scene-json">SCENE JSON · SHOTS ARE IN SIMULATION SECONDS</label>
+    <textarea id="scene-json" spellcheck="false" aria-label="Scene JSON script"></textarea>
+    <div class="scene-actions">
+      <button id="scene-run" class="primary">▶ PLAY SCENE</button>
+      <button id="scene-save">SAVE SCRIPT LOCALLY</button>
+      <button id="scene-default">RESTORE EXAMPLE</button>
+    </div>
+    <div id="scene-status" role="status">EDIT SHOTS OR START THE EXAMPLE</div>
+  </div>
+</section>
+<footer>INDEPENDENT NON-COMMERCIAL FAN PROJECT · ORIGINAL SOURCE-BASED 3D ENGINE · BUILD 0.3 DEVELOPMENT</footer>
 `;
 
 // User-controlled TV scaling: only DOM controls, never the 3D drawing buffer.
@@ -166,6 +183,80 @@ app.addEventListener('change',(event:Event)=>{
   const target=event.target as HTMLElement;
   if(target.matches('select,input[type="number"]'))audio.play('ui_click',0,.44);
 });
+
+
+// Scene Mode: user-authored camera cuts + real, scheduled fleet reinforcements.
+// It changes presentation and BattleConfig only; no simulation RNG or hit logic.
+const sceneEditor=$<HTMLTextAreaElement>('scene-json');
+const scenePanel=$('scene-panel');
+const SCENE_STORAGE_KEY='reaperwar:spectator:scene-script';
+try{sceneEditor.value=localStorage.getItem(SCENE_STORAGE_KEY)??DEFAULT_SCENE_SCRIPT;}
+catch{sceneEditor.value=DEFAULT_SCENE_SCRIPT;}
+$('scene-script').addEventListener('click',()=>{scenePanel.hidden=false;sceneEditor.focus();});
+$('scene-close').addEventListener('click',()=>{scenePanel.hidden=true;});
+$('scene-default').addEventListener('click',()=>{
+  sceneEditor.value=DEFAULT_SCENE_SCRIPT;
+  $('scene-status').textContent='EXAMPLE RESTORED — CLICK PLAY SCENE';
+});
+$('scene-save').addEventListener('click',()=>{
+  try{
+    parseSceneScript(sceneEditor.value);
+    localStorage.setItem(SCENE_STORAGE_KEY,sceneEditor.value);
+    $('scene-status').textContent='SCRIPT SAVED ON THIS DEVICE';
+  }catch(error){$('scene-status').textContent='SCRIPT ERROR: '+String(error);}
+});
+$('scene-run').addEventListener('click',()=>{
+  try{
+    const next=parseSceneScript(sceneEditor.value);
+    // Preflight faction compatibility and wave composition before destroying
+    // any running battle; keep the existing sim untouched if validation fails.
+    stageSceneConfig(currentConfig(),next);
+    activeScene=next; mode='3d';speed=1;$<HTMLSelectElement>('speed').value='1';
+    scenePanel.hidden=true;
+    launch();
+    $('scene-status').textContent='SCENE LIVE / '+next.beats.length+' SHOTS';
+  }catch(error){$('scene-status').textContent='SCRIPT ERROR: '+String(error);}
+});
+scenePanel.addEventListener('keydown',(event:KeyboardEvent)=>{
+  if(event.key==='Escape'){event.stopPropagation();scenePanel.hidden=true;}
+});
+
+function stageCameraBeat(beat:SceneBeat):void{
+  if(!sim||!view)return;
+  if(beat.shot==='wide'){
+    const a=view.sideCentre('A'),b=view.sideCentre('B');
+    const centre=a.clone().add(b).multiplyScalar(0.5);
+    // Scale to the deployed engagement, not a fixed tiny camera orbit.
+    view.rig.focus.copy(centre);
+    view.rig.distance=Math.max(1800,a.distanceTo(b)*1.4);
+    view.rig.pitch=.36;view.rig.yaw=Math.PI+.42;
+    view.rig.setMode('tactical');
+  }else if(beat.shot==='cinematic'){
+    view.rig.setMode('cinematic');
+  }else{
+    const side=beat.side??(beat.shot==='reaper'?'B':'A');
+    const candidates=sim.ships.filter(s=>s.alive&&!s.escaped&&s.side===side);
+    const suitable=beat.shot==='reaper'
+      ?candidates.filter(s=>s.faction==='reaper')
+      :candidates.filter(s=>s.role!=='fighter');
+    const focus=(suitable.length?suitable:candidates)
+      .sort((a,b)=>b.pointValue-a.pointValue)[0];
+    if(focus){
+      view.followId=focus.id;selectedShip=focus.id;flat!.selected=focus.id;
+      view.rig.setMode(beat.shot==='reaper'&&focus.faction==='reaper'?'reaper':'follow');
+    }else view.rig.setMode('cinematic');
+  }
+  const caption=$('scene-caption');
+  caption.textContent=beat.caption.toUpperCase();
+  caption.hidden=beat.caption.length===0;
+}
+function advanceSceneBeats():void{
+  if(!activeScene||!sim||!view)return;
+  while(nextSceneBeat<activeScene.beats.length
+    &&sim.time+1e-6>=activeScene.beats[nextSceneBeat].at){
+    stageCameraBeat(activeScene.beats[nextSceneBeat++]);
+  }
+}
 
 const selectableChapters=[...EXPANDED_BATTLES,...AU_CHAPTERS];
 // Every scenario can be tested under an AU ruleset, including late-cycle AUs.
@@ -383,7 +474,7 @@ function currentConfig(){
 function launch(){try{
   $('quick-report').hidden=true;
   $('error').hidden=true;viewError=undefined;
-  const config=currentConfig();
+  const config=activeScene?stageSceneConfig(currentConfig(),activeScene):currentConfig();
   const requestedHullCount=config.fleets.reduce((n,f)=>n+
     f.ships.reduce((sum,c)=>sum+c.count,0),0);
   // Truly strategic AU chapters have their own calculator: avoid hanging the
@@ -408,6 +499,9 @@ function launch(){try{
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
   if(audioEnabled){audio.init();}
   if(mode==='3d')createView();switchMode();updateKillScoreboard(true);updateHud();
+  nextSceneBeat=0;
+  if(activeScene) advanceSceneBeats();
+  else { $('scene-caption').hidden=true; $('scene-caption').textContent=''; }
 }catch(e){reportError(e);}}
 let quickReport: QuickBattleReport | null=null;
 function reportCounts(side:Side,report:QuickBattleReport):string{
@@ -492,7 +586,7 @@ document.addEventListener('keydown',e=>{
 
 $('toggle3d').addEventListener('click',()=>{mode='3d';if(!view&&sim)createView();switchMode();});
 $('toggle2d').addEventListener('click',()=>{mode='2d';switchMode();});
-$('launch').addEventListener('click',launch);$('restart').addEventListener('click',launch);
+$('launch').addEventListener('click',()=>{activeScene=null;launch();});$('restart').addEventListener('click',launch);
 $('pause').addEventListener('click',()=>{paused=!paused;$('pause').textContent=paused?'▶':'Ⅱ';$('state').textContent=paused?'PAUSED':'ENGAGEMENT LIVE';});
 $('speed').addEventListener('change',()=>{speed=Math.max(1,Number($<HTMLSelectElement>('speed').value)||1);});
 $('graphics').addEventListener('change',()=>{graphics=$<HTMLSelectElement>('graphics').value as GraphicsPreset;if(mode==='3d'&&sim)createView(true);});
@@ -550,6 +644,7 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
       }
       simWorkMs=performance.now()-started;
     }
+    if(activeScene)advanceSceneBeats();
     const alpha=paused?1:Math.min(1,accum/SIM_DT);
     if(mode==='3d'&&view){
       view.update(dt,alpha);view.render();
