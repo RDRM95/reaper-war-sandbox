@@ -520,7 +520,9 @@ export function disposeEnvironment(env: EnvironmentBuild): void {
       geometry?: THREE.BufferGeometry;
       material?: THREE.Material | THREE.Material[];
     };
-    if (renderable.geometry) geometries.add(renderable.geometry);
+    // Three.js sprites may share the engine's global quad geometry.
+    // Only dispose the geometries this environment created itself.
+    if (!(node as THREE.Sprite).isSprite && renderable.geometry) geometries.add(renderable.geometry);
     const candidates = renderable.material === undefined ? []
       : Array.isArray(renderable.material) ? renderable.material : [renderable.material];
     for (const material of candidates) {
