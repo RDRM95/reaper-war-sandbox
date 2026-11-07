@@ -7,20 +7,25 @@ test('APEX Omegas have separate selectable factions, authored hulls and weapon m
     const { WEAPONS } = await import('/src/data/weapons.ts');
     const { hasModel, getShipTemplate } = await import('/src/rendering/ships/index.ts');
     const { isShipAllowedInRules } = await import('/src/timelines/lore.ts');
-    const THREE = await import('three');
 
     const alliance = SHIP_CLASSES.alliance_omaha;
     const cerberus = SHIP_CLASSES.cerberus_omaha;
     const aModel = getShipTemplate(alliance.id);
     const cModel = getShipTemplate(cerberus.id);
-    const aSize = new THREE.Box3().setFromObject(aModel.group).getSize(new THREE.Vector3());
-    const cSize = new THREE.Box3().setFromObject(cModel.group).getSize(new THREE.Vector3());
+    const vertexCount = (model: typeof aModel) => {
+      let n = 0;
+      model.group.traverse(o => {
+        if ('geometry' in o && o.geometry?.attributes?.position)
+          n += o.geometry.attributes.position.count;
+      });
+      return n;
+    };
     return {
       factions: [alliance.faction, cerberus.faction],
       bothModelled: hasModel(alliance.id) && hasModel(cerberus.id),
       distinctModels: aModel.group !== cModel.group &&
         aModel.group.name !== cModel.group.name,
-      sizes: [aSize.toArray(), cSize.toArray()],
+      vertices: [vertexCount(aModel), vertexCount(cModel)],
       lengths: [aModel.lengthUnits, cModel.lengthUnits],
       muzzle: cModel.muzzle?.toArray(),
       engineCount: cModel.engineNodes.length,
@@ -34,9 +39,9 @@ test('APEX Omegas have separate selectable factions, authored hulls and weapon m
   expect(report.bothModelled).toBe(true);
   expect(report.distinctModels).toBe(true);
   expect(report.lengths).toEqual([18, 18]);
-  for (const dimensions of report.sizes) {
-    expect(dimensions.every((n: number) => Number.isFinite(n) && n > 0)).toBe(true);
-  }
+  expect(report.vertices[0]).toBeGreaterThan(100);
+  expect(report.vertices[1]).toBeGreaterThan(100);
+  expect(report.vertices[0]).not.toEqual(report.vertices[1]);
   expect(report.muzzle?.[2]).toBeGreaterThan(8);
   expect(report.engineCount).toBeGreaterThanOrEqual(4);
   expect(report.mounts).toContain('cerberus_hades_spinal');
