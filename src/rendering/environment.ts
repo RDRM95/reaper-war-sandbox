@@ -70,6 +70,7 @@ export const PLANET_STYLES: Record<string, PlanetStyle> = {
   rannoch: { ocean: [60, 70, 80], land: [160, 120, 80], landHigh: [210, 180, 130], ice: [220, 215, 200], atmosphere: 0xffc890, cloudiness: 0.2, seaLevel: 0.3, seed: 43 },
   // Sur'Kesh: humid jungle world — shallow green seas, dense dark-green lowlands, misty highlands.
   surkesh: { ocean: [18, 70, 80], land: [40, 90, 44], landHigh: [120, 140, 90], ice: [225, 235, 225], atmosphere: 0x6fc0a8, cloudiness: 0.4, seaLevel: 0.44, seed: 57 },
+  pluto: { ocean: [73, 66, 64], land: [115, 97, 88], landHigh: [188, 174, 161], ice: [218, 221, 223], atmosphere: 0x546578, cloudiness: 0, seaLevel: 0.47, seed: 65 },
 };
 
 export function makePlanetTexture(style: PlanetStyle, size = 1024): THREE.CanvasTexture {
@@ -324,6 +325,62 @@ export function makeCitadel(): THREE.Group {
   return g;
 }
 
+
+/** Charon Relay: distant, original procedural relay silhouette.
+ * No imported copyrighted meshes or texture assets; 3D landmark only.
+ * It never participates in collision/AI and is kept off normal spawn lanes.
+ */
+export function makeCharonRelay(): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'charon-mass-relay';
+  const hull = new THREE.MeshStandardMaterial({
+    color: 0x647a90, metalness: 0.86, roughness: 0.3,
+  });
+  const edges = new THREE.MeshStandardMaterial({
+    color: 0x1c334b, metalness: 0.78, roughness: 0.35,
+  });
+  const light = new THREE.MeshBasicMaterial({
+    color: 0x70c4ff, transparent: true, opacity: 0.68, depthWrite: false,
+  });
+  const mainY = new THREE.Vector3(0, 1, 0);
+  const bar = (a: [number,number,number], b: [number,number,number], thickness: number,
+    material: THREE.Material): void => {
+    const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b);
+    const offset = end.clone().sub(start);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(thickness * 0.85, thickness,
+      offset.length(), 8), material);
+    beam.position.copy(start).add(end).multiplyScalar(0.5);
+    beam.quaternion.setFromUnitVectors(mainY, offset.normalize());
+    g.add(beam);
+  };
+  for (const sign of [-1, 1]) {
+    // Split, hooked relay arms around the blue field core.
+    bar([sign*35,-260,-4],[sign*98,-95,0],17,hull);
+    bar([sign*98,-95,0],[sign*126,75,0],19,hull);
+    bar([sign*126,75,0],[sign*67,258,-6],13,hull);
+    bar([sign*73,-184,0],[sign*118,-70,0],8,edges);
+    bar([sign*118,-70,0],[sign*145,100,0],7,edges);
+    for (const y of [-130, 0, 135]) {
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(27, 42, 25),edges);
+      plate.position.set(sign * (110 + Math.abs(y) * .08),y,0);
+      plate.rotation.z=sign*0.28;
+      g.add(plate);
+    }
+  }
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(25,2),
+    new THREE.MeshBasicMaterial({color:0x83d5ff,transparent:true,opacity:.68,depthWrite:false}));
+  g.add(core);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(55,3.8,8,56), light);
+  g.add(ring);
+  const innerRing = new THREE.Mesh(new THREE.TorusGeometry(31,1.8,6,48),light);
+  innerRing.rotation.y = Math.PI/5;
+  g.add(innerRing);
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(22,370,25),hull);
+  spine.position.z=-49;
+  g.add(spine);
+  return g;
+}
+
 export interface EnvironmentBuild {
   group: THREE.Group;
   sunDirection: THREE.Vector3;
@@ -360,7 +417,7 @@ export function buildEnvironment(env: Environment, textureResolution = 1024, sho
     p.rotation.y = 1.2;
     p.name = 'planet';
     group.add(p);
-    if (showClouds) {
+    if (showClouds && style.cloudiness > 0) {
       const cloudMap = makeCloudTexture(style, Math.min(2048, textureResolution));
       const cloudMat = new THREE.MeshStandardMaterial({
         map: cloudMap, transparent: true, depthWrite: false, roughness: 1,
@@ -415,7 +472,15 @@ export function buildEnvironment(env: Environment, textureResolution = 1024, sho
       name = 'The Citadel, Serpent Nebula';
       break;
     }
-    case 'relay':
+    case 'relay': {
+      const relay = makeCharonRelay();
+      relay.position.set(1250, 220, -1650);
+      relay.rotation.set(0.16, 0.42, -0.1);
+      group.add(relay);
+      addPlanet(PLANET_STYLES.pluto, 2300,
+        new THREE.Vector3(7200, -3400, -9800), 'Charon Relay / Pluto');
+      break;
+    }
     case 'deep_space':
       break;
   }
