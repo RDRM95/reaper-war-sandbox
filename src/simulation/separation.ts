@@ -24,7 +24,8 @@ export class SeparationField {
   pairChecks = 0;
 
   constructor(ships: readonly ShipState[]) {
-    const byId = new Map(ships.map(ship => [ship.id, ship]));
+    const byId = new Map<string, ShipState>();
+    for (const ship of ships) byId.set(ship.id, ship);
     for (const ship of ships) {
       if (!ship.alive || ship.escaped) continue;
       const engine = 0.25 + 0.75 * ship.subsystems.engines;
