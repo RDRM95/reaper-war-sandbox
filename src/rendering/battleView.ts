@@ -17,7 +17,7 @@ import { TravelField } from './travelField';
 import { KM } from './geometry';
 import { instantiateShip, getShipTemplate, type BuiltShip } from './ships';
 import { InstancedFleet } from './instancedFleet';
-import { DETAIL_MESH_NAMES, lodLevel, type LodLevel } from './lod';
+import { DETAIL_MESH_NAMES, lodLevelSquared, type LodLevel } from './lod';
 import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
 import { weaponWorldOffset } from '@/simulation/fireControl';
 import { primaryGunneryMount, isMainGunShot } from './gunnery';
@@ -108,9 +108,11 @@ export class BattleView {
   private readonly activeBeamMounts: { ship: ShipState; weapon: WeaponState }[] = [];
   /** Shared point cloud for ships beyond mesh range (one draw call). */
   private readonly farPoints: THREE.Points;
-  private readonly farPositions = new Float32Array(MAX_FAR_POINTS * 3);
-  private readonly farColours = new Float32Array(MAX_FAR_POINTS * 3);
+  private farCapacity = MAX_FAR_POINTS;
+  private farPositions = new Float32Array(MAX_FAR_POINTS * 3);
+  private farColours = new Float32Array(MAX_FAR_POINTS * 3);
   private readonly tmpColour = new THREE.Color();
+  private readonly farColourCache = new Map<string, readonly [number, number, number]>();
   /** Draw calls of the last rendered frame. */
   drawCalls = 0;
   lodCounts = { full: 0, reduced: 0, point: 0 };
@@ -292,6 +294,20 @@ export class BattleView {
     }
   }
 
+  /**
+   * Preserve every far-away ship, including battles larger than the original
+   * 16,384-point buffer. Resize only on fleet growth, never in the hot loop.
+   */
+  private ensureFarPointCapacity(needed: number): void {
+    if (needed <= this.farCapacity) return;
+    while (this.farCapacity < needed) this.farCapacity *= 2;
+    this.farPositions = new Float32Array(this.farCapacity * 3);
+    this.farColours = new Float32Array(this.farCapacity * 3);
+    const geometry = this.farPoints.geometry;
+    geometry.setAttribute('position', new THREE.BufferAttribute(this.farPositions, 3).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('color', new THREE.BufferAttribute(this.farColours, 3).setUsage(THREE.DynamicDrawUsage));
+  }
+
   update(dt: number, alpha: number): void {
     this.alpha = alpha;
     this.processEvents();
@@ -301,6 +317,7 @@ export class BattleView {
     let far = 0;
     this.lodCounts = { full: 0, reduced: 0, point: 0 };
     this.instances.begin(sim.ships);
+    this.ensureFarPointCapacity(sim.ships.length);
     this.rig.camera.updateMatrixWorld();
     this.frustumMatrix.multiplyMatrices(this.rig.camera.projectionMatrix, this.rig.camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.frustumMatrix);
@@ -319,8 +336,9 @@ export class BattleView {
       const px = (ship.prevPos.x + (ship.pos.x - ship.prevPos.x) * alpha) * KM;
       const py = (ship.prevPos.y + (ship.pos.y - ship.prevPos.y) * alpha) * KM;
       const pz = (ship.prevPos.z + (ship.pos.z - ship.prevPos.z) * alpha) * KM;
-      const dist = Math.hypot(px - cam.x, py - cam.y, pz - cam.z);
-      const level = lodLevel(dist, lengthUnits, ship.role, lodOn);
+      const dx = px - cam.x, dy = py - cam.y, dz = pz - cam.z;
+      const distanceSquared = dx * dx + dy * dy + dz * dz;
+      const level = lodLevelSquared(distanceSquared, lengthUnits, ship.role, lodOn);
       this.lodCounts[level]++;
       this.sphere.center.set(px, py, pz);
       this.sphere.radius = lengthUnits * 0.8 + 2;
@@ -329,14 +347,19 @@ export class BattleView {
         this.cine.fromId === ship.id || this.cine.toId === ship.id;
       if (level === 'point') {
         if (existing) existing.built.group.visible = false;
-        if (onScreen && far < MAX_FAR_POINTS) {
+        if (onScreen && far < this.farCapacity) {
           this.farPositions[far * 3] = px;
           this.farPositions[far * 3 + 1] = py;
           this.farPositions[far * 3 + 2] = pz;
-          this.tmpColour.setHex(getFaction(ship.faction).engineColourHex);
-          this.farColours[far * 3] = this.tmpColour.r;
-          this.farColours[far * 3 + 1] = this.tmpColour.g;
-          this.farColours[far * 3 + 2] = this.tmpColour.b;
+          let colour = this.farColourCache.get(ship.faction);
+          if (!colour) {
+            this.tmpColour.setHex(getFaction(ship.faction).engineColourHex);
+            colour = [this.tmpColour.r, this.tmpColour.g, this.tmpColour.b];
+            this.farColourCache.set(ship.faction, colour);
+          }
+          this.farColours[far * 3] = colour[0];
+          this.farColours[far * 3 + 1] = colour[1];
+          this.farColours[far * 3 + 2] = colour[2];
           far++;
         }
         continue;
@@ -345,7 +368,8 @@ export class BattleView {
         if (existing) existing.built.group.visible = false;
         continue;
       }
-      const nearby = dist <= Math.max(75, lengthUnits * 22);
+      const nearRange = Math.max(75, lengthUnits * 22);
+      const nearby = distanceSquared <= nearRange * nearRange;
       const hero = priority || (nearby && nearVisuals < this.MAX_HERO_VISUALS);
       if (hero) {
         const v = existing ?? this.ensureVisual(ship);
