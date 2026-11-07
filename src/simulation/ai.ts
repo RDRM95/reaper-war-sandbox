@@ -234,7 +234,15 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
       const delta = sub(enemy, fleet.anchor);
       const dist = Math.sqrt(lengthSq(delta));
       const resumeRange = desiredRange + range * 0.07;
-      if (fleet.engagementMode !== 'approach' && dist > resumeRange) fleet.engagementMode = 'approach';
+      // A Reaper fleet can win by establishing a firing line. Once contact
+      // has happened, do not send the whole capital group after one damaged
+      // fleeing vessel across empty space. Fast screens can intercept nearby.
+      const fleeing = !!focus && (focus.withdrawing ||
+        ctx.fleets.get(focus.fleetId)?.orders.order === 'retreat');
+      const stopLongChase = !!ctx.rules.special.reaperHardcore && noRetreat &&
+        fleet.engagementMode === 'hold' && fleeing && dist > range * 1.7;
+      if (!stopLongChase && fleet.engagementMode !== 'approach' && dist > resumeRange)
+        fleet.engagementMode = 'approach';
       if (fleet.engagementMode === 'approach' && dist <= desiredRange) fleet.engagementMode = 'hold';
       if (fleet.engagementMode === 'approach') {
         // Canon-style fleet closure: the whole line follows a gentle, stable
@@ -420,6 +428,13 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const dist = distance(ship.pos, target.pos);
   const screen = ship.role === 'frigate' || ship.role === 'reaper_destroyer' || ship.role === 'fighter';
   if (screen && ctx.fleets.get(target.fleetId)?.orders.order === 'retreat') {
+    // Intercept at the battle edge, then return to the fleet. A Reaper
+    // destroyer does not follow a lone escaping frigate indefinitely.
+    if (noRetreat && ctx.rules.special.reaperHardcore &&
+        distance(fleet.anchor, target.pos) > Math.max(range * 2.4,
+          (fleet.engagementRange ?? range) * 1.8)) {
+      return { position: slotPos, speedFraction: 1, face: target.pos };
+    }
     // Once the enemy abandons the engagement, a fast screen intercepts at its
     // own gun range. Keeping it tethered to the slow capital line can match a
     // fleeing cruiser forever, despite the escort's available closing speed.
