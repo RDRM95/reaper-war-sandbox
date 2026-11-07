@@ -1,6 +1,5 @@
-import type { RuleSet } from '@/timelines/rules';
+import type { RuleSet, EffectiveWeapon } from '@/timelines/rules';
 import type { ShipState } from './types';
-import type { EffectiveWeapon } from '@/data/types';
 
 /** Only purpose-built alternate-universe command/hardening vessels can
  * withstand a main-gun strike in the explicitly enabled Hardcore preset.
