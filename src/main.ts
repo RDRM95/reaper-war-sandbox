@@ -491,6 +491,7 @@ function launch(){try{
   killScoreboard.reset();lastScoreDraw=-1;
   view?.dispose();view=null;
   sim=new BattleSimulation(config);
+  sim.profileEnabled = parameters.get('profile') === '1';
   if(referenceMode){
     for(let i=0;i<Math.round(referenceSeconds/SIM_DT)&&!sim.finished;i++)sim.step();
   }
@@ -685,7 +686,7 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
   requestAnimationFrame(frame);
 }
 // Read-only testing interface. No gameplay state is changed by inspection.
-(window as Window & { __reaperDiagnostics?: () => unknown }).__reaperDiagnostics=()=>({
+(window as Window & { __reaperDiagnostics?: (summaryOnly?:boolean) => unknown }).__reaperDiagnostics=(summaryOnly=false)=>({
   seed:sim?.config.seed,time:sim?.time,shipCount:sim?.ships.length,
   frameMsAverage:frameTimes.reduce((a,b)=>a+b,0)/Math.max(1,frameTimes.length),
   frameMsP95:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.ceil(frameTimes.length*0.95)-1)]??0,
@@ -699,7 +700,8 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
     Number(((performance as Performance & {memory?:{usedJSHeapSize:number}}).memory!.usedJSHeapSize/1048576).toFixed(1)) : null,
   fps:fpsValue,simCpuMs:simWorkMs,
   liveShips:sim?.ships.filter(s=>s.alive&&!s.escaped).length,
-  ships:sim?.ships.map(s=>({id:s.id,side:s.side,position:{...s.pos},heading:{...s.heading}})),
+  simulationProfile:sim ? {...sim.profileTotals} : null,
+  ships:summaryOnly ? undefined : sim?.ships.map(s=>({id:s.id,side:s.side,position:{...s.pos},heading:{...s.heading}})),
   view: view?{
     camera: view.rig.camera.position.toArray(),
     quaternion: view.rig.camera.quaternion.toArray(),
