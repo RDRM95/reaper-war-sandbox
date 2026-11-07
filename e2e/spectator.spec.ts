@@ -27,7 +27,7 @@ test('gunnery HUD and HUD-free mode are real spectator controls', async ({page})
   await page.locator('#gunner').click();
   await expect(page.locator('.target-telemetry')).toBeVisible();
   // Live gunnery automatically acquires a friendly weapon platform.
-  await expect(page.locator('.target-panel')).toContainText('WEAPON READY');
+  await expect(page.locator('.gunner-readout-panel')).toContainText('WEAPON READY');
   await page.locator('#clean').click();
   await expect(page.locator('.target-telemetry')).toBeHidden();
   await expect(page.locator('#stage')).toHaveClass(/clean-recording/);
