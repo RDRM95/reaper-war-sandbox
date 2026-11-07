@@ -24,7 +24,8 @@ type ScreenMode = '3d'|'2d';
 type GraphicsPreset = 'low'|'medium'|'high'|'ultra';
 const parameters = new URLSearchParams(window.location.search);
 const referenceMode = parameters.get('reference') === 'sol-42';
-const requestedShips = Math.min(12000, Math.max(0, Math.floor(Number(parameters.get('ships')) || 0)));
+// More than 12k hulls are explicitly opt-in via forceLive=1; ordinary UI remains protected.
+const requestedShips = Math.min(50000, Math.max(0, Math.floor(Number(parameters.get('ships')) || 0)));
 const referenceSeconds = Math.min(120, Math.max(0, Number(parameters.get('t') ?? 18) || 18));
 const $ = <T extends HTMLElement = HTMLElement>(id:string):T => {
   const value=document.getElementById(id);
@@ -687,7 +688,15 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
 (window as Window & { __reaperDiagnostics?: () => unknown }).__reaperDiagnostics=()=>({
   seed:sim?.config.seed,time:sim?.time,shipCount:sim?.ships.length,
   frameMsAverage:frameTimes.reduce((a,b)=>a+b,0)/Math.max(1,frameTimes.length),
-  frameMsP95:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.floor(frameTimes.length*0.95)-1)]??0,
+  frameMsP95:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.ceil(frameTimes.length*0.95)-1)]??0,
+  frameMsP99:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.ceil(frameTimes.length*0.99)-1)]??0,
+  tick:sim?.tick,
+  missileCount:sim?.missiles.length,
+  projectileCount:sim?.projectiles.length,
+  weaponFiredTotal:sim?.events.filter(e=>e.type==='weapon_fired').length,
+  destroyedTotal:sim?.events.filter(e=>e.type==='ship_destroyed').length,
+  jsHeapMb:(performance as Performance & {memory?:{usedJSHeapSize:number}}).memory?.usedJSHeapSize ?
+    Number(((performance as Performance & {memory?:{usedJSHeapSize:number}}).memory!.usedJSHeapSize/1048576).toFixed(1)) : null,
   fps:fpsValue,simCpuMs:simWorkMs,
   liveShips:sim?.ships.filter(s=>s.alive&&!s.escaped).length,
   ships:sim?.ships.map(s=>({id:s.id,side:s.side,position:{...s.pos},heading:{...s.heading}})),
