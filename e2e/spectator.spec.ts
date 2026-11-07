@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test('original-engine simulator boots and both spectator modes render', async ({page}) => {
   const errors:string[]=[];
   page.on('pageerror', error=>errors.push(error.message));
-  await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+  await page.goto('/',{waitUntil:'domcontentloaded'});
   await expect(page.locator('#launch')).toBeVisible();
   await expect(page.locator('#clock')).not.toHaveText('00:00',{timeout:30000});
   await expect(page.locator('#error')).toBeHidden();
@@ -22,7 +22,7 @@ test('original-engine simulator boots and both spectator modes render', async ({
 test('gunnery HUD and HUD-free mode are real spectator controls', async ({page}) => {
   const errors:string[]=[];
   page.on('pageerror', error=>errors.push(error.message));
-  await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded'});
+  await page.goto('/',{waitUntil:'domcontentloaded'});
   await expect(page.locator('#clock')).not.toHaveText('00:00',{timeout:30000});
   await page.locator('#gunner').click();
   await expect(page.locator('.target-telemetry')).toBeVisible();
