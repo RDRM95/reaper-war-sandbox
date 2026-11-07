@@ -13,6 +13,7 @@ import { getFaction } from '@/data/factions';
 import { CameraRig, type CameraSubject, type CinematicFrame } from './cameras';
 import { EffectsSystem } from './effects';
 import { buildEnvironment, type EnvironmentBuild } from './environment';
+import { TravelField } from './travelField';
 import { KM } from './geometry';
 import { instantiateShip, getShipTemplate, type BuiltShip } from './ships';
 import { InstancedFleet } from './instancedFleet';
@@ -74,6 +75,8 @@ export class BattleView {
   private readonly MAX_HERO_VISUALS = 96;
   readonly visuals = new Map<string, ShipVisual>();
   env!: EnvironmentBuild;
+  /** Static scene objects showing subtle true parallax on following shots. */
+  private travelField?: TravelField;
   sim: BattleSimulation;
   /** Interpolation alpha within the current fixed step (0..1). */
   alpha = 0;
@@ -180,10 +183,16 @@ export class BattleView {
     this.effects.clear();
     this.nextBeamShieldAt.clear();
     if (this.env) this.scene.remove(this.env.group);
+    if (this.travelField) { this.scene.remove(this.travelField.points); this.travelField.dispose(); }
     const resolution = this.settings.quality === 'ultra' ? 2048 :
       this.settings.quality === 'high' ? 1536 : this.settings.quality === 'medium' ? 1024 : 512;
     this.env = buildEnvironment(sim.config.environment, resolution, this.settings.quality !== 'low', this.settings.quality === 'ultra');
     this.scene.add(this.env.group);
+    // Fixed-world foreground references; no fake warp streaks or camera-locked sky movement.
+    const theatreCentre = this.sideCentre('A').add(this.sideCentre('B')).multiplyScalar(0.5);
+    this.travelField = new TravelField(sim.config.seed, theatreCentre);
+    this.travelField.points.visible = false;
+    this.scene.add(this.travelField.points);
     this.sunLight.position.copy(this.env.sunDirection).multiplyScalar(10_000);
     this.sunLight.target.position.set(0, 0, 0);
     this.scene.add(this.sunLight.target);
@@ -405,6 +414,9 @@ export class BattleView {
     // Camera.
     this.cine.age += dt;
     if (!this.referenceCamera) this.updateCamera(dt);
+    if (this.travelField) this.travelField.points.visible =
+      !this.referenceCamera && (this.rig.mode === 'follow' || this.rig.mode === 'cinematic' ||
+      this.rig.mode === 'reaper' || this.rig.mode === 'free' || this.rig.mode === 'projectile');
     // Fill light rides with the camera.
     this.fillLight.position.copy(this.rig.camera.position);
     this.fillLight.target.position.copy(this.rig.camera.position).add(this.rig.camera.getWorldDirection(this.tmpB).multiplyScalar(100));
@@ -763,6 +775,7 @@ export class BattleView {
   }
 
   dispose(): void {
+    if (this.travelField) { this.scene.remove(this.travelField.points); this.travelField.dispose(); this.travelField = undefined; }
     this.effects.dispose();
     this.instances.dispose();
     if(this.gpuTimer)for(const query of this.gpuTimer.pending)this.gpuTimer.gl.deleteQuery(query);
