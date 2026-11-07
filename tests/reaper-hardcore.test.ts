@@ -41,3 +41,44 @@ describe('opt-in Reaper Hardcore — Annihilation', () => {
     expect(hardcoreReaperTargetFactor(canon, shooter, scoringTarget, 6, 10)).toBe(1);
   });
 });
+
+
+import { buildCustomBattle } from '@/scenarios';
+import { BattleSimulation } from '@/simulation/battle';
+
+const duelConfig = (rulesId: string) => buildCustomBattle({
+  seed: 9, rulesId, environment: 'deep_space' as const, startingDistanceKm: 30,
+  sideA: { faction: 'alliance' as const, name: 'One Alliance dreadnought', formation: 'line_abreast' as const,
+    counts: { alliance_dreadnought: 1 } },
+  sideB: { faction: 'reaper' as const, name: 'One capital Reaper', formation: 'strike_wedge' as const,
+    counts: { reaper_capital: 1 } },
+});
+
+describe('real simulated beam hit', () => {
+  const fireActualMainGun = (rulesId: string) => {
+    const sim = new BattleSimulation(duelConfig(rulesId));
+    const target = sim.ships.find(s => s.faction === 'alliance')!;
+    const reaper = sim.ships.find(s => s.faction === 'reaper')!;
+    const beam = reaper.weapons.find(w => w.def.id === 'reaper_capital_beam')!;
+    target.pos = { x: 0, y: 0, z: 0 };
+    target.prevPos = { ...target.pos };
+    reaper.pos = { x: 0, y: 0, z: 1.5 };
+    reaper.prevPos = { ...reaper.pos };
+    reaper.heading = { x: 0, y: 0, z: -1 };
+    reaper.prevHeading = { ...reaper.heading };
+    beam.beamRemaining = .5;
+    beam.beamTargetId = target.id;
+    beam.beamHit = true;
+    sim.step();
+    return { sim, target, reaper };
+  };
+  it('destroys an unprotected organic dreadnought through the normal combat events', () => {
+    const { sim, target } = fireActualMainGun('reaper_hardcore');
+    expect(target.alive).toBe(false);
+    expect(sim.events.some(e => e.type === 'ship_destroyed' && e.shipId === target.id)).toBe(true);
+  });
+  it('keeps ordinary canon beam damage unchanged', () => {
+    const { target } = fireActualMainGun('canon_me3');
+    expect(target.alive).toBe(true);
+  });
+});
