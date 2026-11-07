@@ -32,11 +32,12 @@ export function isHardcoreReaperMainGun(
 export function hardcoreReaperBeamDamage(
   rules: Pick<RuleSet,'special'>,
   shooter: Pick<ShipState,'faction'|'role'>,
-  target: Pick<ShipState,'classId'|'maxHull'|'maxBarriers'|'armour'>,
+  target: Pick<ShipState,'classId'|'faction'|'maxHull'|'maxBarriers'|'armour'>,
   weapon: Pick<EffectiveWeapon,'kind'|'id'>,
   normalDamage: number,
 ): number {
-  if (!isHardcoreReaperMainGun(rules, shooter, weapon)) return normalDamage;
+  // Reapers fighting other Reapers still use their real barrier and armour model.
+  if (!isHardcoreReaperMainGun(rules, shooter, weapon) || target.faction === 'reaper') return normalDamage;
   if (isProtectedAuHull(target)) {
     return Math.min(normalDamage * 2.5,
       Math.max(1, (target.maxHull + target.maxBarriers) * 0.018));
