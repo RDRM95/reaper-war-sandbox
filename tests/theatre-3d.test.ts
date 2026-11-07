@@ -5,6 +5,7 @@ import { BattleSimulation } from '@/simulation/battle';
 
 const setup = (distance: number) => ({
   seed: 42, rulesId: 'canon_me3', environment: 'relay' as const,
+  theatreLayout: 'three_dimensional' as const,
   startingDistanceKm: distance,
   sideA: { faction: 'alliance' as const, name: 'Fifth Fleet',
     formation: 'line_abreast' as const, counts: { alliance_cruiser: 4, alliance_frigate: 6 } },
@@ -55,7 +56,7 @@ describe('open-space 3D fleet theatres', () => {
     expect(sim.ships.every(s => Number.isFinite(s.pos.x + s.pos.y + s.pos.z))).toBe(true);
   });
   it('stages preset scenarios while preserving their fleet rosters', () => {
-    const cfg = buildScenario('battle_of_earth', 'canon_me3', 17);
+    const cfg = buildScenario('battle_of_earth', 'canon_me3', 17, { theatre_layout: 'three_dimensional' });
     expect(cfg.fleets.some(f => f.position.y > 0)).toBe(true);
     expect(cfg.fleets.some(f => f.position.y < 0)).toBe(true);
   });
