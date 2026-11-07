@@ -90,3 +90,44 @@ Independent, non-commercial fan software. Mass Effect is owned by Electronic Art
 - GitHub Pages workflow is included. You may need to select **Settings → Pages → Source: GitHub Actions** in the new repo to publish the site.
 
 A geometric contact sheet of the newly authored models is in `docs/ship-model-preview.png`. It is a static mesh preview, not a real-time screenshot of the browser renderer.
+
+## Local GPU Edition (Windows)
+
+To install the local spectator build and keep it updated, extract this
+repository's ZIP and double-click **`PLAY_LOCAL_GPU.cmd`**.
+
+- First run requires **Git for Windows**, **Node.js 20.19+** and internet.
+  The launcher installs an independent copy into
+  `%LOCALAPPDATA%\\ReaperWarSandbox\\source`; it never overwrites this ZIP,
+  an existing development checkout or manually edited source.
+- Every later run attempts a safe `git pull --ff-only` from `main`. If
+  offline or if you edited the installed code, it keeps your local copy.
+- Dependency installation is skipped when `package.json` has not changed.
+  The launcher builds the production version and runs Vite's production
+  preview at **http://127.0.0.1:5173/** rather than its development server.
+  Once downloaded, the game simulation and renderer run locally.
+- The URL matches the original `START_WINDOWS.bat` browser origin, so
+  ordinary local browser storage at that address is retained. GitHub Pages
+  storage and storage on other hosts/ports remain separate; export data
+  from the old origin before switching hosts.
+- Keep the launcher window open while playing. The browser must have
+  hardware acceleration enabled to use the GPU; the launcher does not
+  bypass browser or graphics-driver safety controls.
+
+Choose **HIGH** for sustained large engagements; **RTX CINEMATIC** includes
+additional bloom and higher render resolution and is better suited to smaller
+battles or close-up recording. The fidelity-preserving renderer optimisations
+retain full close-range ship models and weapons, while distant hulls use
+instancing and point sprites. The point buffer now grows beyond 16,384
+vessels; this does not guarantee 60 FPS for very large fleets.
+
+For repeatable **4K on-machine benchmarks**, first install the dev
+dependencies in the local source folder, then in PowerShell run:
+
+```powershell
+$env:RW_COUNTS = '1000,3000,5000,20000'
+npm run benchmark:4k
+```
+
+Results and screenshots appear in `benchmark-results/`. The benchmark
+uses actual Edge/Chromium performance on the machine that runs it.
