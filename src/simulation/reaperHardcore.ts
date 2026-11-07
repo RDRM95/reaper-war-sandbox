@@ -52,7 +52,7 @@ export function hardcoreReaperBeamDamage(
 export function hardcoreReaperTargetFactor(
   rules: Pick<RuleSet,'special'>,
   shooter: Pick<ShipState,'faction'|'role'>,
-  target: Pick<ShipState,'role'|'classId'|'withdrawing'|'stats'>,
+  target: Pick<ShipState,'role'|'classId'|'withdrawing'> & { stats: Pick<ShipState['stats'],'damageDealt'> },
   distanceKm: number,
   effectiveRangeKm: number,
 ): number {
