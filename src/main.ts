@@ -92,6 +92,7 @@ app.innerHTML=`
       <option value="iron_dawn">IRON DAWN</option>
       <option value="multiverse_crossover">SANDBOX — MULTIVERSE</option>
     </select>
+    <label>BATTLESPACE LAYOUT</label><select id="theatre-layout" aria-label="Battlespace layout"><option value="three_dimensional" selected>OPEN 3D / TACTICAL DEPTH</option><option value="legacy_plane">ORIGINAL / REPLAY LAYOUT</option></select>
     <div class="double"><label>SEED <input id="seed" type="number" value="42" min="1"></label><label>DISTANCE, KM <input id="distance" type="number" value="110" min="10" max="600"></label></div>
     <div class="side-tabs"><button id="sideA" class="active">SIDE A <b id="countA"></b></button><button id="sideB">SIDE B <b id="countB"></b></button></div>
     <label>FACTION</label><select id="faction"></select>
@@ -450,6 +451,7 @@ function currentConfig(){
   const config=buildCustomBattle({seed:Math.max(1,Math.floor(Number($<HTMLInputElement>('seed').value)||42)),rulesId:$<HTMLSelectElement>('rules').value,
     environment:scenarios[selectedScenario].environment as 'earth_orbit'|'palaven_orbit'|'deep_space',
     startingDistanceKm:Math.max(10,Math.min(600,Number($<HTMLInputElement>('distance').value)||110)),
+    theatreLayout:$<HTMLSelectElement>('theatre-layout').value as 'three_dimensional' | 'legacy_plane',
     maxDuration:650,
     sideA:{...copyFleet(fleets.A)},sideB:{...copyFleet(fleets.B)},
     extraA:[
