@@ -164,3 +164,38 @@ For large-scale spectacles, start opposing fleets farther apart or deploy
 reinforcement wings from separated x/z approaches; this produces a transit,
 closing artillery battle and later close action without shrinking or
 removing ship models. Cinematic camera modes can follow any member.
+
+
+## Reaper Hardcore — Annihilation (optional)
+
+Select **Reaper Hardcore — Annihilation** under the timeline/combat-rules
+selector. This is a separate, reversible gameplay preset, not a change to
+Canon, Strict Lore, APEX, or other saved timeline configurations.
+
+- A capital-class Reaper's `reaper_capital_beam` destroys a **conventional
+  warship on a successful actual hit** through the existing damage/destruction
+  pipeline. Misses remain misses. Smaller Reaper beams do not gain an
+  automatic kill.
+- Specifically hardened AU hulls (`normandy_valkyrie`,
+  `alliance_super_dreadnought`, `turian_super_dreadnought`,
+  `alliance_omaha`, `alliance_aegis_command`, `alliance_valkyrie`)
+  retain their defences and take heavy, bounded beam damage. Unprotected
+  ships such as the Destiny Ascension are not special-cased.
+- Reapers prioritise dangerous firing platforms, carriers, capitals and
+  actual gun damage. Their gun line keeps station, destroyer screens
+  intercept nearby escape attempts, and fleet commanders stop extending
+  endless pursuit for a single fleeing target. Reapers do not retreat.
+- The spectator camera can observe **actual Reaper main-beam launches**
+  as they occur, without scripting kills or affecting the combat RNG.
+- Indoctrination is disabled within this preset.
+
+**Open-3D battlespace:** New game setup screens default to **OPEN 3D**.
+Older saved scenarios, simulation API calls and replay seed benchmarks keep
+their original coordinates unless `theatre_layout: 'three_dimensional'`
+is explicitly selected. The setup screen also offers **ORIGINAL** to
+compare battle outcomes on their previous tactical positions. Custom
+starting distances now support up to 600 km; these map options do not
+change weapon ranges or ship physics.
+
+These features have automated regression tests, but FPS and play feel
+should also be checked on the actual local GPU build.
