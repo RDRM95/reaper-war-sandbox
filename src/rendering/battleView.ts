@@ -12,7 +12,7 @@ import type { BattleEvent, ShipState } from '@/simulation/types';
 import { getFaction } from '@/data/factions';
 import { CameraRig, type CameraSubject, type CinematicFrame } from './cameras';
 import { EffectsSystem } from './effects';
-import { buildEnvironment, type EnvironmentBuild } from './environment';
+import { buildEnvironment, disposeEnvironment, type EnvironmentBuild } from './environment';
 import { TravelField } from './travelField';
 import { KM } from './geometry';
 import { instantiateShip, getShipTemplate, type BuiltShip } from './ships';
@@ -182,7 +182,7 @@ export class BattleView {
     this.visuals.clear();
     this.effects.clear();
     this.nextBeamShieldAt.clear();
-    if (this.env) this.scene.remove(this.env.group);
+    if (this.env) { this.scene.remove(this.env.group); disposeEnvironment(this.env); }
     if (this.travelField) { this.scene.remove(this.travelField.points); this.travelField.dispose(); }
     const resolution = this.settings.quality === 'ultra' ? 2048 :
       this.settings.quality === 'high' ? 1536 : this.settings.quality === 'medium' ? 1024 : 512;
@@ -775,6 +775,7 @@ export class BattleView {
   }
 
   dispose(): void {
+    if (this.env) { this.scene.remove(this.env.group); disposeEnvironment(this.env); }
     if (this.travelField) { this.scene.remove(this.travelField.points); this.travelField.dispose(); this.travelField = undefined; }
     this.effects.dispose();
     this.instances.dispose();
