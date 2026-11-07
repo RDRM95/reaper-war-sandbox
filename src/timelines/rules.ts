@@ -42,6 +42,8 @@ export interface SpecialTechnology {
   thanixAvailability: 'canon' | 'fleetwide' | 'none';
   /** Reaper command network can be disrupted: losing a capital ship degrades others' coordination. */
   reaperCommandVulnerability: boolean;
+  /** Optional gameplay challenge: Reaper capital beams annihilate standard hulls; explicitly hardened AU vessels are protected. */
+  reaperHardcore?: boolean;
   /** Indoctrination disabled: no morale/coordination penalty on organics from Reaper presence. */
   indoctrinationDisabled: boolean;
 }

@@ -1,3 +1,4 @@
+import { hardcoreReaperTargetFactor } from './reaperHardcore';
 import type { Rng } from '@/core/rng';
 import { add, clampLength, distance, dot, lengthSq, normalize, scale, sub, v3, type Vec3 } from '@/core/vec3';
 import { FACTIONS, type FactionDoctrine } from '@/data/factions';
@@ -134,6 +135,7 @@ export function scoreTarget(ctx: AiContext, shooter: ShipState, fleet: FleetStat
     const tgt = target.targetId ? ctx.getShip(target.targetId) : undefined;
     if (tgt && (tgt.role === 'dreadnought' || tgt.role === 'carrier') && tgt.side === shooter.side) score *= 1.8;
   }
+  score *= hardcoreReaperTargetFactor(ctx.rules, shooter, target, dist, mainRange);
   return score;
 }
 
@@ -165,6 +167,19 @@ export function chooseTarget(ctx: AiContext, ship: ShipState, fleet: FleetState)
   }
   if (best?.id !== ship.targetId) ship.targetLockUntil = ctx.time + 5;
   return best?.id;
+}
+
+/** Each fleet keeps one approach side for its whole battle, not a random
+ * individual ship orbit. Identical IDs give identical manoeuvres in replays. */
+const approachLanes = new WeakMap<FleetState, number>();
+function approachLane(fleet: FleetState): number {
+  const cached = approachLanes.get(fleet);
+  if (cached !== undefined) return cached;
+  let hash = 2166136261;
+  for (const c of fleet.spec.id) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+  const lane = ((hash >>> 0) % 5 - 2) / 2;
+  approachLanes.set(fleet, lane);
+  return lane;
 }
 
 /** Stable fleet fire control and formation translation. Tactical observations
@@ -219,9 +234,28 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
       const delta = sub(enemy, fleet.anchor);
       const dist = Math.sqrt(lengthSq(delta));
       const resumeRange = desiredRange + range * 0.07;
-      if (fleet.engagementMode !== 'approach' && dist > resumeRange) fleet.engagementMode = 'approach';
+      // A Reaper fleet can win by establishing a firing line. Once contact
+      // has happened, do not send the whole capital group after one damaged
+      // fleeing vessel across empty space. Fast screens can intercept nearby.
+      const fleeing = !!focus && (focus.withdrawing ||
+        ctx.fleets.get(focus.fleetId)?.orders.order === 'retreat');
+      const stopLongChase = !!ctx.rules.special.reaperHardcore && noRetreat &&
+        fleet.engagementMode === 'hold' && fleeing && dist > range * 1.7;
+      if (!stopLongChase && fleet.engagementMode !== 'approach' && dist > resumeRange)
+        fleet.engagementMode = 'approach';
       if (fleet.engagementMode === 'approach' && dist <= desiredRange) fleet.engagementMode = 'hold';
-      if (fleet.engagementMode === 'approach') desired = add(fleet.anchor, scale(normalize(delta), Math.max(0, dist - desiredRange)));
+      if (fleet.engagementMode === 'approach') {
+        // Canon-style fleet closure: the whole line follows a gentle, stable
+        // lateral approach lane, rather than converging on one central point.
+        // The bend vanishes as the formation reaches its firing station.
+        const forward = normalize(delta);
+        const right = normalize(v3(forward.z, 0, -forward.x));
+        const lane = approachLane(fleet);
+        const remaining = Math.max(0, dist - desiredRange);
+        const bend = ctx.rules.special.reaperHardcore ? Math.min(1, remaining / Math.max(1, 2 * range)) : 0;
+        desired = add(add(fleet.anchor, scale(forward, remaining)),
+          scale(right, lane * range * 0.12 * bend));
+      }
     }
   } else if (o.order === 'defend_position') {
     desired = o.position;
@@ -394,6 +428,13 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const dist = distance(ship.pos, target.pos);
   const screen = ship.role === 'frigate' || ship.role === 'reaper_destroyer' || ship.role === 'fighter';
   if (screen && ctx.fleets.get(target.fleetId)?.orders.order === 'retreat') {
+    // Intercept at the battle edge, then return to the fleet. A Reaper
+    // destroyer does not follow a lone escaping frigate indefinitely.
+    if (noRetreat && ctx.rules.special.reaperHardcore &&
+        distance(fleet.anchor, target.pos) > Math.max(range * 2.4,
+          (fleet.engagementRange ?? range) * 1.8)) {
+      return { position: slotPos, speedFraction: 1, face: target.pos };
+    }
     // Once the enemy abandons the engagement, a fast screen intercepts at its
     // own gun range. Keeping it tethered to the slow capital line can match a
     // fleeing cruiser forever, despite the escort's available closing speed.
@@ -429,7 +470,15 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   // target-centred sphere contracted broad wings and erased the depth between
   // battlegroups. A forward translation retains the assigned lateral/vertical
   // stations, and the cached reference prevents the same contraction in depth.
-  const leash = screen ? Math.max(range, (fleet.engagementRange ?? range) * 1.1) : range * 0.55;
+  const normalLeash = screen ? Math.max(range, (fleet.engagementRange ?? range) * 1.1) : range * 0.55;
+  // Heavy units advance as a battle line under their fleet anchor. They do
+  // not independently charge a target and lose their mutual firing screen.
+  // Cruisers can manoeuvre further; frigates and fighters retain wide freedom.
+  const lineFraction = ship.role === 'carrier' ? 0.12 :
+    ship.role === 'dreadnought' ? 0.24 :
+    ship.role === 'reaper_capital' ? 0.35 :
+    ship.role === 'cruiser' ? 0.42 : 1;
+  const leash = ctx.rules.special.reaperHardcore ? Math.min(normalLeash, range * lineFraction) : normalLeash;
   let advance = Math.min(Math.max(0, referenceDistance - band.preferred), Math.max(0, axialDistance - band.min), leash);
   if (!noRetreat && referenceDistance < band.min) advance = -Math.min(band.min - referenceDistance, range * 0.25);
   let position = add(slotPos, scale(fleet.heading, advance));

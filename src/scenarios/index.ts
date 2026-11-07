@@ -1,4 +1,5 @@
 import { v3, type Vec3 } from '@/core/vec3';
+import { stageThreeDimensionalTheatre } from './theatre';
 import { AU_CHAPTERS, type AUChapterFleet } from './auLibrary';
 import { EXPANDED_BATTLES } from './expandedBattles';
 import { getPreset } from '@/timelines/presets';
@@ -682,7 +683,7 @@ export const defaultWorldState = (s: ScenarioDef): Record<string, string> => {
 export function buildScenario(scenarioId: string, rulesId: string, seed: number, worldState?: Record<string, string>): BattleConfig {
   const s = getScenario(scenarioId);
   const rules = getPreset(rulesId);
-  return s.build(rules, seed, { ...defaultWorldState(s), ...(worldState ?? {}) });
+  return stageThreeDimensionalTheatre(s.build(rules, seed, { ...defaultWorldState(s), ...(worldState ?? {}) }));
 }
 
 // ------------------------------------------------------------ custom battles
@@ -702,6 +703,8 @@ export interface CustomFleetInput {
 
 export interface CustomBattleInput {
   seed: number;
+  /** Spatial staging selected by the user. Existing old presets stay unchanged. */
+  theatreLayout?: 'three_dimensional' | 'legacy_plane';
   rulesId: string;
   /** Explicit UI roster selection; old setups default to Mass Effect. */
   rosterMode?: 'mass_effect' | 'multiverse';
@@ -780,8 +783,9 @@ export function buildCustomBattle(input: CustomBattleInput, rules?: RuleSet): Ba
     maxDuration: input.maxDuration ?? 420,
     perspectiveSide: 'A',
     objective: 'Destroy the enemy force.',
+    worldState: { theatre_layout: input.theatreLayout ?? 'legacy_plane' },
     fleets: fleets.filter((f) => f.ships.length > 0),
   };
   assertLoreCompatible(config);
-  return config;
+  return stageThreeDimensionalTheatre(config);
 }

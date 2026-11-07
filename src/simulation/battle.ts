@@ -23,6 +23,7 @@ import { WEAPONS, getWeapon } from '@/data/weapons';
 import { applyRulesToShip, applyRulesToWeapon, cloneRules, type EffectiveWeapon, type RuleSet } from '@/timelines/rules';
 import { assertLoreCompatible } from '@/timelines/lore';
 import { fleetDecision, movementGoal, shipDecision, type AiContext } from './ai';
+import { hardcoreReaperBeamDamage } from './reaperHardcore';
 import { applyDamage, applyProjectileDamage, hitProbability } from './damage';
 import { assignSlots } from './formations';
 import { summarise } from './results';
@@ -683,7 +684,8 @@ export class BattleSimulation implements AiContext {
         if (target && target.alive && !target.escaped && distance(w.beamStart, target.pos) <= w.def.range && this.inArc(ship, w, target.pos) && w.beamHit) {
           w.beamEnd = w.beamLocalHit ? worldHullContact(target, w.beamLocalHit) : clone(target.pos);
           const dmg = w.def.damage * dt * (w.beamGlance ?? 1);
-          const out = applyDamage(target, dmg, w.def, this.rng, this.time);
+          const impact = hardcoreReaperBeamDamage(this.rules, ship, target, w.def, dmg);
+          const out = applyDamage(target, impact, w.def, this.rng, this.time);
           ship.stats.damageDealt += out.hullDamage + out.barrierDamage;
           if (out.barriersCollapsed) this.emit({ t: this.time, type: 'barriers_down', shipId: target.id });
           if (out.subsystem) this.emit({ t: this.time, type: 'subsystem_disabled', shipId: target.id, subsystem: out.subsystem.name, level: out.subsystem.level });

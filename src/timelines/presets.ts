@@ -164,6 +164,30 @@ export const REAPER_ESCALATION: RuleSet = {
   strategic: { ...CANON_STRATEGIC, reaperCompetence: 1.3, indoctrinationEffectiveness: 1.3, reaperReinforcements: 1.6 },
 };
 
+
+/**
+ * Opt-in tactical challenge. A gameplay variant rather than a claim that
+ * every canon Reaper hit produces an automatic kill.
+ */
+export const REAPER_HARDCORE: RuleSet = {
+  ...cloneRules(REAPER_ESCALATION),
+  id: 'reaper_hardcore',
+  name: 'Reaper Hardcore — Annihilation',
+  tagline: 'Capital beams are lethal. Reapers attack as an organised force.',
+  category: 'au',
+  description: 'Optional high-lethality challenge: direct Reaper capital main-beam contacts destroy standard warships. Explicitly hardened AU super-vessels can absorb heavy damage. Reaper targeting prioritises gunships, fleet leaders and orbital defences. No indoctrination mechanics or Reaper retreats. This is a gameplay mode, not a canon claim.',
+  historyChanges: [
+    'Reaper capital main guns destroy unprotected ships on a successful direct contact.',
+    'Specially hardened AU vessels use their normal armour and barrier mechanics under stronger beam damage.',
+    'Reaper harvest formations prioritise threats and limit aimless pursuit.',
+    'Indoctrination is disabled; normal canon and APEX presets remain unchanged.',
+  ],
+  reaper: tech({ accuracy: 1.15, sensors: 1.3, crewQuality: 1.2, barrierRegen: 1.2, beamDamage: 1.4 }),
+  fleetStrength: { ...CANON_FLEETS },
+  special: { ...CANON_SPECIAL, reaperHardcore: true, indoctrinationDisabled: true },
+  strategic: { ...CANON_STRATEGIC, reaperCompetence: 1.5, indoctrinationEffectiveness: 0 },
+};
+
 /**
  * PRESET 6 — Prime/Apex: Successful Refuse. Optional, player-selected AU.
  * Nothing in here touches canon mode.
@@ -384,6 +408,7 @@ export const PRESETS: RuleSet[] = [
   HUMANITY_ASCENDANT,
   CERBERUS_REFORMED,
   REAPER_ESCALATION,
+  REAPER_HARDCORE,
   PRIME_APEX,
   CERBERUS_ASCENDANT,
   ALIGNED_HUMANITY,
