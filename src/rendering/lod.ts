@@ -31,3 +31,21 @@ export function lodLevel(distance: number, lengthUnits: number, role: ShipRole, 
   if (distance > L * REDUCED_FACTOR) return 'reduced';
   return 'full';
 }
+
+/**
+ * Same thresholds as lodLevel, but accepts squared camera distance.
+ * The render loop calls this for tens of thousands of ships per frame,
+ * avoiding a square root for every vessel without lowering detail.
+ */
+export function lodLevelSquared(distanceSquared: number, lengthUnits: number, role: ShipRole, enabled = true): LodLevel {
+  if (!enabled) return 'full';
+  if (role === 'fighter') {
+    if (distanceSquared > FIGHTER_POINT_DISTANCE * FIGHTER_POINT_DISTANCE) return 'point';
+    return distanceSquared > FIGHTER_REDUCED_DISTANCE * FIGHTER_REDUCED_DISTANCE ? 'reduced' : 'full';
+  }
+  const length = Math.max(0.5, lengthUnits);
+  const pointAt = length * POINT_FACTOR;
+  if (distanceSquared > pointAt * pointAt) return 'point';
+  const reducedAt = length * REDUCED_FACTOR;
+  return distanceSquared > reducedAt * reducedAt ? 'reduced' : 'full';
+}
