@@ -707,6 +707,41 @@ export const SHIP_CLASSES: Record<string, ShipClassDef> = {
     pointValue: 86,
     description: 'Cerberus’ main warship: better electronics than its Alliance equivalent.',
   },
+  /** APEX alternate configuration: independently built Cerberus Black Fleet Omaha. */
+  cerberus_omaha: {
+    id: 'cerberus_omaha',
+    name: 'SSV Omaha — Cerberus Black Fleet (APEX)',
+    shortName: 'SSV Omaha [Black Fleet]',
+    faction: 'cerberus',
+    role: 'dreadnought',
+    designProvenance: {
+      value: 'APEX-only Black Fleet configuration of the Omaha heavy dreadnought. Separate from Alliance SSV Omaha.',
+      provenance: 'AU_MODIFIED',
+      note: 'Original fan design informed by Cerberus cruiser and dreadnought references; all statistics are AU estimates.',
+    },
+    lengthM: auEstimate(1800),
+    hull: auEstimate(18600),
+    armour: auEstimate(205),
+    barriers: auEstimate(9600),
+    barrierRegen: auEstimate(82),
+    maxSpeed: auEstimate(0.46),
+    acceleration: auEstimate(0.044),
+    turnRate: auEstimate(2.1),
+    sensorRange: auEstimate(132),
+    signature: 3.6,
+    ecm: 0.34,
+    crewQuality: 1.17,
+    hardpoints: [
+      { weaponId: 'cerberus_hades_spinal', offset: [0, -24, 850], facing: 0, count: 1 },
+      { weaponId: 'cerberus_omega_battery', offset: [68, 18, 135], facing: 90, count: 8 },
+      { weaponId: 'cerberus_omega_battery', offset: [-68, 18, 135], facing: -90, count: 8 },
+      { weaponId: 'gardian', offset: [0, 47, 300], facing: 0, count: 16 },
+    ],
+    pointValue: 1450,
+    description:
+      'APEX Cerberus super-dreadnought: independent Black Fleet Omaha variant with HADES internal penetrators, Omega heavy broadsides, dense point defence and a distinct stealth-armour silhouette. Not a canonical trilogy ship.',
+  },
+
   cerberus_dreadnought: {
     id: 'cerberus_dreadnought',
     name: 'Cerberus Black Fleet dreadnought',

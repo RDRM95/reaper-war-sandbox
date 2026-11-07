@@ -99,7 +99,7 @@ const FIGHTER_FIRST = words('Silver|Scarlet|Azure|Silent|Swift|Golden|Ashen|Iron
 const FIGHTER_LAST = words('Kestrel|Falcon|Lance|Warden|Talon|Harrier|Comet|Spear|Arrow|Phoenix|Raven|Viper|Osprey|Lancer|Ghost|Peregrine');
 const GENERIC = style('', 'Distant|Ancient|Resolute|Radiant|Silent|Unbroken|Rising|Enduring', 'Horizon|Beacon|Vigil|Promise|Archive|Sentinel|Dawn|Concord', 'Dawn|Hope|Memory|Stars|Concord|Resolve|Unity|Legacy');
 const SIGNATURE_NAMES: Record<string, string> = {
-  alliance_omaha: 'SSV Omaha', alliance_frigate_thanix: 'SSV Normandy SR-2', destiny_ascension: 'Destiny Ascension',
+  alliance_omaha: 'SSV Omaha', cerberus_omaha: 'SSV Omaha — Black Fleet', alliance_frigate_thanix: 'SSV Normandy SR-2', destiny_ascension: 'Destiny Ascension',
   unsc_infinity: 'UNSC Infinity',
 };
 const ALLIANCE_ROLE_SEEDS: Partial<Record<ShipRole, readonly string[]>> = {
