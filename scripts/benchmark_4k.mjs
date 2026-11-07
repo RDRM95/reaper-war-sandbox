@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const host = 'http://127.0.0.1:5173';
 const sizes = (process.env.RW_COUNTS ?? '1000,3000,5000')
-  .split(',').map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 12000);
+  .split(',').map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 50000);
 const warmup = Math.max(2000, Number(process.env.RW_WARMUP_MS ?? 8000));
 const sample = Math.max(3000, Number(process.env.RW_SAMPLE_MS ?? 10000));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -40,7 +40,9 @@ try {
     const page=await browser.newPage({viewport:{width:3840,height:2160},deviceScaleFactor:1});
     page.setDefaultTimeout(120000);
     for(const count of sizes)for(const preset of ['high','ultra']){
-      const url=host+'/?ships='+count;
+      // The simulator intentionally protects casual sessions from >12k live ships.
+      // The explicit benchmark flag bypasses the estimator only for this run.
+      const url=host+'/?ships='+count+(count>12000?'&forceLive=1':'');
       let record={ships:count,preset,viewport:'3840x2160',seed:42};
       try{
         await page.goto(url,{waitUntil:'domcontentloaded',timeout:120000});
@@ -56,11 +58,20 @@ try {
           simulationSecondsAdvanced:Number((after.time-before.time).toFixed(2)),
           elapsedWallSeconds:sample/1000,
           fps:after.fps,
+          approximate1PctLowFps:Number((1000/Math.max(0.01,after.frameMsP99)).toFixed(1)),
+          simTicksPerSecond:Number(((after.tick-before.tick)/(sample/1000)).toFixed(2)),
+          weaponEventsDuringSample:after.weaponFiredTotal-before.weaponFiredTotal,
+          destructionEventsDuringSample:after.destroyedTotal-before.destroyedTotal,
+          projectilesActive:after.projectileCount,
+          missilesActive:after.missileCount,
+          jsHeapMb:after.jsHeapMb,
           meanFrameMs:Number(after.frameMsAverage.toFixed(2)),
           p95FrameMs:Number(after.frameMsP95.toFixed(2)),
+          p99FrameMs:Number(after.frameMsP99.toFixed(2)),
           drawCalls:after.view?.drawCalls??null,
           triangles:after.view?.triangles??null,
           rendererCpuMs:after.view?.renderCpuMs??null,
+          simCpuPerRafMs:after.simCpuMs,
           gpuFrameMs:after.view?.gpuFrameMs??null,
           status:'ok'
         };
