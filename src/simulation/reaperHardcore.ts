@@ -59,9 +59,9 @@ export function hardcoreReaperTargetFactor(
   if (!rules.special.reaperHardcore || shooter.faction !== 'reaper') return 1;
   const majorGun = shooter.role === 'reaper_capital';
   if (target.withdrawing && distanceKm > effectiveRangeKm * (majorGun ? 1.7 : 2.2)) return 0.08;
-  const roleFactor = target.role === 'fixed_platform' ? 2.8 :
+  const roleFactor = target.classId.includes('platform') ? 2.8 :
     target.role === 'carrier' ? 2.2 :
-    target.role === 'super_dreadnought' ? 2.0 :
+    isProtectedAuHull(target) ? 2.0 :
     target.role === 'dreadnought' ? 1.9 :
     target.role === 'cruiser' ? 1.25 : 1;
   const firePowerFactor = 1 + Math.min(0.7, Math.log2(1 + Math.max(0, target.stats.damageDealt)) / 22);
