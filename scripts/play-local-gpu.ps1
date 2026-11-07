@@ -45,7 +45,10 @@ Set-Location -LiteralPath $source
 $package = Join-Path $source 'package.json'
 if (-not (Test-Path -LiteralPath $package)) { throw 'Incomplete game install: package.json is missing.' }
 $stamp = Join-Path $source '.local-dependencies.sha256'
-$hash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash
+$lock = Join-Path $source 'package-lock.json'
+$packageHash = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash
+$lockHash = if (Test-Path -LiteralPath $lock) { (Get-FileHash -LiteralPath $lock -Algorithm SHA256).Hash } else { '' }
+$hash = $packageHash + ':' + $lockHash
 $installedHash = if (Test-Path -LiteralPath $stamp) {
   (Get-Content -LiteralPath $stamp -Raw).Trim()
 } else { '' }
