@@ -506,3 +506,34 @@ export function buildEnvironment(env: Environment, textureResolution = 1024, sho
 
   return { group, sunDirection, skyObjects: sky, planet, clouds, name };
 }
+
+/** Release all procedural landmark/sky GPU resources between redeployments.
+ * Materials/geometries are often shared by dozens of relay/Citadel meshes,
+ * so every distinct resource is disposed exactly once.
+ */
+export function disposeEnvironment(env: EnvironmentBuild): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  env.group.traverse((node) => {
+    const renderable = node as THREE.Object3D & {
+      geometry?: THREE.BufferGeometry;
+      material?: THREE.Material | THREE.Material[];
+    };
+    if (renderable.geometry) geometries.add(renderable.geometry);
+    const candidates = renderable.material === undefined ? []
+      : Array.isArray(renderable.material) ? renderable.material : [renderable.material];
+    for (const material of candidates) {
+      if (materials.has(material)) continue;
+      materials.add(material);
+      for (const property of Object.values(material)) {
+        const texture = property as THREE.Texture | null;
+        if (texture && texture.isTexture) textures.add(texture);
+      }
+    }
+  });
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) material.dispose();
+  for (const texture of textures) texture.dispose();
+}
+
