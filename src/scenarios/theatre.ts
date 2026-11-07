@@ -38,7 +38,9 @@ export const LEGACY_THEATRE_FLAG = 'legacy_plane';
  * Static defence platforms retain their exact placed coordinates.
  */
 export function stageThreeDimensionalTheatre(config: BattleConfig): BattleConfig {
-  if (config.worldState?.theatre_layout === LEGACY_THEATRE_FLAG) return config;
+  // Older scenario IDs, replays and calibration seeds retain their exact
+  // positions until the player selects the new spatial theatre.
+  if (config.worldState?.theatre_layout !== 'three_dimensional') return config;
   const a = config.fleets.filter(f => f.side === 'A');
   const b = config.fleets.filter(f => f.side === 'B');
   if (!a.length || !b.length) return config;
