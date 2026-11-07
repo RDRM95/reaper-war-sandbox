@@ -60,10 +60,20 @@ const feed:{time:number;message:string;side?:Side}[]=[];
 const killScoreboard=new ShipKillScoreboard();
 let killScoreVisible=true;
 let lastScoreDraw=-1;
+const TV_SCALE_OPTIONS = [0.85,1,1.15,1.3,1.5,1.75] as const;
+const TV_SCALE_KEY = 'reaperwar:spectator:tv-scale';
+const readTvScale = (): number => {
+  let value = Number.NaN;
+  try { value = Number(localStorage.getItem(TV_SCALE_KEY)); } catch { /* private mode */ }
+  return TV_SCALE_OPTIONS.includes(value as typeof TV_SCALE_OPTIONS[number])
+    ? value : window.innerWidth >= 2500 ? 1.3 : 1;
+};
+let tvScale = readTvScale();
+document.documentElement.style.setProperty('--rw-tv-scale', String(tvScale));
 const app=document.getElementById('app')!;
 app.innerHTML=`
 <header class="rw-header"><div class="brand"><small>MASS EFFECT / FAN-MADE SIMULATION</small><strong>REAPER WAR <span>— SPECTATOR</span></strong></div>
-  <div class="header-right"><span class="status" id="state">READY TO DEPLOY</span><button id="sound" class="plain">SOUND OFF</button></div></header>
+  <div class="header-right"><span class="status" id="state">READY TO DEPLOY</span><label class="rw-scale-control" for="tv-scale">TV UI <select id="tv-scale" aria-label="TV interface scale"><option value="0.85">85%</option><option value="1">100%</option><option value="1.15">115%</option><option value="1.3">130%</option><option value="1.5">150%</option><option value="1.75">175%</option></select></label><button id="sound" class="plain">SOUND OFF</button></div></header>
 <div class="rw-layout">
   <aside class="pane rw-setup"><div class="pane-heading">FLEET BUILDER <span>01</span></div>
     <label>SCENARIO</label><select id="scenario">
@@ -116,6 +126,47 @@ app.innerHTML=`
   </aside>
 </div><footer>INDEPENDENT NON-COMMERCIAL FAN PROJECT · ORIGINAL SOURCE-BASED 3D ENGINE · BUILD 0.3 DEVELOPMENT</footer>
 `;
+
+// User-controlled TV scaling: only DOM controls, never the 3D drawing buffer.
+const tvScaleSelect=$<HTMLSelectElement>('tv-scale');
+tvScaleSelect.value=String(tvScale);
+const setTvScale=(next:number):void=>{
+  if(!TV_SCALE_OPTIONS.includes(next as typeof TV_SCALE_OPTIONS[number]))return;
+  tvScale=next;
+  document.documentElement.style.setProperty('--rw-tv-scale',String(tvScale));
+  tvScaleSelect.value=String(tvScale);
+  try{localStorage.setItem(TV_SCALE_KEY,String(tvScale));}catch{/* storage may be disabled */}
+  window.dispatchEvent(new Event('resize'));
+};
+tvScaleSelect.addEventListener('change',()=>setTvScale(Number(tvScaleSelect.value)));
+window.addEventListener('keydown',(event:KeyboardEvent)=>{
+  if(!event.ctrlKey||!event.altKey)return;
+  if(event.code==='Digit0'||event.code==='Numpad0'){event.preventDefault();setTvScale(1);return;}
+  if(event.code!=='ArrowUp'&&event.code!=='ArrowDown')return;
+  event.preventDefault();
+  const index=TV_SCALE_OPTIONS.indexOf(tvScale as typeof TV_SCALE_OPTIONS[number]);
+  setTvScale(TV_SCALE_OPTIONS[Math.max(0,Math.min(TV_SCALE_OPTIONS.length-1,index+(event.code==='ArrowUp'?1:-1)))]);
+},{capture:true});
+
+// Low-level original terminal tones — opt-in with the existing SOUND toggle.
+// Delegation also covers dynamically rendered scenario and fleet controls.
+app.addEventListener('click',(event:MouseEvent)=>{
+  if(!audioEnabled)return;
+  const button=(event.target as Element).closest('button');
+  if(button)audio.play(button.id==='launch'?'ui_confirm':'ui_click',0,.55);
+});
+app.addEventListener('pointerover',(event:PointerEvent)=>{
+  if(!audioEnabled)return;
+  const button=(event.target as Element).closest('button');
+  if(!button||button.contains(event.relatedTarget as Node))return;
+  audio.play('ui_hover',0,.38);
+});
+app.addEventListener('change',(event:Event)=>{
+  if(!audioEnabled)return;
+  const target=event.target as HTMLElement;
+  if(target.matches('select,input[type="number"]'))audio.play('ui_click',0,.44);
+});
+
 const selectableChapters=[...EXPANDED_BATTLES,...AU_CHAPTERS];
 // Every scenario can be tested under an AU ruleset, including late-cycle AUs.
 for(const preset of PRESETS){
