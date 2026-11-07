@@ -100,6 +100,11 @@ export class BattleSimulation implements AiContext {
   private spatialIndex?: CombatSpatialIndex;
   /** Exact narrow-phase projectile checks in the latest fixed tick (profiling). */
   projectileCandidateChecksLastTick = 0;
+  /** Opt-in wall-clock profiling; never consulted by combat or the seeded RNG. */
+  profileEnabled = false;
+  readonly profileTotals = { ticks: 0, fleetAiMs: 0, spatialMs: 0,
+    separationMs: 0, shipsMs: 0, projectilesMs: 0, missilesMs: 0, endMs: 0 };
+
   /** Indexed once per tick instead of scanning the full fleet for every carrier. */
   private carrierFighters = new Map<string, ShipState[]>();
   private primaryVolleys = new PrimaryVolleyControl();
@@ -471,6 +476,8 @@ export class BattleSimulation implements AiContext {
   step(): void {
     if (this.finished) return;
     const dt = SIM_DT;
+    const measuring = this.profileEnabled;
+    let sampledAt = measuring ? performance.now() : 0;
     this.time += dt;
     this.tick++;
 
@@ -487,6 +494,8 @@ export class BattleSimulation implements AiContext {
       fleetDecision(this, fleet, dt);
     }
 
+    if (measuring) { const time = performance.now();
+      this.profileTotals.fleetAiMs += time - sampledAt; sampledAt = time; }
     this.carrierFighters.clear();
     for (const fighter of this.ships) {
       if (!fighter.carrierId || !fighter.alive || fighter.escaped) continue;
@@ -495,7 +504,11 @@ export class BattleSimulation implements AiContext {
       group.push(fighter);
     }
     this.spatialIndex = new CombatSpatialIndex(this.ships, dt);
+    if (measuring) { const time = performance.now();
+      this.profileTotals.spatialMs += time - sampledAt; sampledAt = time; }
     this.separationField = new SeparationField(this.ships);
+    if (measuring) { const time = performance.now();
+      this.profileTotals.separationMs += time - sampledAt; sampledAt = time; }
     for (const ship of this.ships) {
       if (!ship.alive || ship.escaped) continue;
       ship.prevPos = clone(ship.pos);
@@ -514,13 +527,21 @@ export class BattleSimulation implements AiContext {
       this.updateWeapons(ship, fleet, dt);
     }
 
+    if (measuring) { const time = performance.now();
+      this.profileTotals.shipsMs += time - sampledAt; sampledAt = time; }
     this.updateProjectiles(dt);
+    if (measuring) { const time = performance.now();
+      this.profileTotals.projectilesMs += time - sampledAt; sampledAt = time; }
     this.updateMissiles(dt);
+    if (measuring) { const time = performance.now();
+      this.profileTotals.missilesMs += time - sampledAt; sampledAt = time; }
     for (const f of this.flashes) f.ttl -= dt;
     this.flashes = this.flashes.filter((f) => f.ttl > 0);
 
     this.checkEscapes();
     this.checkEnd();
+    if (measuring) { this.profileTotals.endMs += performance.now() - sampledAt;
+      this.profileTotals.ticks++; }
   }
 
   /** Run to completion (headless). Returns the result. */
