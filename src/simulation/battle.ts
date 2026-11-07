@@ -642,7 +642,7 @@ export class BattleSimulation implements AiContext {
 
   private updateWeapons(ship: ShipState, fleet: FleetState, dt: number): void {
     const wpnFactor = 0.4 + 0.6 * ship.subsystems.weapons;
-    for (const w of this.iterWeapons(ship)) {
+    for (const w of ship.weapons) {
       // Active beams deal damage over time.
       if (w.beamRemaining > 0) {
         w.beamRemaining -= dt;
@@ -681,10 +681,6 @@ export class BattleSimulation implements AiContext {
       if (fleet.orders.order === 'retreat' && ship.role !== 'fighter' && w.def.arc < 180) continue;
       this.tryFire(ship, fleet, w);
     }
-  }
-
-  private *iterWeapons(ship: ShipState): Generator<WeaponState> {
-    for (const w of ship.weapons) yield w;
   }
 
   private tryFire(ship: ShipState, fleet: FleetState, w: WeaponState): void {
