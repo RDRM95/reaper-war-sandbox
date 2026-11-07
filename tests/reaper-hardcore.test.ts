@@ -4,7 +4,7 @@ import { hardcoreReaperBeamDamage, hardcoreReaperTargetFactor, isProtectedAuHull
 
 const shooter = { faction: 'reaper' as const, role: 'reaper_capital' as const };
 const mainGun = { kind: 'reaper_beam' as const, id: 'reaper_capital_beam' };
-const regular = { classId: 'alliance_dreadnought', maxHull: 1500, maxBarriers: 800, armour: 450 };
+const regular = { classId: 'alliance_dreadnought', faction: 'alliance' as const, maxHull: 1500, maxBarriers: 800, armour: 450 };
 const hardened = { ...regular, classId: 'alliance_valkyrie' };
 const scoringTarget = { ...regular, role: 'dreadnought' as const, withdrawing: false, stats: { damageDealt: 1000 } };
 
@@ -22,6 +22,7 @@ describe('opt-in Reaper Hardcore — Annihilation', () => {
     const regularHit = hardcoreReaperBeamDamage(hardcore, shooter, regular, mainGun, 20);
     expect(regularHit).toBeGreaterThan(regular.maxHull + regular.maxBarriers + regular.armour);
     expect(hardcoreReaperBeamDamage(canon, shooter, regular, mainGun, 20)).toBe(20);
+    expect(hardcoreReaperBeamDamage(hardcore, shooter, { ...regular, faction: 'reaper' }, mainGun, 20)).toBe(20);
     expect(hardcoreReaperBeamDamage(hardcore, { ...shooter, role: 'reaper_destroyer' }, regular, mainGun, 20)).toBe(20);
     expect(hardcoreReaperBeamDamage(hardcore, shooter, regular, { ...mainGun, id: 'reaper_destroyer_beam' }, 20)).toBe(20);
   });
