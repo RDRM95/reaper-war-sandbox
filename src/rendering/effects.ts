@@ -70,7 +70,9 @@ export class EffectsSystem {
   private readonly tracerDummy = new THREE.Object3D();
 
   // Beams.
-  private readonly beamPool: { core: THREE.Mesh; glow: THREE.Mesh; used: boolean }[] = [];
+  private readonly beamPool: { core: THREE.Mesh; glow: THREE.Mesh; impact: THREE.Sprite }[] = [];
+  private readonly beamGeometry = new THREE.CylinderGeometry(1,1,1,10,1,true);
+  private readonly beamMid = new THREE.Vector3();
   private readonly beamCoreMatReaper = new THREE.MeshBasicMaterial({ color: 0xfff0e0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
   private readonly beamGlowMatReaper = new THREE.MeshBasicMaterial({ color: 0xff1738, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false });
   private readonly beamCoreMatThanix = new THREE.MeshBasicMaterial({ color: 0xf0f8ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -93,6 +95,7 @@ export class EffectsSystem {
   private flashLightLife = 0;
 
   constructor() {
+    this.beamGeometry.rotateX(Math.PI/2);
     const tracerGeo = new THREE.BoxGeometry(0.1, 0.1, 1);
     const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffd080, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
     this.tracerMesh = new THREE.InstancedMesh(tracerGeo, tracerMat, this.tracerCapacity);
@@ -167,8 +170,17 @@ export class EffectsSystem {
   }
 
   /** Impact: barrier hit shimmer or hull hit sparks. */
-  impact(pos: THREE.Vector3, barrierDamage: number, hullDamage: number, targetRadiusUnits: number, targetPos: () => THREE.Vector3 | undefined, damageType: string): void {
+  impact(pos: THREE.Vector3, barrierDamage: number, hullDamage: number, targetRadiusUnits: number, targetPos: () => THREE.Vector3 | undefined, damageType: string, glancing = false): void {
     const total = barrierDamage + hullDamage;
+    if(glancing){
+      // Glancing rounds leave a short grazing flare. Avoid using the same
+      // large impact cloud as a direct HADES/NOVA penetration.
+      const size=Math.min(1.6,.24+Math.sqrt(total)*.016);
+      this.spark(pos,new THREE.Vector3(),.13,size*.4,size*1.1,
+        barrierDamage>hullDamage?this.blueTex:this.fireTex,
+        barrierDamage>hullDamage?0x86c7ff:0xe8a876);
+      return;
+    }
     const size = Math.min(8, 0.4 + Math.sqrt(total) * 0.09);
     if (barrierDamage > hullDamage && barrierDamage > 3) {
       this.spark(pos, new THREE.Vector3(), 0.2, size * 0.6, size * 1.4, this.blueTex, 0x9fd0ff);
@@ -327,66 +339,75 @@ export class EffectsSystem {
   }
 
   /** Active beams: start/end in render units. */
+  /** Beam segments and contact sprites are allocated only once per visible
+   * beam, then reused. No per-frame spark spawning, mesh geometry creation
+   * or large white impact blooms when hundreds of Reapers fire together.
+   */
   setBeams(beams: { start: THREE.Vector3; end: THREE.Vector3; kind: 'thanix' | 'reaper_beam'; intensity: number }[]): void {
-    for (const b of this.beamPool) b.used = false;
-    for (let i=0; i<beams.length && i<this.beamMax; i++) {
-      const b=beams[i];
-      let slot = this.beamPool[i];
-      if (!slot) {
-        const geo = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true);
-        geo.rotateX(Math.PI / 2);
-        const core = new THREE.Mesh(geo, this.beamCoreMatReaper);
-        const glow = new THREE.Mesh(geo, this.beamGlowMatReaper);
-        core.frustumCulled = false;
-        glow.frustumCulled = false;
-        this.group.add(core, glow);
-        slot = { core, glow, used: false };
-        this.beamPool.push(slot);
+    const visible=Math.min(beams.length,this.beamMax);
+    for(let i=0;i<visible;i++){
+      const beam=beams[i];
+      let slot=this.beamPool[i];
+      if(!slot){
+        const core=new THREE.Mesh(this.beamGeometry,this.beamCoreMatReaper);
+        const glow=new THREE.Mesh(this.beamGeometry,this.beamGlowMatReaper);
+        const impact=new THREE.Sprite(new THREE.SpriteMaterial({
+          map:this.redTex,color:0xffffff,transparent:true,opacity:.55,
+          blending:THREE.AdditiveBlending,depthWrite:false,
+        }));
+        core.frustumCulled=false;glow.frustumCulled=false;
+        this.group.add(core,glow,impact);
+        slot={core,glow,impact};this.beamPool.push(slot);
       }
-      slot.used = true;
-      const reaper = b.kind === 'reaper_beam';
-      slot.core.material = reaper ? this.beamCoreMatReaper : this.beamCoreMatThanix;
-      slot.glow.material = reaper ? this.beamGlowMatReaper : this.beamGlowMatThanix;
-      const len = b.start.distanceTo(b.end);
-      const mid = b.start.clone().add(b.end).multiplyScalar(0.5);
-      const coreR = (reaper ? 0.09 : 0.05) * b.intensity;
-      const glowR = coreR * 3.2;
-      for (const [mesh, r] of [[slot.core, coreR], [slot.glow, glowR]] as [THREE.Mesh, number][]) {
-        mesh.visible = true;
-        mesh.position.copy(mid);
-        mesh.lookAt(b.end);
-        mesh.scale.set(r, r, len);
-      }
-      // Beam impact bloom at the end point.
-      if(i%6===0)this.spark(b.end, new THREE.Vector3(), 0.08, coreR * 5, coreR * 9, reaper ? this.redTex : this.blueTex, 0xffffff);
+      const reaper=beam.kind==='reaper_beam';
+      slot.core.material=reaper?this.beamCoreMatReaper:this.beamCoreMatThanix;
+      slot.glow.material=reaper?this.beamGlowMatReaper:this.beamGlowMatThanix;
+      const len=beam.start.distanceTo(beam.end);
+      const mid=this.beamMid.copy(beam.start).add(beam.end).multiplyScalar(.5);
+      const coreR=(reaper?.09:.05)*beam.intensity;
+      slot.core.visible=true;
+      slot.core.position.copy(mid);
+      slot.core.lookAt(beam.end);
+      slot.core.scale.set(coreR,coreR,len);
+      slot.glow.visible=true;
+      slot.glow.position.copy(mid);
+      slot.glow.lookAt(beam.end);
+      slot.glow.scale.set(coreR*2.6,coreR*2.6,len);
+      slot.impact.visible=true;
+      slot.impact.position.copy(beam.end);
+      slot.impact.scale.setScalar(coreR*6);
+      (slot.impact.material as THREE.SpriteMaterial).map=reaper?this.redTex:this.blueTex;
     }
-    for (const b of this.beamPool) {
-      if (!b.used) {
-        b.core.visible = false;
-        b.glow.visible = false;
-      }
+    for(let i=visible;i<this.beamPool.length;i++){
+      const slot=this.beamPool[i];slot.core.visible=false;slot.glow.visible=false;slot.impact.visible=false;
     }
   }
 
-  setPointDefence(lines: { from: THREE.Vector3; to: THREE.Vector3; reaper: boolean }[]): void {
-    let n = 0;
-    for (const l of lines) {
-      if (n >= this.pdMax) break;
-      const i = n * 6;
-      this.pdPositions[i] = l.from.x;
-      this.pdPositions[i + 1] = l.from.y;
-      this.pdPositions[i + 2] = l.from.z;
-      this.pdPositions[i + 3] = l.to.x;
-      this.pdPositions[i + 4] = l.to.y;
-      this.pdPositions[i + 5] = l.to.z;
-      const c = l.reaper ? [1, 0.25, 0.15] : [0.5, 0.95, 1];
-      this.pdColors.set(c, i);
-      this.pdColors.set(c, i + 3);
-      n++;
+  /** Read fixed-tick GARDIAN/Reaper PD vectors directly; no GPU-frame
+   * THREE.Vector3 allocations or array mapping per shot. Optional scale
+   * converts km into render units. Uniform sampling retains all battle wings.
+   */
+  setPointDefence(lines: readonly { from: {x:number;y:number;z:number}; to: {x:number;y:number;z:number}; kind?: 'gardian'|'reaper_pd'; reaper?:boolean }[], positionScale = 1): void {
+    let n=0;
+    const capacity=this.pdMax;
+    const stride=Math.max(1,Math.ceil(lines.length/capacity));
+    for(let index=0;index<lines.length&&n<capacity;index+=stride){
+      const l=lines[index];
+      const i=n++*6;
+      this.pdPositions[i]=l.from.x*positionScale;
+      this.pdPositions[i+1]=l.from.y*positionScale;
+      this.pdPositions[i+2]=l.from.z*positionScale;
+      this.pdPositions[i+3]=l.to.x*positionScale;
+      this.pdPositions[i+4]=l.to.y*positionScale;
+      this.pdPositions[i+5]=l.to.z*positionScale;
+      const reaper=l.reaper??(l.kind==='reaper_pd');
+      const r=reaper?1:.5, g=reaper?.25:.95, b=reaper?.15:1;
+      this.pdColors[i]=r;this.pdColors[i+1]=g;this.pdColors[i+2]=b;
+      this.pdColors[i+3]=r;this.pdColors[i+4]=g;this.pdColors[i+5]=b;
     }
-    this.pdGeometry.setDrawRange(0, n * 2);
-    (this.pdGeometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (this.pdGeometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+    this.pdGeometry.setDrawRange(0,n*2);
+    (this.pdGeometry.attributes.position as THREE.BufferAttribute).needsUpdate=true;
+    (this.pdGeometry.attributes.color as THREE.BufferAttribute).needsUpdate=true;
   }
 
   update(dt: number): void {

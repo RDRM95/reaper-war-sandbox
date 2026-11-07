@@ -408,7 +408,8 @@ export class BattleView {
           if (v) start = weaponBeamOrigin(v.built.group, v.built.muzzle, w, ship.faction === 'reaper');
           else start = new THREE.Vector3(w.beamStart.x * KM, w.beamStart.y * KM, w.beamStart.z * KM);
           const t = w.beamTargetId ? sim.getShip(w.beamTargetId) : undefined;
-          const end = w.beamHit && t ? new THREE.Vector3(t.pos.x * KM, t.pos.y * KM, t.pos.z * KM) : new THREE.Vector3(w.beamEnd.x * KM, w.beamEnd.y * KM, w.beamEnd.z * KM);
+          // Render fixed-step, rotating hull contact; never snap to target centre.
+          const end = new THREE.Vector3(w.beamEnd.x * KM, w.beamEnd.y * KM, w.beamEnd.z * KM);
           if (w.beamHit && t?.alive && t.barriers > 0 && sim.time >= (this.nextBeamShieldAt.get(t.id) ?? 0)) {
             const victim = this.visuals.get(t.id);
             if (victim && !victim.removed) {
@@ -421,7 +422,7 @@ export class BattleView {
       }
     }
     this.effects.setBeams(beams);
-    this.effects.setPointDefence(sim.flashes.map((f) => ({ from: new THREE.Vector3(f.from.x * KM, f.from.y * KM, f.from.z * KM), to: new THREE.Vector3(f.to.x * KM, f.to.y * KM, f.to.z * KM), reaper: f.kind === 'reaper_pd' })));
+    this.effects.setPointDefence(sim.flashes, KM);
     this.effects.update(dt);
 
     // Camera.
@@ -529,7 +530,9 @@ export class BattleView {
           const big = w.def.damage >= 600;
           if (!big && Math.random() > 0.35) break; // thin out small-gun flashes
           const pose = weaponFlashPose(v.built.group, v.built.muzzle, w);
-          this.effects.muzzleFlash(pose.position, pose.direction, big ? 6 : 1.4, ship.faction === 'reaper');
+          const pov = this.rig.mode === 'gunnery' && ship.id === this.followId;
+          this.effects.muzzleFlash(pose.position, pose.direction,
+            pov ? (big ? 1.8 : 0.75) : (big ? 3.6 : 1.2), ship.faction === 'reaper');
           if (big && this.rig.mode === 'projectile') this.projectileTrack = { id: this.sim.projectiles[this.sim.projectiles.length - 1]?.id ?? 0 };
           break;
         }
@@ -538,7 +541,7 @@ export class BattleView {
           const v = t ? this.visuals.get(t.id) : undefined;
           const pos = new THREE.Vector3(e.pos.x * KM, e.pos.y * KM, e.pos.z * KM);
           if (v && e.barrierDamage > 3) this.effects.barriers.hit(t!.id, t!.classId, v.built.group, pos, e.barrierDamage);
-          this.effects.impact(pos, e.barrierDamage, e.hullDamage, v ? v.built.lengthUnits * 0.55 : 2, () => (v && !v.removed ? v.built.group.position : undefined), e.damageType);
+          this.effects.impact(pos, e.barrierDamage, e.hullDamage, v ? v.built.lengthUnits * 0.55 : 2, () => (v && !v.removed ? v.built.group.position : undefined), e.damageType, e.glancing);
           break;
         }
         case 'hades_detonation': {

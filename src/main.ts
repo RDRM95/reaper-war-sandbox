@@ -390,9 +390,14 @@ function pushEvent(e:BattleEvent){
     telemetry.notify(e,selectedShip,sim??undefined);
     if(audioEnabled && e.type==='weapon_fired'&&e.shipId===selectedShip){
       const shooter=sim?.getShip(e.shipId);
-      if(shooter&&isMainGunShot(shooter,e.weaponIndex))
-        audio.play('gunner_spinal',0,.65);
+      if(shooter&&isMainGunShot(shooter,e.weaponIndex)){
+        const kind=shooter.weapons[e.weaponIndex].def.kind;
+        audio.play(kind==='reaper_beam'?'gunner_beam':
+          kind==='thanix'?'gunner_thanix':'gunner_spinal',0,.54);
+      }
     }
+    if(audioEnabled&&e.type==='projectile_impact'&&e.shipId===selectedShip&&e.glancing)
+      audio.play('gunner_glance',0,.24);
     if(audioEnabled&&e.type==='projectile_impact'&&e.targetId===selectedShip)
       audio.play(e.hullDamage>0?'impact_hull':'impact_barrier',0,.23);
     if(audioEnabled&&e.type==='ship_destroyed'&&e.shipId===selectedShip)
