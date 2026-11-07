@@ -227,6 +227,9 @@ function stageCameraBeat(beat:SceneBeat):void{
   if(beat.shot==='wide'){
     const a=view.sideCentre('A'),b=view.sideCentre('B');
     const centre=a.clone().add(b).multiplyScalar(0.5);
+    // Let wide establishing shots include the theatre's actual landmark.
+    const landmark=view.env.group.getObjectByName(sim.config.environment==='relay' ? 'charon-mass-relay' : 'citadel');
+    if(landmark)centre.lerp(landmark.position,0.28);
     // Scale to the deployed engagement, not a fixed tiny camera orbit.
     view.rig.focus.copy(centre);
     view.rig.distance=Math.max(1800,a.distanceTo(b)*1.4);
