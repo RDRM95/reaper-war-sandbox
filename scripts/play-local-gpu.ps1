@@ -61,12 +61,12 @@ Write-Host 'Building the optimized production edition...'
 if ($LASTEXITCODE -ne 0) { throw 'Production build failed. No source files were changed by this launcher.' }
 
 Write-Host ''
-Write-Host 'Starting REAPER WAR on localhost:5173'
+Write-Host 'Starting REAPER WAR on 127.0.0.1:5173'
 Write-Host 'Hardware-accelerated WebGL runs on the PC GPU when enabled in the browser.'
 Write-Host 'No cloud server is used to simulate or render the battle.'
 Write-Host 'Keep this window open during play. Press Ctrl+C to stop.'
 Write-Host ''
-# Preserve the existing localhost:5173 browser storage origin for game data.
+# Match START_WINDOWS.bat's 127.0.0.1:5173 browser storage origin for local game data.
 # The production preview avoids Vite's source-transform/HMR development overhead.
-& npm.cmd run preview -- --host localhost --port 5173 --strictPort --open
+& npm.cmd run preview -- --host 127.0.0.1 --port 5173 --strictPort --open
 if ($LASTEXITCODE -ne 0) { throw 'Local game server could not start. Close any other server on port 5173.' }
