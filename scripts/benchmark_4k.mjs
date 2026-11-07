@@ -42,16 +42,16 @@ try {
     for(const count of sizes)for(const preset of ['high','ultra']){
       // The simulator intentionally protects casual sessions from >12k live ships.
       // The explicit benchmark flag bypasses the estimator only for this run.
-      const url=host+'/?ships='+count+(count>12000?'&forceLive=1':'');
+      const url=host+'/?ships='+count+(count>12000?'&forceLive=1':'')+'&profile=1';
       let record={ships:count,preset,viewport:'3840x2160',seed:42};
       try{
         await page.goto(url,{waitUntil:'domcontentloaded',timeout:120000});
         await page.locator('#graphics').selectOption(preset);
         await page.waitForFunction(()=>typeof window.__reaperDiagnostics==='function',{timeout:120000});
         await sleep(warmup);
-        const before=await page.evaluate(()=>window.__reaperDiagnostics());
+        const before=await page.evaluate(()=>window.__reaperDiagnostics(true));
         await sleep(sample);
-        const after=await page.evaluate(()=>window.__reaperDiagnostics());
+        const after=await page.evaluate(()=>window.__reaperDiagnostics(true));
         record={
           ...record,
           actualShipCount:after.shipCount,
@@ -60,6 +60,10 @@ try {
           fps:after.fps,
           approximate1PctLowFps:Number((1000/Math.max(0.01,after.frameMsP99)).toFixed(1)),
           simTicksPerSecond:Number(((after.tick-before.tick)/(sample/1000)).toFixed(2)),
+          simulationPhasesMeanMs:Object.fromEntries(Object.keys(after.simulationProfile??{})
+            .filter(k=>k.endsWith('Ms'))
+            .map(k=>[k,Number(((after.simulationProfile[k]-before.simulationProfile[k])/
+              Math.max(1,after.simulationProfile.ticks-before.simulationProfile.ticks)).toFixed(3))])),
           weaponEventsDuringSample:after.weaponFiredTotal-before.weaponFiredTotal,
           destructionEventsDuringSample:after.destroyedTotal-before.destroyedTotal,
           projectilesActive:after.projectileCount,
@@ -73,7 +77,9 @@ try {
           rendererCpuMs:after.view?.renderCpuMs??null,
           simCpuPerRafMs:after.simCpuMs,
           gpuFrameMs:after.view?.gpuFrameMs??null,
-          status:'ok'
+          status:'ok',
+          activeCombat:after.weaponFiredTotal>before.weaponFiredTotal,
+          simulationAdvanced:after.tick>before.tick
         };
         await page.locator('#scene3d').screenshot({
           path:path.join('benchmark-results',count+'-'+preset+'.png'),timeout:120000
