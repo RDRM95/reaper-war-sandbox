@@ -131,3 +131,36 @@ npm run benchmark:4k
 
 Results and screenshots appear in `benchmark-results/`. The benchmark
 uses actual Edge/Chromium performance on the machine that runs it.
+
+
+## Open 3D theatres and fleet movement
+
+Battles use an **open, three-dimensional battlespace**—not a ground plane
+or a fixed arena boundary. Each environment has a reference landmark:
+a planet for orbital combat, a mass relay for relay encounters, the Citadel
+for station defence, or open stars for deep-space engagements.
+
+New preset/custom deployments use separate vertical approach corridors,
+in addition to authored lateral and forward/back positions. The vertical
+spacing scales with the opposing fleets' original horizontal distance,
+so a close duel is not turned into a long approach. Pre-authored flanking
+heights remain intact. Static defence platforms remain fixed. To preserve
+an old scenario's exact deployment coordinates, pass world state
+`theatre_layout: 'legacy_plane'`.
+
+**Fleet doctrine:** capitals move with the fleet anchor as a firing line;
+cruisers have more room to manoeuvre; frigate and fighter screens can
+pursue threats. In the Codex/Spectator engines, the main battle line
+takes a deterministic shallow curved approach rather than every ship
+seeking one central point. Ships retain their actual collision avoidance,
+turning limits, weapon ranges, combat AI and deterministic replay rules.
+
+The planetary and relay visuals are **navigation references**, not opaque
+invisible walls, scripted weapons or gravity wells. Sector overview
+distances are planning/camera guidelines, not hard gameplay boundaries;
+the existing simulation-distance compression still applies to combat.
+
+For large-scale spectacles, start opposing fleets farther apart or deploy
+reinforcement wings from separated x/z approaches; this produces a transit,
+closing artillery battle and later close action without shrinking or
+removing ship models. Cinematic camera modes can follow any member.
