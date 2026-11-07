@@ -16,6 +16,8 @@ const IDENTITY = new THREE.Vector3(1, 1, 1);
 export class InstancedFleet {
   readonly group = new THREE.Group();
   private batches = new Map<string, Batch>();
+  private measuredShips?: readonly ShipState[];
+  private measuredShipCount = -1;
   private readonly pos = new THREE.Vector3();
   private readonly dir = new THREE.Vector3();
   private readonly quat = new THREE.Quaternion();
@@ -98,22 +100,30 @@ export class InstancedFleet {
   }
 
   begin(ships: readonly ShipState[]): void {
-    const needed = new Map<string, number>();
-    for (const ship of ships) if (ship.alive && !ship.escaped) {
-      needed.set(ship.classId, (needed.get(ship.classId) ?? 0) + 1);
-    }
-    for (const [classId, count] of needed) {
-      let batch = this.batches.get(classId);
-      if (!batch || batch.capacity < count) {
-        if (batch) for (const part of batch.parts) {
-          this.group.remove(part.mesh);
-          part.mesh.geometry.dispose();
-          part.mesh.dispose();
-        }
-        if(batch?.trail){this.group.remove(batch.trail);batch.trail.geometry.dispose();(batch.trail.material as THREE.Material).dispose();batch.trail.dispose();}
-        batch = this.createBatch(classId, Math.max(64, 2 ** Math.ceil(Math.log2(count))));
-        this.batches.set(classId, batch);
+    // Hulls only leave the battle; newly launched fighters and reinforcements
+    // append to the stable ship array. Batch capacity therefore only needs
+    // recounting when a new battle replaces the array or new ships are added.
+    // Avoid a full-fleet counting/Map-allocation pass every render frame.
+    if (this.measuredShips !== ships || this.measuredShipCount !== ships.length) {
+      const needed = new Map<string, number>();
+      for (const ship of ships) if (ship.alive && !ship.escaped) {
+        needed.set(ship.classId, (needed.get(ship.classId) ?? 0) + 1);
       }
+      for (const [classId, count] of needed) {
+        let batch = this.batches.get(classId);
+        if (!batch || batch.capacity < count) {
+          if (batch) for (const part of batch.parts) {
+            this.group.remove(part.mesh);
+            part.mesh.geometry.dispose();
+            part.mesh.dispose();
+          }
+          if(batch?.trail){this.group.remove(batch.trail);batch.trail.geometry.dispose();(batch.trail.material as THREE.Material).dispose();batch.trail.dispose();}
+          batch = this.createBatch(classId, Math.max(64, 2 ** Math.ceil(Math.log2(count))));
+          this.batches.set(classId, batch);
+        }
+      }
+      this.measuredShips = ships;
+      this.measuredShipCount = ships.length;
     }
     for (const batch of this.batches.values()) {for (const part of batch.parts) part.mesh.count = 0;if(batch.trail)batch.trail.count=0;}
   }
@@ -186,5 +196,7 @@ export class InstancedFleet {
       }
     }
     this.batches.clear();
+    this.measuredShips = undefined;
+    this.measuredShipCount = -1;
   }
 }
