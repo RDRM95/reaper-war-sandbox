@@ -140,10 +140,7 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType): Map<st
     const phase = index * 2.399963229728653;
     let x = wing * lateralStride;
     let z = -wave * rearStride;
-    // Three distinct vertical battlegroup lanes. Formation members retain
-    // their local spacing, so gun lines and escorts travel as one unit.
-    let y = Math.sin(wing * 0.7) * clearance * 0.18 +
-      ((wave % 3) - 1) * Math.min(clearance * 0.22, 1.8);
+    let y = Math.sin(wing * 0.7) * clearance * 0.18;
     switch (formation) {
       case 'strike_wedge': z -= Math.abs(x) * 0.32; break;
       case 'defensive_screen': z -= wing * wing * lateralStride * 0.09; break;
