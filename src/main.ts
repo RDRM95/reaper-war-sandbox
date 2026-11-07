@@ -499,7 +499,7 @@ function launch(){try{
   if(referenceMode)$('pause').textContent='▶';
   $('battle-name').textContent=config.name.toUpperCase();$('state').textContent='ENGAGEMENT LIVE';$('message').textContent='FLEETS ENGAGING';
   $('launch').textContent='↻ REDEPLOY';$('log').textContent='Contacts acquired.';
-  if(audioEnabled){audio.init();}
+  if(audioEnabled){audio.init();audio.startAmbience();}
   if(mode==='3d')createView();switchMode();updateKillScoreboard(true);updateHud();
   nextSceneBeat=0;
   if(activeScene) advanceSceneBeats();
@@ -592,7 +592,7 @@ $('launch').addEventListener('click',()=>{activeScene=null;launch();});$('restar
 $('pause').addEventListener('click',()=>{paused=!paused;$('pause').textContent=paused?'▶':'Ⅱ';$('state').textContent=paused?'PAUSED':'ENGAGEMENT LIVE';});
 $('speed').addEventListener('change',()=>{speed=Math.max(1,Number($<HTMLSelectElement>('speed').value)||1);});
 $('graphics').addEventListener('change',()=>{graphics=$<HTMLSelectElement>('graphics').value as GraphicsPreset;if(mode==='3d'&&sim)createView(true);});
-$('sound').addEventListener('click',()=>{audioEnabled=!audioEnabled;if(audioEnabled)audio.init();audio.settings.muted=!audioEnabled;audio.applySettings();$('sound').textContent=audioEnabled?'SOUND ON':'SOUND OFF';});
+$('sound').addEventListener('click',()=>{audioEnabled=!audioEnabled;if(audioEnabled){audio.init();audio.startAmbience();}audio.settings.muted=!audioEnabled;audio.applySettings();$('sound').textContent=audioEnabled?'SOUND ON':'SOUND OFF';});
 function camera(mode:CameraMode){if(!view||!sim)return;view.rig.setMode(mode);}
 $('cine').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('cinematic');});
 $('tactical').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('tactical');});
