@@ -252,7 +252,7 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
         const right = normalize(v3(forward.z, 0, -forward.x));
         const lane = approachLane(fleet);
         const remaining = Math.max(0, dist - desiredRange);
-        const bend = Math.min(1, remaining / Math.max(1, 2 * range));
+        const bend = ctx.rules.special.reaperHardcore ? Math.min(1, remaining / Math.max(1, 2 * range)) : 0;
         desired = add(add(fleet.anchor, scale(forward, remaining)),
           scale(right, lane * range * 0.12 * bend));
       }
@@ -478,7 +478,7 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
     ship.role === 'dreadnought' ? 0.24 :
     ship.role === 'reaper_capital' ? 0.35 :
     ship.role === 'cruiser' ? 0.42 : 1;
-  const leash = Math.min(normalLeash, range * lineFraction);
+  const leash = ctx.rules.special.reaperHardcore ? Math.min(normalLeash, range * lineFraction) : normalLeash;
   let advance = Math.min(Math.max(0, referenceDistance - band.preferred), Math.max(0, axialDistance - band.min), leash);
   if (!noRetreat && referenceDistance < band.min) advance = -Math.min(band.min - referenceDistance, range * 0.25);
   let position = add(slotPos, scale(fleet.heading, advance));
