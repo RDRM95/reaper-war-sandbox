@@ -37,7 +37,7 @@ export const LEGACY_THEATRE_FLAG = 'legacy_plane';
  * Keep authored altitudes (e.g. a high flanking Reaper wave) as offsets.
  * Static defence platforms retain their exact placed coordinates.
  */
-export function stageThreeDimensionalTheatre<T extends BattleConfig>(config: T): T {
+export function stageThreeDimensionalTheatre(config: BattleConfig): BattleConfig {
   if (config.worldState?.theatre_layout === LEGACY_THEATRE_FLAG) return config;
   const a = config.fleets.filter(f => f.side === 'A');
   const b = config.fleets.filter(f => f.side === 'B');
