@@ -16,9 +16,11 @@ const heroViews = [
   {name:'HERO 3/4 AFT',pos:[-1,.7,-1.4],up:[0,1,0]},
 ] as const;
 const css=`
-.shipref-open{position:fixed;right:12px;top:12px;bottom:auto;z-index:9998;cursor:pointer;
-  font:600 12px ui-monospace,monospace;padding:10px 14px;color:#d8ebfb;
-  background:#10283b;border:1px solid #6a9ebf}
+.shipref-open{position:fixed;right:0;top:50%;bottom:auto;transform:translateY(-50%);
+  z-index:9998;cursor:pointer;writing-mode:vertical-rl;max-width:35px;
+  font:600 10px ui-monospace,monospace;letter-spacing:.05em;padding:12px 6px;color:#d8ebfb;
+  background:#10283b;border:1px solid #6a9ebf;border-radius:4px 0 0 4px}
+.shipref-open:focus-visible{outline:2px solid #bfe8ff;outline-offset:-3px}
 .shipref-panel{position:fixed;inset:5vh 4vw;z-index:9999;display:flex;flex-direction:column;
   overflow:hidden;background:#07121e;color:#d8ebfa;border:1px solid #6187a9;
   box-shadow:0 20px 80px #000e;font:12px system-ui,sans-serif}
