@@ -167,6 +167,19 @@ export function chooseTarget(ctx: AiContext, ship: ShipState, fleet: FleetState)
   return best?.id;
 }
 
+/** Each fleet keeps one approach side for its whole battle, not a random
+ * individual ship orbit. Identical IDs give identical manoeuvres in replays. */
+const approachLanes = new WeakMap<FleetState, number>();
+function approachLane(fleet: FleetState): number {
+  const cached = approachLanes.get(fleet);
+  if (cached !== undefined) return cached;
+  let hash = 2166136261;
+  for (const c of fleet.spec.id) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+  const lane = ((hash >>> 0) % 5 - 2) / 2;
+  approachLanes.set(fleet, lane);
+  return lane;
+}
+
 /** Stable fleet fire control and formation translation. Tactical observations
  * are shared; individual movement never rebuilds a global enemy centroid. */
 export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): void {
@@ -221,7 +234,18 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
       const resumeRange = desiredRange + range * 0.07;
       if (fleet.engagementMode !== 'approach' && dist > resumeRange) fleet.engagementMode = 'approach';
       if (fleet.engagementMode === 'approach' && dist <= desiredRange) fleet.engagementMode = 'hold';
-      if (fleet.engagementMode === 'approach') desired = add(fleet.anchor, scale(normalize(delta), Math.max(0, dist - desiredRange)));
+      if (fleet.engagementMode === 'approach') {
+        // Canon-style fleet closure: the whole line follows a gentle, stable
+        // lateral approach lane, rather than converging on one central point.
+        // The bend vanishes as the formation reaches its firing station.
+        const forward = normalize(delta);
+        const right = normalize(v3(forward.z, 0, -forward.x));
+        const lane = approachLane(fleet);
+        const remaining = Math.max(0, dist - desiredRange);
+        const bend = Math.min(1, remaining / Math.max(1, 2 * range));
+        desired = add(add(fleet.anchor, scale(forward, remaining)),
+          scale(right, lane * range * 0.12 * bend));
+      }
     }
   } else if (o.order === 'defend_position') {
     desired = o.position;
@@ -429,7 +453,15 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   // target-centred sphere contracted broad wings and erased the depth between
   // battlegroups. A forward translation retains the assigned lateral/vertical
   // stations, and the cached reference prevents the same contraction in depth.
-  const leash = screen ? Math.max(range, (fleet.engagementRange ?? range) * 1.1) : range * 0.55;
+  const normalLeash = screen ? Math.max(range, (fleet.engagementRange ?? range) * 1.1) : range * 0.55;
+  // Heavy units advance as a battle line under their fleet anchor. They do
+  // not independently charge a target and lose their mutual firing screen.
+  // Cruisers can manoeuvre further; frigates and fighters retain wide freedom.
+  const lineFraction = ship.role === 'carrier' ? 0.12 :
+    ship.role === 'dreadnought' ? 0.24 :
+    ship.role === 'reaper_capital' ? 0.35 :
+    ship.role === 'cruiser' ? 0.42 : 1;
+  const leash = Math.min(normalLeash, range * lineFraction);
   let advance = Math.min(Math.max(0, referenceDistance - band.preferred), Math.max(0, axialDistance - band.min), leash);
   if (!noRetreat && referenceDistance < band.min) advance = -Math.min(band.min - referenceDistance, range * 0.25);
   let position = add(slotPos, scale(fleet.heading, advance));
