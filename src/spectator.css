@@ -267,3 +267,25 @@ button:hover:not(:disabled) { box-shadow: inset 0 1px 0 rgba(190, 231, 255, .17)
 @media (prefers-reduced-motion: reduce) {
   button, select, input, .camera-rail, .stage-tag { animation: none !important; transition: none !important; }
 }
+
+
+/* Fleet-command visual identity, designed to remain readable at 4K and from a TV. */
+.rw-header {
+  box-shadow: inset 0 1px 0 rgba(105, 190, 245, .12), 0 1px 12px rgba(0, 0, 0, .28);
+  border-bottom-color: #3b6b87;
+}
+.brand strong { text-shadow: 0 0 22px rgba(95, 181, 238, .18); }
+.brand small { color: #8acef1; }
+.pane-heading { text-shadow: 0 0 13px rgba(90, 165, 222, .16); }
+.pane-heading::before { content: '▸'; color: #79bbdf; margin-right: 5px; }
+.pane {
+  background-image: linear-gradient(120deg, rgba(19, 55, 81, .08), transparent 58%);
+}
+.rw-setup { border-top: 2px solid rgba(95, 170, 219, .35); }
+.rw-data { border-top: 2px solid rgba(225, 112, 129, .24); }
+.stage-tag { text-shadow: 0 0 18px rgba(55, 133, 191, .32), 0 2px 12px #000; }
+.stage-foot { border-top: 1px solid rgba(77, 137, 175, .15); }
+.rw-header .status { text-shadow: 0 0 12px rgba(127, 218, 178, .20); }
+.rw-header button:active, .rw-setup button:active, .toolbar button:active {
+  background: #2b6384; border-color: #9ad4ee;
+}
