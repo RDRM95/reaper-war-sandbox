@@ -122,16 +122,16 @@ export const buildAllianceOmaha = (): BuiltShip => {
     // Exposed structural gun cradle / heavy lateral armour, inspired by the
     // stepped aft prongs in the Alliance dreadnought orthographic reference.
     parts.hull.push(at(taperedBox(0.78, 0.36, 11.2, 0.18, 0.88),
-      side * 2.35, -0.38, -0.25));
+      side * 2.15, -0.38, -0.25));
     parts.hullDark.push(at(taperedBox(0.58, 0.24, 8.8, 0.27, 0.94),
-      side * 2.81, -0.29, -1.06));
+      side * 2.47, -0.29, -1.06));
     parts.hull.push(at(taperedBox(0.44, 0.28, 4.65, 0.13, 0.92),
-      side * 2.52, 0.25, 1.2));
+      side * 2.29, 0.25, 1.2));
     // Raised, protected broadside batteries and gun-control casemates.
     for (let i = 0; i < 6; i++) {
       const z = -4.25 + i * 1.6;
       parts.hullDark.push(at(new THREE.BoxGeometry(0.34, 0.29, 0.7),
-        side * 2.11, 0.34, z));
+        side * 1.94, 0.34, z));
     }
     parts.accent.push(at(new THREE.BoxGeometry(0.075, 0.03, 8.1),
       side * 1.76, 0.61, -0.48));
@@ -139,7 +139,14 @@ export const buildAllianceOmaha = (): BuiltShip => {
   parts.hull.push(at(taperedBox(1.12, 0.30, 5.0, 0.42, 0.88),
     0, 1.10, -0.94));
   const addition = assemble(parts, 'alliance', [], 18);
-  for (const mesh of [...addition.group.children]) base.group.add(mesh);
+  // Merge upgraded structure into the existing five material batches.
+  // Extra submeshes would multiply large-fleet draw calls for no benefit.
+  for (const object of [...addition.group.children]) {
+    const mesh = object as THREE.Mesh;
+    const existing = base.group.getObjectByName(mesh.name) as THREE.Mesh | undefined;
+    if (existing) existing.geometry = merge([existing.geometry, mesh.geometry]);
+    else base.group.add(mesh);
+  }
   base.group.name = 'SSV Omaha - Systems Alliance / APEX';
   return base;
 };
