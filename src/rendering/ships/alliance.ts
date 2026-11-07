@@ -111,7 +111,45 @@ function buildAllianceGunship(L: number, kind: 'dreadnought' | 'omaha' | 'cruise
 
 /** Existing catalogue dimensions are preserved; these are original fan hulls. */
 export const buildAllianceDreadnought = (): BuiltShip => buildAllianceGunship(8.88, 'dreadnought');
-export const buildAllianceOmaha = (): BuiltShip => buildAllianceGunship(18, 'omaha');
+/** Alliance-fitted APEX Omaha. Retains Alliance spine engineering but has
+ * its own broad gun-cradle and angular weapon sponsons; the Cerberus Omaha is
+ * a separate class with an entirely independent model builder.
+ */
+export const buildAllianceOmaha = (): BuiltShip => {
+  const base = buildAllianceGunship(18, 'omaha');
+  const parts = newParts();
+  for (const side of [-1, 1]) {
+    // Exposed structural gun cradle / heavy lateral armour, inspired by the
+    // stepped aft prongs in the Alliance dreadnought orthographic reference.
+    parts.hull.push(at(taperedBox(0.78, 0.36, 11.2, 0.18, 0.88),
+      side * 2.15, -0.38, -0.25));
+    parts.hullDark.push(at(taperedBox(0.58, 0.24, 8.8, 0.27, 0.94),
+      side * 2.47, -0.29, -1.06));
+    parts.hull.push(at(taperedBox(0.44, 0.28, 4.65, 0.13, 0.92),
+      side * 2.29, 0.25, 1.2));
+    // Raised, protected broadside batteries and gun-control casemates.
+    for (let i = 0; i < 6; i++) {
+      const z = -4.25 + i * 1.6;
+      parts.hullDark.push(at(new THREE.BoxGeometry(0.34, 0.29, 0.7),
+        side * 1.94, 0.34, z));
+    }
+    parts.accent.push(at(new THREE.BoxGeometry(0.075, 0.03, 8.1),
+      side * 1.76, 0.61, -0.48));
+  }
+  parts.hull.push(at(taperedBox(1.12, 0.30, 5.0, 0.42, 0.88),
+    0, 1.10, -0.94));
+  const addition = assemble(parts, 'alliance', [], 18);
+  // Merge upgraded structure into the existing five material batches.
+  // Extra submeshes would multiply large-fleet draw calls for no benefit.
+  for (const object of [...addition.group.children]) {
+    const mesh = object as THREE.Mesh;
+    const existing = base.group.getObjectByName(mesh.name) as THREE.Mesh | undefined;
+    if (existing) existing.geometry = merge([existing.geometry, mesh.geometry]);
+    else base.group.add(mesh);
+  }
+  base.group.name = 'SSV Omaha - Systems Alliance / APEX';
+  return base;
+};
 
 /** Serial-production Apex AU command capital ship.
  * Shares Alliance structural construction, but adds a broad bridge spine and
@@ -125,6 +163,14 @@ export const buildAllianceAegis = (): BuiltShip => {
     parts.hull.push(at(taperedBox(.53,.38,7.8,.3,.88,{frontHeight:.27}),side*1.53,-.16,.42));
     parts.hullDark.push(at(taperedBox(.30,.23,5.4,.44,.9),side*2.14,-.18,-1.65));
     parts.accent.push(at(new THREE.BoxGeometry(.075,.045,4.8),side*1.75,.23,-.24));
+  }
+  // Serial command hull: broad protected sensors and a recognisable long
+  // dorsal command keel rather than the Omaha's weapon casemates.
+  for (const side of [-1, 1]) {
+    parts.hullDark.push(at(taperedBox(.24,.19,4.3,.26,.94),
+      side*1.05,.89,-2.12));
+    parts.windows.push(at(new THREE.BoxGeometry(.08,.05,1.1),
+      side*.82,1.04,-.78));
   }
   parts.hull.push(at(taperedBox(1.40,.34,4.4,.41,.95),0,.83,1.1));
   parts.windows.push(at(new THREE.BoxGeometry(.88,.045,.95),0,1.02,1.82));
@@ -238,6 +284,20 @@ export const buildAllianceValkyrie = (): BuiltShip => {
     const fin = taperedBox(0.48,0.30,4.2,0.24,1);
     fin.translate(side*3.0,0,-4.0);
     const wing = new THREE.Mesh(fin,plateMaterial);wing.name='hull';built.group.add(wing);
+  }
+  // The experimental Valkyrie has two enormous armoured emitter fairings and
+  // aft outboard drives, visually separate from the Omaha's heavy broadsides.
+  for (const side of [-1, 1]) {
+    const fairing = taperedBox(0.71,0.39,8.8,0.10,0.94,{frontHeight:0.22});
+    fairing.translate(side*1.13,-0.66,4.33);
+    const mesh = new THREE.Mesh(fairing,plateMaterial);
+    mesh.name = 'hull';
+    built.group.add(mesh);
+    const nacelle = taperedBox(0.57,0.46,5.6,0.37,0.94);
+    nacelle.translate(side*3.1,-0.05,-6.27);
+    const pod = new THREE.Mesh(nacelle,plateMaterial);
+    pod.name = 'hull';
+    built.group.add(pod);
   }
   const emitter = new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.65,3.0,16),darkMaterial);
   emitter.rotation.x=Math.PI/2;emitter.position.set(0,-0.55,9.25);

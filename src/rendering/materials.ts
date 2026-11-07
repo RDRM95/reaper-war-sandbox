@@ -34,6 +34,16 @@ export const PALETTES: Record<string, FactionPalette> = {
     windows: new THREE.MeshStandardMaterial({ color: 0xfff0d8, emissive: 0xffd9a0, emissiveIntensity: 1.5 }),
     glow: new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
   },
+  cerberus_black_fleet: {
+    // Distinct from stock Cerberus white/orange: dark stealth plating with
+    // restrained bone-grey upper facets, orange insignia and blue drive glow.
+    hull: std(0x818b93, { metalness: 0.68, roughness: 0.42 }),
+    hullDark: std(0x181b21, { metalness: 0.75, roughness: 0.43 }),
+    accent: std(0xc58a39, { metalness: 0.44, roughness: 0.48 }),
+    engine: new THREE.MeshStandardMaterial({ color: 0x6fbfff, emissive: 0x3d9be8, emissiveIntensity: 2.7, roughness: 0.3 }),
+    windows: new THREE.MeshStandardMaterial({ color: 0xb4dcff, emissive: 0x8bc9ef, emissiveIntensity: 1.3 }),
+    glow: new THREE.MeshBasicMaterial({ color: 0x64b7ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+  },
   reaper: {
     hull: std(0x111924, { metalness: 0.78, roughness: 0.35, emissive: 0x07101c, emissiveIntensity: 0.2 }),
     hullDark: std(0x080e18, { metalness: 0.8, roughness: 0.38, emissive: 0x030914, emissiveIntensity: 0.15 }),
