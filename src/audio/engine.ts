@@ -10,6 +10,7 @@ export type SoundId =
   | 'gunner_warning'
   | 'target_lock'
   | 'battery_ready'
+  | 'ui_open'
   | 'ui_click'
   | 'ui_hover'
   | 'ui_confirm'
@@ -141,15 +142,22 @@ export class AudioEngine {
     if (att < 0.02) return;
     const bus = this.sfxBus;
     switch (id) {
+      case 'ui_open':
+        // Soft command-terminal wake: low contact tone and delayed data chirp.
+        this.tone('triangle', 350, 540, 0.22, 0.032 * att, bus);
+        this.tone('sine', 720, 940, 0.26, 0.013 * att, bus, 0.08);
+        break;
       case 'ui_click':
-        this.tone('square', 1800, 1200, 0.05, 0.05 * att, bus);
+        // Original, procedural cockpit/terminal contact feedback.
+        this.tone('triangle', 1120, 720, 0.055, 0.038 * att, bus);
+        this.tone('sine', 1600, 1250, 0.07, 0.014 * att, bus);
         break;
       case 'ui_hover':
-        this.tone('sine', 2400, 2400, 0.03, 0.02 * att, bus);
+        this.tone('sine', 880, 1140, 0.038, 0.013 * att, bus);
         break;
       case 'ui_confirm':
-        this.tone('triangle', 600, 1200, 0.18, 0.08 * att, bus);
-        this.tone('sine', 1200, 1800, 0.25, 0.05 * att, bus, 0.06);
+        this.tone('triangle', 420, 750, 0.16, 0.055 * att, bus);
+        this.tone('sine', 960, 1420, 0.23, 0.028 * att, bus, 0.05);
         break;
       case 'alert':
         this.tone('square', 440, 440, 0.12, 0.06 * att, bus);
