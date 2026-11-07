@@ -289,3 +289,68 @@ button:hover:not(:disabled) { box-shadow: inset 0 1px 0 rgba(190, 231, 255, .17)
 .rw-header button:active, .rw-setup button:active, .toolbar button:active {
   background: #2b6384; border-color: #9ad4ee;
 }
+
+
+/* Script mode remains over the renderer, with its own scrollable editor. */
+.scene-panel[hidden], .scene-caption[hidden] { display: none !important; }
+.scene-panel {
+  position: fixed; inset: 0; z-index: 80; display: flex;
+  justify-content: center; align-items: center; overflow: auto;
+  padding: clamp(10px, 3vh, 46px); background: rgba(1,7,14,.94);
+}
+.scene-dialog {
+  width: min(980px,100%); max-height: 100%; overflow-y: auto;
+  border: 1px solid #598aaa;
+  background: linear-gradient(125deg,#10273a,#050d19);
+  padding: clamp(16px,2vw,32px); box-shadow: 0 25px 70px #000c;
+}
+.scene-dialog header {
+  display:flex; justify-content:space-between; align-items:start; gap:14px;
+  background:none; border-bottom:1px solid #39607a; padding:0 0 16px;
+  margin-bottom:14px; height:auto;
+}
+.scene-dialog h2 {
+  font:600 clamp(25px,3vw,36px) 'Barlow Condensed',sans-serif;
+  letter-spacing:.09em; margin:5px 0 0; color:#eefaff;
+}
+.scene-dialog header small {
+  font:600 11px 'JetBrains Mono',monospace;
+  color:#9dcae8; letter-spacing:.15em;
+}
+.scene-dialog p {
+  font:13px/1.7 Inter,Arial,sans-serif;
+  color:#bfd4e5; max-width:85ch;
+}
+.scene-dialog > label {
+  display:block; color:#9dd7f0; margin:16px 0 8px; font-size:12px;
+}
+.scene-dialog textarea {
+  display:block; width:100%; min-height:min(49vh,500px); max-height:56vh;
+  resize:vertical; background:#06111e; color:#d3e7f7;
+  border:1px solid #39637f; padding:14px;
+  font:12px/1.5 Consolas,'JetBrains Mono',monospace;
+}
+.scene-actions {
+  display:flex; flex-wrap:wrap; gap:10px; margin:13px 0 7px;
+  align-items:stretch;
+}
+.scene-actions button { min-height:42px; font-size:12px; }
+.scene-actions .primary { width:auto; }
+#scene-status {
+  min-height:24px; padding:6px 0; color:#a1d3e7;
+  overflow-wrap:anywhere; font:12px/1.45 'JetBrains Mono',monospace;
+}
+.scene-caption {
+  position:absolute; z-index:6; left:4%; right:4%; bottom:12%;
+  pointer-events:none; padding:10px 14px; width:max-content;
+  max-width:82%; border-left:2px solid #72abcc;
+  color:#d6e8f0; background:linear-gradient(90deg,rgba(3,15,29,.85),rgba(2,10,20,.08));
+  font:600 clamp(11px,.9vw,16px)/1.4 'JetBrains Mono',monospace;
+  letter-spacing:.14em; text-shadow:0 2px 6px #000;
+}
+@media(max-width:760px) {
+  .scene-panel { align-items:flex-start; }
+  .scene-dialog { max-height:none; }
+  .scene-dialog textarea { min-height:45vh; }
+  .scene-caption { max-width:94%; bottom:18%; }
+}
