@@ -387,9 +387,10 @@ function updateHud(){if(!sim)return;
     $('message').textContent=sim.result?.winner==='draw'?'DRAW':`SIDE ${sim.result?.winner??'?'} VICTORIOUS`;}
 }
 function pushEvent(e:BattleEvent){
-  if(gunnery&&selectedShip){
-    telemetry.notify(e,selectedShip,sim??undefined);
-    if(audioEnabled && e.type==='weapon_fired'&&e.shipId===selectedShip){
+  if(audioEnabled&&e.type==='weapon_fired'&&e.weaponId==='oculus_beam') audio.play('oculus_pulse',35,.32);
+  if(gunnery&&view?.gunneryLockedShipId){
+    telemetry.notify(e,view!.gunneryLockedShipId,sim??undefined);
+    if(audioEnabled && e.type==='weapon_fired'&&e.shipId===view!.gunneryLockedShipId){
       const shooter=sim?.getShip(e.shipId);
       if(shooter&&isMainGunShot(shooter,e.weaponIndex)){
         const kind=shooter.weapons[e.weaponIndex].def.kind;
@@ -397,11 +398,11 @@ function pushEvent(e:BattleEvent){
           kind==='thanix'?'gunner_thanix':'gunner_spinal',0,.54);
       }
     }
-    if(audioEnabled&&e.type==='projectile_impact'&&e.shipId===selectedShip&&e.glancing)
+    if(audioEnabled&&e.type==='projectile_impact'&&e.shipId===view!.gunneryLockedShipId&&e.glancing)
       audio.play('gunner_glance',0,.24);
-    if(audioEnabled&&e.type==='projectile_impact'&&e.targetId===selectedShip)
+    if(audioEnabled&&e.type==='projectile_impact'&&e.targetId===view!.gunneryLockedShipId)
       audio.play(e.hullDamage>0?'impact_hull':'impact_barrier',0,.23);
-    if(audioEnabled&&e.type==='ship_destroyed'&&e.shipId===selectedShip)
+    if(audioEnabled&&e.type==='ship_destroyed'&&e.shipId===view!.gunneryLockedShipId)
       audio.play('gunner_signal',0,.7);
   }
   if(e.type==='ship_destroyed'){
