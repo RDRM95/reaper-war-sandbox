@@ -175,8 +175,14 @@ export const buildAllianceAegis = (): BuiltShip => {
   parts.hull.push(at(taperedBox(1.40,.34,4.4,.41,.95),0,.83,1.1));
   parts.windows.push(at(new THREE.BoxGeometry(.88,.045,.95),0,1.02,1.82));
   const extra = assemble(parts,'alliance',[],16.5);
-  // Keep batch geometry cheap: five additional existing material classes.
-  for(const mesh of [...extra.group.children])hull.group.add(mesh);
+  // Fold command armour into the existing five material batches, preserving
+  // one shared render template per class even with hundreds of Aegis hulls.
+  for (const object of [...extra.group.children]) {
+    const mesh = object as THREE.Mesh<THREE.BufferGeometry>;
+    const existing = hull.group.getObjectByName(mesh.name) as THREE.Mesh<THREE.BufferGeometry> | undefined;
+    if (existing) existing.geometry = merge([existing.geometry, mesh.geometry]);
+    else hull.group.add(mesh);
+  }
   hull.muzzle = new THREE.Vector3(0,-.38,8.03);
   hull.group.name = 'Aegis-pattern command dreadnought (Apex AU)';
   return hull;
