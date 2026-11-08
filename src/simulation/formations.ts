@@ -147,7 +147,7 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType, seed: n
   const groups: SlotShip[][] = Array.from({ length: count }, () => []);
   const reapers = members[0].every(s => s.role === 'reaper_capital')
     && members[1].every(s => s.role === 'reaper_destroyer')
-    && members[2].length === 0;
+    && members[2].length === 0 && members[0].length + members[1].length > 0;
 
   members.forEach((roleShips, role) => {
     if (reapers) {
@@ -250,7 +250,7 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType, seed: n
       const trim = reapers ? 0 : layoutNoise(seed ^ Math.imul(index + 1, 0x71e2a9b7), localIndex, 8) - 0.5;
       const trimZ = reapers ? 0 : layoutNoise(seed ^ Math.imul(index + 1, 0x4cf5ad43), localIndex, 9) - 0.5;
       slots.set(id, v3(
-        x + centreX + dx + trim * clearance * 0.24,
+        x + dx + trim * clearance * 0.24,
         y + p.y + trimZ * clearance * 0.11,
         z + centreZ + dz - Math.abs(dx) * 0.06 + trimZ * clearance * 0.26,
       ));
