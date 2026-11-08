@@ -49,7 +49,7 @@ const freshWave=():Reinforcement=>({delay:120,counts:{}});
 let waves:Record<Side,Reinforcement>={A:freshWave(),B:freshWave()};
 let activeSide:Side='A',mode:ScreenMode='3d',speed=1,paused=false,audioEnabled=false;
 let sim:BattleSimulation|null=null,view:BattleView|null=null,flat: FleetMap2D|null=null;
-let activeScene:SceneScript|null=null, nextSceneBeat=0;
+let activeScene:SceneScript|null=null, nextSceneBeat=0, sceneViewInitialized=false;
 let selectedShip:string|undefined,following=false,accum=0,last=0,lastHud=0;
 let viewError:string|undefined;
 let gunnery=false;
@@ -213,7 +213,7 @@ $('scene-run').addEventListener('click',()=>{
     // Preflight faction compatibility and wave composition before destroying
     // any running battle; keep the existing sim untouched if validation fails.
     stageSceneConfig(currentConfig(),next);
-    activeScene=next; mode='3d';speed=1;$<HTMLSelectElement>('speed').value='1';
+    activeScene=next; sceneViewInitialized=false;mode='3d';speed=1;$<HTMLSelectElement>('speed').value='1';
     scenePanel.hidden=true;
     launch();
     $('scene-status').textContent='SCENE LIVE / '+next.beats.length+' SHOTS';
@@ -225,13 +225,33 @@ scenePanel.addEventListener('keydown',(event:KeyboardEvent)=>{
 
 function stageCameraBeat(beat:SceneBeat):void{
   if(!sim||!view)return;
-  if(beat.shot==='wide'){
+  const presentation=activeScene?.presentation??'directed';
+  if(presentation==='continuous_pov'||presentation==='explore'){
+    // One chosen camera for the whole live scene. Later timed beats may
+    // update captions but NEVER force a POV cut or switch to another hull.
+    if(!sceneViewInitialized){
+      sceneViewInitialized=true;
+      if(presentation==='explore'){
+        gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');
+        $('gunner').classList.remove('active');camera('free');
+      }else{
+        const side=activeScene?.pov?.side??sim.config.perspectiveSide;
+        const classId=activeScene?.pov?.classId;
+        const focus=sim.ships.find(s=>s.alive&&!s.escaped&&s.side===side&&
+          (!classId||s.classId===classId)&&!!primaryGunneryMount(s));
+        if(!focus){
+          reportError('SCENE POV: No living forward main-battery station matches this fleet. Select a capital ship with a primary gun.');
+          return;
+        }
+        selectedShip=focus.id;flat!.selected=focus.id;
+        $('gunner').click();
+      }
+    }
+  }else if(beat.shot==='wide'){
     const a=view.sideCentre('A'),b=view.sideCentre('B');
     const centre=a.clone().add(b).multiplyScalar(0.5);
-    // Let wide establishing shots include the theatre's actual landmark.
     const landmark=view.env.group.getObjectByName(sim.config.environment==='relay' ? 'charon-mass-relay' : 'citadel');
     if(landmark)centre.lerp(landmark.position,0.28);
-    // Scale to the deployed engagement, not a fixed tiny camera orbit.
     view.rig.focus.copy(centre);
     view.rig.distance=Math.max(1800,a.distanceTo(b)*1.4);
     view.rig.pitch=.36;view.rig.yaw=Math.PI+.42;
@@ -255,6 +275,7 @@ function stageCameraBeat(beat:SceneBeat):void{
   caption.textContent=beat.caption.toUpperCase();
   caption.hidden=beat.caption.length===0;
 }
+
 function advanceSceneBeats():void{
   if(!activeScene||!sim||!view)return;
   while(nextSceneBeat<activeScene.beats.length
