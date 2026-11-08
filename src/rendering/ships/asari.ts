@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { at, latheBody, merge, taperedBox, taperedTube, zCylinder } from '../geometry';
-import { paletteFor } from '../materials';
+import { at, latheBody, taperedBox, taperedTube, zCylinder } from '../geometry';
 import { assemble, newParts, type Parts } from './alliance';
 import type { BuiltShip } from './types';
 
@@ -79,37 +78,71 @@ export function buildAsariDreadnought(): BuiltShip {
 }
 
 /**
- * Destiny Ascension: central hull with four long curved prongs sweeping
- * forward and outward around the primary gun.
+ * Destiny Ascension: broad asymmetric-looking-at-angle swept fan, not an
+ * enlarged Asari cruiser with four detached claws. The original procedural
+ * interpretation is guided by the user-supplied Destiny Ascension comparison
+ * (fan concept), NOT by an extracted/approved game mesh.
+ * Geometry is folded into five existing materials for fleet scalability.
  */
 export function buildDestinyAscension(): BuiltShip {
   const L = 16;
   const parts = newParts();
-  curvedBody(parts, L * 0.75, 1.2, 0.8);
-  const p = paletteFor('asari');
-  const prongs: THREE.BufferGeometry[] = [];
-  const lights: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 4; i++) {
-    const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const dir = new THREE.Vector3(Math.cos(ang), Math.sin(ang) * 0.85, 0).normalize();
-    const root = dir.clone().multiplyScalar(1.0).add(new THREE.Vector3(0, 0, -1.5));
-    const c1 = dir.clone().multiplyScalar(2.8).add(new THREE.Vector3(0, 0, 2.5));
-    const c2 = dir.clone().multiplyScalar(3.4).add(new THREE.Vector3(0, 0, 6.5));
-    const tip = dir.clone().multiplyScalar(2.6).add(new THREE.Vector3(0, 0, 9.5));
-    const curve = new THREE.CatmullRomCurve3([root, c1, c2, tip]);
-    prongs.push(taperedTube(curve, (t) => 0.55 * (1 - t * 0.7), 24, 10, 0.7));
-    const lc = new THREE.CatmullRomCurve3([root.clone().add(dir.clone().multiplyScalar(0.5)), c1.clone().add(dir.clone().multiplyScalar(0.45)), c2.clone().add(dir.clone().multiplyScalar(0.3)), tip.clone()]);
-    lights.push(taperedTube(lc, (t) => 0.06 * (1 - t * 0.6), 20, 5));
+  curvedBody(parts, L * 0.78, 1.25, 0.72);
+
+  // Broad paired swept shell panels. The transverse span is intentionally
+  // prominent at normal spectator distance, matching the reference's fan.
+  for (const side of [-1, 1]) {
+    const outline = new THREE.Shape();
+    const points: Array<[number, number]> = [
+      [side * 0.24, 4.5],
+      [side * 0.84, 4.0],
+      [side * 1.92, 2.7],
+      [side * 3.45, -1.3],
+      [side * 5.05, -5.95],
+      [side * 4.10, -6.25],
+      [side * 1.45, -5.10],
+      [side * 0.16, -4.40],
+    ];
+    outline.moveTo(...points[0]);
+    for (let i = 1; i < points.length; i++) outline.lineTo(...points[i]);
+    outline.closePath();
+    // Extruded Shape lies in XY; rotate into the horizontal XZ hull plane.
+    const panel = new THREE.ExtrudeGeometry(outline, {
+      depth: 0.16, bevelEnabled: false, steps: 1, curveSegments: 3,
+    });
+    panel.rotateX(Math.PI / 2);
+    panel.translate(0, 0.18, 0);
+    parts.hull.push(panel);
+
+    // Structural leading-edge spar, thickness tapered to the outer tip.
+    const edge = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(side * 0.24, 0.23, 4.5),
+      new THREE.Vector3(side * 0.84, 0.23, 4.0),
+      new THREE.Vector3(side * 1.92, 0.23, 2.7),
+      new THREE.Vector3(side * 3.45, 0.23, -1.3),
+      new THREE.Vector3(side * 5.05, 0.23, -5.95),
+    ]);
+    parts.accent.push(taperedTube(edge, t => 0.18 * (1 - 0.72 * t), 30, 7, 0.76));
+    for (let i = 0; i < 5; i++) {
+      const z = -3.9 + i * 1.36;
+      const x = side * (1.30 + i * 0.14);
+      parts.hullDark.push(at(taperedBox(0.28, 0.07, 0.75, 0.45, 0.95), x, 0.25, z));
+    }
   }
-  const prongMesh = new THREE.Mesh(merge(prongs), p.hull);
-  prongMesh.name = 'hull';
-  const lightMesh = new THREE.Mesh(merge(lights), p.windows);
-  lightMesh.name = 'windows';
-  // Main gun at the centre, between the prongs.
-  parts.hullDark.push(at(zCylinder(0.25, 0.35, 4.5, 14), 0, 0, 5.0));
-  parts.accent.push(at(zCylinder(0.4, 0.4, 0.3, 14), 0, 0, 3.2));
-  parts.windows.push(at(new THREE.BoxGeometry(0.6, 0.06, 2.0), 0, 0.95, -1.0));
-  const built = assemble(parts, 'asari', [new THREE.Vector3(0, 0, -L * 0.375)], L, new THREE.Vector3(0, 0, 7.4), GLOW);
-  built.group.add(prongMesh, lightMesh);
-  return built;
+
+  // Central command hull and coaxial cannon run between the swept surfaces.
+  parts.hullDark.push(at(taperedBox(0.64, 0.42, 8.8, 0.38, 0.96), 0, 0.04, 0.55));
+  parts.hull.push(at(taperedBox(0.28, 0.24, 3.3, 0.16, 0.9), 0, 0.03, 5.75));
+  parts.hullDark.push(at(zCylinder(0.18, 0.24, 3.5, 12), 0, -0.20, 5.6));
+  // Distinct circular central collar remains visible in bow and side views.
+  const collar = new THREE.TorusGeometry(0.94, 0.15, 8, 36);
+  collar.translate(0, 0, 0.48);
+  parts.accent.push(collar);
+  const litCollar = new THREE.TorusGeometry(0.80, 0.045, 6, 36);
+  litCollar.translate(0, 0, 0.57);
+  parts.windows.push(litCollar);
+  parts.windows.push(at(new THREE.BoxGeometry(0.62, 0.06, 2.1), 0, 0.95, -1.1));
+
+  return assemble(parts, 'asari', [new THREE.Vector3(0, 0, -L * 0.39)],
+    L, new THREE.Vector3(0, -0.20, 7.5), GLOW);
 }
