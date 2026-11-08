@@ -35,6 +35,8 @@ export interface CinematicFrame {
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
   mode: CameraMode = 'tactical';
+  /** Optical magnification never changes simulation, targeting or camera mount. */
+  gunneryZoomed = false;
   /** Orbit state for tactical camera. */
   yaw = 0.6;
   pitch = 0.55;
@@ -74,8 +76,20 @@ export class CameraRig {
       this.distance = 320;
     }
     this.mode = mode;
+    if (mode !== 'gunnery') {
+      this.gunneryZoomed = false;
+      this.camera.fov = 50;
+      this.camera.updateProjectionMatrix();
+    }
     // Optical gunnery must stay physically attached to the firing mount.
     this.transition = mode === 'gunnery' ? 0 : 1;
+  }
+
+  toggleGunneryZoom(): void {
+    if (this.mode !== 'gunnery') return;
+    this.gunneryZoomed = !this.gunneryZoomed;
+    this.camera.fov = this.gunneryZoomed ? 25 : 50;
+    this.camera.updateProjectionMatrix();
   }
 
   addShake(amount: number): void {
@@ -84,6 +98,7 @@ export class CameraRig {
 
   // --- Input hooks (called by the controller).
   orbit(dx: number, dy: number): void {
+    if (this.mode === 'gunnery') return; // Reticle is not a steering command.
     if (this.mode === 'free') {
       this.freeYaw -= dx * 0.003;
       this.freePitch = THREE.MathUtils.clamp(this.freePitch - dy * 0.003, -1.5, 1.5);
@@ -93,6 +108,7 @@ export class CameraRig {
     this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.005, -1.5, 1.5); // full orbit: above and below the plane
   }
   zoom(delta: number): void {
+    if (this.mode === 'gunnery') return; // Explicit optical toggle only.
     this.distance = THREE.MathUtils.clamp(this.distance * Math.exp(delta * 0.0012), 6, 60_000);
   }
   pan(dx: number, dy: number): void {
