@@ -75,6 +75,34 @@ export function buildQuarianCruiser(): BuiltShip {
   const parts = newParts();
   parts.hull.push(taperedBox(0.8, 0.6, L * 0.7, 0.8, 1).translate(0, 0, 0));
   parts.hullDark.push(at(zCylinder(0.1, 0.12, 0.9, 10), 0, 0.02, L * 0.42));
+  // The Migrant Fleet cruiser is defined by its large transverse annulus.
+  // The ring embraces the hull rather than sitting on an unrelated mast.
+  // Put the structure into existing hull/armour/accent batches, avoiding
+  // per-vessel draw calls in large fleet renders.
+  const ringZ = 0.38;
+  const ring = new THREE.TorusGeometry(1.06, 0.19, 8, 36);
+  ring.scale(1.0, 1.12, 1.0);
+  ring.translate(0, 0, ringZ);
+  parts.hull.push(ring);
+  const inset = new THREE.TorusGeometry(0.96, 0.06, 6, 36);
+  inset.scale(1.0, 1.12, 1.0);
+  inset.translate(0, 0, ringZ + 0.075);
+  parts.hullDark.push(inset);
+  // Segmented external armour and four structural spokes tie the ring
+  // physically to the long civilian-derived pressure hull.
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const segment = new THREE.BoxGeometry(0.16, 0.24, 0.30);
+    segment.rotateZ(a - Math.PI / 2);
+    segment.translate(Math.cos(a) * 1.06, Math.sin(a) * 1.19, ringZ - 0.025);
+    parts.accent.push(segment);
+  }
+  for (const side of [-1, 1]) {
+    const brace = taperedBox(0.12, 0.11, 1.34, 0.75, 1);
+    brace.rotateY(side * -0.38);
+    parts.hullDark.push(at(brace, side * 0.58, 0.16, ringZ - 0.15));
+    parts.hull.push(at(new THREE.BoxGeometry(0.22, 0.18, 1.20), side * 0.70, -0.11, ringZ - 0.19));
+  }
   modules(parts, 4, 0.5, 0.35, -L * 0.3, 0.9, 0.32);
   modules(parts, 3, -0.5, 0.3, -L * 0.25, 0.9, 0.32);
   parts.hull.push(at(new THREE.BoxGeometry(0.3, 0.3, 0.7), 0.15, 0.42, -0.6));
