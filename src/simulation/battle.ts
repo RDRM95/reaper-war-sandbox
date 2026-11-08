@@ -111,6 +111,9 @@ export class BattleSimulation implements AiContext {
 
   /** Indexed once per tick instead of scanning the full fleet for every carrier. */
   private carrierFighters = new Map<string, ShipState[]>();
+  /** Immutable squadron lane numbers; capped Oculus deployments per fleet. */
+  private readonly fighterLaunchSerial = new Map<string, number>();
+  private readonly oculusLaunchCount = new Map<string, number>();
   private primaryVolleys = new PrimaryVolleyControl();
   /** Listener for events (renderer/UI). */
   onEvent?: (e: BattleEvent) => void;
@@ -584,7 +587,10 @@ export class BattleSimulation implements AiContext {
       const cur = ship.heading;
       const cosA = Math.max(-1, Math.min(1, dot(cur, target)));
       const angle = Math.acos(cosA);
-      const maxTurn = ship.turnRate * (0.3 + 0.7 * ship.subsystems.engines) * dt;
+      // Combat-mass Reapers rotate deliberately; their high-speed turn relies on
+      // mass-lightening not available while firing a capital main beam.
+      const combatMass = ship.faction === 'reaper' && ship.role === 'reaper_capital' ? 0.72 : 1;
+      const maxTurn = ship.turnRate * combatMass * (0.3 + 0.7 * ship.subsystems.engines) * dt;
       if (angle <= maxTurn || angle < 1e-4) ship.heading = target;
       else {
         // Rotate cur towards target around their common normal.
@@ -616,20 +622,32 @@ export class BattleSimulation implements AiContext {
   private updateCarrier(ship: ShipState, fleet: FleetState, dt: number): void {
     if (!ship.hangar) return;
     const h = ship.hangar;
-    if (fleet.orders.fightersDeployed && h.remaining > 0) {
+    const oculus = h.classId === 'reaper_oculus';
+    const oculusRoom = oculus ? Math.max(0, 24 - (this.oculusLaunchCount.get(fleet.spec.id) ?? 0)) : Infinity;
+    // Generic canon scenarios preserve their existing fleet roster. Oculus
+    // wings auto-deploy only in explicit Reaper Hardcore engagements; scenario
+    // designers may still place Oculus fighters directly in any battle.
+    if (fleet.orders.fightersDeployed && h.remaining > 0 && oculusRoom > 0 &&
+        (!oculus || !!this.rules.special.reaperHardcore)) {
       h.launchTimer -= dt;
       if (h.launchTimer <= 0) {
         h.launchTimer = 0.4;
-        const n = Math.min(2, h.remaining);
+        const n = Math.min(2, h.remaining, oculusRoom);
         for (let i = 0; i < n; i++) {
           const f = this.createShip(h.classId, fleet.spec, undefined, ship.id);
-          const off = rotateY(v3((i === 0 ? 1 : -1) * 0.12, -0.05, 0.1), Math.atan2(ship.heading.x, ship.heading.z));
+          const number = this.fighterLaunchSerial.get(ship.id) ?? 0;
+          this.fighterLaunchSerial.set(ship.id, number + 1);
+          const lane = number % 4 - 1.5;
+          const wing = Math.floor(number / 4);
+          const off = rotateY(v3(lane * 0.30, -0.06, 0.18 + wing * 0.11), Math.atan2(ship.heading.x, ship.heading.z));
           f.pos = add(ship.pos, off);
           f.prevPos = clone(f.pos);
           f.heading = clone(ship.heading);
           f.prevHeading = clone(ship.heading);
           f.vel = scale(ship.heading, 0.6);
-          f.slot = v3((this.rng.next() - 0.5) * 6 * S, (2 + this.rng.next() * 2) * S, (10 + this.rng.next() * 3) * S);
+          // Repeatable four-craft wing structure, with spacing across wings.
+          f.slot = v3(lane * 1.45 * S, (1.1 + wing * 0.65 + (number % 2) * 0.25) * S,
+            (2.5 + wing * 1.30) * S);
           this.ships.push(f);
           this.shipById.set(f.id, f);
           this.sideCache.tick = -1;
@@ -637,6 +655,8 @@ export class BattleSimulation implements AiContext {
           this.emit({ t: this.time, type: 'ship_deployed', shipId: f.id, classId: f.classId, faction: f.faction, side: f.side, name: f.name });
         }
         h.remaining -= n;
+        if (oculus) this.oculusLaunchCount.set(fleet.spec.id,
+          (this.oculusLaunchCount.get(fleet.spec.id) ?? 0) + n);
         if (h.remaining === 0 || h.remaining % 8 === 0) this.emit({ t: this.time, type: 'fighters_launched', carrierId: ship.id, count: n });
       }
     }
@@ -751,12 +771,12 @@ export class BattleSimulation implements AiContext {
           }
         }
       }
-      if (!missile && !target && def.kind === 'gardian') {
+      if (!missile && !target && (def.kind === 'gardian' || def.id === 'oculus_beam')) {
         // GARDIAN lasers can scorch nearby hulls (bypassing barriers) — low priority.
         for (const e of this.enemiesNear(ship.side, origin, def.range)) {
           if (!e.alive || e.escaped) continue;
           const d = distance(origin, e.pos);
-          if (d <= def.range && d < best) {
+          if (d <= def.range && this.inArc(ship, w, e.pos) && d < best) {
             best = d;
             target = e;
           }

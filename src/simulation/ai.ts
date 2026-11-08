@@ -129,6 +129,8 @@ export function scoreTarget(ctx: AiContext, shooter: ShipState, fleet: FleetStat
   if (intercepting) score = (1 + wounded * 0.2) / (1 + relativeRange * relativeRange);
   else score *= relativeRange <= 1 ? 1.15 : 1 / (relativeRange * relativeRange);
   if (target.role === 'fighter' && shooter.role !== 'fighter') score *= 0.05;
+  // Interceptors prioritise hostile fighters over repeatedly chasing capitals.
+  if (shooter.role === 'fighter' && target.role === 'fighter') score *= 3.2;
   if (!intercepting && fleet.orders.focusFire && fleet.focusTargetId === target.id && relativeRange <= 1.2) score *= 1 + d.focusFire * 2;
   score *= priorityMultiplier(fleet.orders.priority, target);
   if (fleet.orders.protectCapitals && (shooter.role === 'frigate' || shooter.role === 'cruiser')) {
@@ -396,6 +398,35 @@ function combatFacing(ship: ShipState, target: ShipState, station: Vec3): Vec3 {
   return add(ship.pos, heading);
 }
 
+/** Stable individual fighter attack passes. A four-craft wing shares the
+ * launch lane while each pilot gets its own offset. The pass-through leg is
+ * latched for seconds, avoiding frame-by-frame oscillation at knife range. */
+interface FighterPass { targetId: string; until: number; waypoint: Vec3 }
+const fighterPasses = new WeakMap<ShipState, FighterPass>();
+function fighterAttackGoal(ctx: AiContext, ship: ShipState, target: ShipState, range: number): MovementGoal {
+  const to = sub(target.pos, ship.pos);
+  const dist = Math.sqrt(lengthSq(to));
+  const leadSeconds = Math.min(1.8, dist / Math.max(0.2, ship.maxSpeed + Math.sqrt(lengthSq(target.vel))));
+  const lead = add(target.pos, scale(target.vel, leadSeconds));
+  const right = normalize(v3(ship.heading.z, 0, -ship.heading.x));
+  const lane = Math.max(-1, Math.min(1, ship.slot.x / Math.max(1, 3 * S)));
+  const ongoing = fighterPasses.get(ship);
+  if (ongoing && ongoing.targetId === target.id && ctx.time < ongoing.until)
+    return { position: ongoing.waypoint, speedFraction: 1, face: lead };
+
+  if (dist < Math.max(range * 0.32, 0.65 * S) && dot(ship.vel, normalize(to)) > 0) {
+    // The craft banks away and extends past the contact before its next pass.
+    // A fixed station at the target centre creates a permanent dogfight knot.
+    const waypoint = add(add(ship.pos, scale(ship.heading, range * 0.92)),
+      scale(right, (lane || 0.35) * range * 0.38));
+    fighterPasses.set(ship, { targetId: target.id,
+      until: ctx.time + Math.max(1.2, range / Math.max(1, ship.maxSpeed) * 0.82), waypoint });
+    return { position: waypoint, speedFraction: 1, face: waypoint };
+  }
+  const approachSide = scale(right, lane * range * 0.16);
+  return { position: add(lead, approachSide), speedFraction: 1, face: lead };
+}
+
 /** A bounded firing station relative to the fleet line. Different roles use
  * different batteries, but do not alternate between mutually exclusive goals. */
 export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState): MovementGoal {
@@ -426,7 +457,8 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const band = engagementBand(ship);
   const range = shipEngagementRange(ship);
   const dist = distance(ship.pos, target.pos);
-  const screen = ship.role === 'frigate' || ship.role === 'reaper_destroyer' || ship.role === 'fighter';
+  if (ship.role === 'fighter') return fighterAttackGoal(ctx, ship, target, range);
+  const screen = ship.role === 'frigate' || ship.role === 'reaper_destroyer';
   if (screen && ctx.fleets.get(target.fleetId)?.orders.order === 'retreat') {
     // Intercept at the battle edge, then return to the fleet. A Reaper
     // destroyer does not follow a lone escaping frigate indefinitely.

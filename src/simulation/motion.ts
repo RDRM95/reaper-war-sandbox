@@ -48,10 +48,11 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
   const lateral = sub(force, forward);
   const typicalLateralFraction = ship.role === 'fighter' ? 0.85 :
     ship.role === 'frigate' ? 0.68 :
-    ship.role === 'reaper_destroyer' ? 0.62 :
+    ship.role === 'reaper_destroyer' ? 0.36 :
     ship.role === 'cruiser' ? 0.46 :
     ship.role === 'carrier' ? 0.24 :
-    ship.role === 'dreadnought' || ship.role === 'reaper_capital' ? 0.28 : 0.42;
+    ship.role === 'reaper_capital' ? 0.12 :
+    ship.role === 'dreadnought' ? 0.28 : 0.42;
   // Fine station keeping and collision avoidance use small omnidirectional
   // thrusters. Do not cripple the final arrival controller or clearance field
   // merely to prevent conspicuous sideways motion during powered cruising.
