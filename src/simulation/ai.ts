@@ -70,13 +70,13 @@ export function shipEngagementRange(ship: ShipState): number {
 export function engagementBand(ship: ShipState): { min: number; preferred: number; max: number } {
   const range = shipEngagementRange(ship);
   switch (ship.role) {
-    case 'dreadnought': return { min: range * 0.72, preferred: range * 0.84, max: range * 0.93 };
-    case 'carrier': return { min: range * 0.80, preferred: range * 0.90, max: range * 0.96 };
-    case 'reaper_capital': return { min: range * 0.50, preferred: range * 0.68, max: range * 0.86 };
-    case 'reaper_destroyer': return { min: range * 0.45, preferred: range * 0.64, max: range * 0.84 };
-    case 'cruiser': return { min: range * 0.62, preferred: range * 0.76, max: range * 0.91 };
-    case 'frigate': return { min: range * 0.56, preferred: range * 0.72, max: range * 0.89 };
-    case 'fighter': return { min: range * 0.40, preferred: range * 0.70, max: range * 0.88 };
+    case 'dreadnought': return { min: range * 0.48, preferred: range * 0.70, max: range * 0.84 };
+    case 'carrier': return { min: range * 0.70, preferred: range * 0.82, max: range * 0.92 };
+    case 'reaper_capital': return { min: range * 0.36, preferred: range * 0.61, max: range * 0.79 };
+    case 'reaper_destroyer': return { min: range * 0.34, preferred: range * 0.59, max: range * 0.81 };
+    case 'cruiser': return { min: range * 0.44, preferred: range * 0.66, max: range * 0.84 };
+    case 'frigate': return { min: range * 0.36, preferred: range * 0.62, max: range * 0.84 };
+    case 'fighter': return { min: range * 0.20, preferred: range * 0.52, max: range * 0.80 };
   }
 }
 
@@ -129,6 +129,8 @@ export function scoreTarget(ctx: AiContext, shooter: ShipState, fleet: FleetStat
   if (intercepting) score = (1 + wounded * 0.2) / (1 + relativeRange * relativeRange);
   else score *= relativeRange <= 1 ? 1.15 : 1 / (relativeRange * relativeRange);
   if (target.role === 'fighter' && shooter.role !== 'fighter') score *= 0.05;
+  // Interceptors prioritise hostile fighters over repeatedly chasing capitals.
+  if (shooter.role === 'fighter' && target.role === 'fighter') score *= 3.2;
   if (!intercepting && fleet.orders.focusFire && fleet.focusTargetId === target.id && relativeRange <= 1.2) score *= 1 + d.focusFire * 2;
   score *= priorityMultiplier(fleet.orders.priority, target);
   if (fleet.orders.protectCapitals && (shooter.role === 'frigate' || shooter.role === 'cruiser')) {
@@ -396,6 +398,35 @@ function combatFacing(ship: ShipState, target: ShipState, station: Vec3): Vec3 {
   return add(ship.pos, heading);
 }
 
+/** Stable individual fighter attack passes. A four-craft wing shares the
+ * launch lane while each pilot gets its own offset. The pass-through leg is
+ * latched for seconds, avoiding frame-by-frame oscillation at knife range. */
+interface FighterPass { targetId: string; until: number; waypoint: Vec3 }
+const fighterPasses = new WeakMap<ShipState, FighterPass>();
+function fighterAttackGoal(ctx: AiContext, ship: ShipState, target: ShipState, range: number): MovementGoal {
+  const to = sub(target.pos, ship.pos);
+  const dist = Math.sqrt(lengthSq(to));
+  const leadSeconds = Math.min(1.8, dist / Math.max(0.2, ship.maxSpeed + Math.sqrt(lengthSq(target.vel))));
+  const lead = add(target.pos, scale(target.vel, leadSeconds));
+  const right = normalize(v3(ship.heading.z, 0, -ship.heading.x));
+  const lane = Math.max(-1, Math.min(1, ship.slot.x / Math.max(1, 3 * S)));
+  const ongoing = fighterPasses.get(ship);
+  if (ongoing && ongoing.targetId === target.id && ctx.time < ongoing.until)
+    return { position: ongoing.waypoint, speedFraction: 1, face: lead };
+
+  if (dist < Math.max(range * 0.32, 0.65 * S) && dot(ship.vel, normalize(to)) > 0) {
+    // The craft banks away and extends past the contact before its next pass.
+    // A fixed station at the target centre creates a permanent dogfight knot.
+    const waypoint = add(add(ship.pos, scale(ship.heading, range * 0.92)),
+      scale(right, (lane || 0.35) * range * 0.38));
+    fighterPasses.set(ship, { targetId: target.id,
+      until: ctx.time + Math.max(1.2, range / Math.max(1, ship.maxSpeed) * 0.82), waypoint });
+    return { position: waypoint, speedFraction: 1, face: waypoint };
+  }
+  const approachSide = scale(right, lane * range * 0.16);
+  return { position: add(lead, approachSide), speedFraction: 1, face: lead };
+}
+
 /** A bounded firing station relative to the fleet line. Different roles use
  * different batteries, but do not alternate between mutually exclusive goals. */
 export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState): MovementGoal {
@@ -426,7 +457,8 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const band = engagementBand(ship);
   const range = shipEngagementRange(ship);
   const dist = distance(ship.pos, target.pos);
-  const screen = ship.role === 'frigate' || ship.role === 'reaper_destroyer' || ship.role === 'fighter';
+  if (ship.role === 'fighter') return fighterAttackGoal(ctx, ship, target, range);
+  const screen = ship.role === 'frigate' || ship.role === 'reaper_destroyer';
   if (screen && ctx.fleets.get(target.fleetId)?.orders.order === 'retreat') {
     // Intercept at the battle edge, then return to the fleet. A Reaper
     // destroyer does not follow a lone escaping frigate indefinitely.
@@ -462,7 +494,7 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
     ship.engagementMode = dist > band.max ? 'approach' : 'hold';
   }
   if (dist > band.max) ship.engagementMode = 'approach';
-  else if (dist < band.min && !noRetreat) ship.engagementMode = 'reposition';
+  else if (dist < Math.min(band.min * 0.60, range * 0.28) && !noRetreat && ship.role !== 'dreadnought' && ship.role !== 'carrier') ship.engagementMode = 'reposition';
   else if (ship.engagementMode === 'approach' && dist <= band.preferred) ship.engagementMode = 'hold';
   else if (ship.engagementMode === 'reposition' && dist >= band.min) ship.engagementMode = 'hold';
 
@@ -480,7 +512,7 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
     ship.role === 'cruiser' ? 0.42 : 1;
   const leash = ctx.rules.special.reaperHardcore ? Math.min(normalLeash, range * lineFraction) : normalLeash;
   let advance = Math.min(Math.max(0, referenceDistance - band.preferred), Math.max(0, axialDistance - band.min), leash);
-  if (!noRetreat && referenceDistance < band.min) advance = -Math.min(band.min - referenceDistance, range * 0.25);
+  if (!noRetreat && ship.engagementMode === 'reposition' && referenceDistance < band.min) advance = -Math.min(band.min - referenceDistance, range * 0.18);
   let position = add(slotPos, scale(fleet.heading, advance));
 
   // A flank can still correct an unusable firing solution, within a bounded
@@ -491,7 +523,7 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const trimLimit = range * 0.15;
   if (stationDistance > range * 0.97) {
     position = add(position, scale(normalize(toTarget), Math.min(trimLimit, stationDistance - range * 0.94)));
-  } else if (!noRetreat && stationDistance < band.min) {
+  } else if (!noRetreat && ship.engagementMode === 'reposition' && stationDistance < band.min) {
     position = add(position, scale(normalize(toTarget), -Math.min(trimLimit, band.min - stationDistance)));
   }
   ship.firingOffset = sub(position, slotPos);
