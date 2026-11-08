@@ -494,7 +494,7 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
     ship.engagementMode = dist > band.max ? 'approach' : 'hold';
   }
   if (dist > band.max) ship.engagementMode = 'approach';
-  else if (dist < Math.min(band.min * 0.60, range * 0.28) && !noRetreat && ship.role !== 'dreadnought' && ship.role !== 'carrier') ship.engagementMode = 'reposition';
+  else if (dist < band.min && !noRetreat) ship.engagementMode = 'reposition';
   else if (ship.engagementMode === 'approach' && dist <= band.preferred) ship.engagementMode = 'hold';
   else if (ship.engagementMode === 'reposition' && dist >= band.min) ship.engagementMode = 'hold';
 
@@ -512,7 +512,7 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
     ship.role === 'cruiser' ? 0.42 : 1;
   const leash = ctx.rules.special.reaperHardcore ? Math.min(normalLeash, range * lineFraction) : normalLeash;
   let advance = Math.min(Math.max(0, referenceDistance - band.preferred), Math.max(0, axialDistance - band.min), leash);
-  if (!noRetreat && ship.engagementMode === 'reposition' && referenceDistance < band.min) advance = -Math.min(band.min - referenceDistance, range * 0.18);
+  if (!noRetreat && referenceDistance < band.min) advance = -Math.min(band.min - referenceDistance, range * 0.25);
   let position = add(slotPos, scale(fleet.heading, advance));
 
   // A flank can still correct an unusable firing solution, within a bounded
@@ -523,7 +523,7 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const trimLimit = range * 0.15;
   if (stationDistance > range * 0.97) {
     position = add(position, scale(normalize(toTarget), Math.min(trimLimit, stationDistance - range * 0.94)));
-  } else if (!noRetreat && ship.engagementMode === 'reposition' && stationDistance < band.min) {
+  } else if (!noRetreat && stationDistance < band.min) {
     position = add(position, scale(normalize(toTarget), -Math.min(trimLimit, band.min - stationDistance)));
   }
   ship.firingOffset = sub(position, slotPos);
