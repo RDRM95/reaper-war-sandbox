@@ -443,7 +443,8 @@ export class BattleView {
               this.nextBeamShieldAt.set(t.id, sim.time + 0.25);
             }
           }
-          const intensity = kind === 'reaper_beam' ? (ship.role === 'reaper_capital' ? 1.3 : 0.7) : 0.9;
+          const intensity = w.def.id === 'oculus_beam' ? 0.19 :
+            kind === 'reaper_beam' ? (ship.role === 'reaper_capital' ? 1.3 : 0.7) : 0.9;
           beams.push({ start, end, kind, intensity });
       }
     }
