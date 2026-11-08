@@ -361,7 +361,7 @@ function reportError(err:unknown){viewError=err instanceof Error?err.message:Str
   $('message').textContent='STARTUP FAILED';$('state').textContent='ERROR';console.error(err);
 }
 function select(ship:ShipState|undefined){selectedShip=ship?.id;following=false;flat!.selected=selectedShip;
-  if(gunnery&&view&&ship)view.followId=ship.id;
+  // Selection never overrides a locked first-person main-gun station.
   if(view){view.selectedIds.clear();if(ship)view.selectedIds.add(ship.id);}
   inspect();
 }
@@ -593,6 +593,7 @@ document.addEventListener('keydown',e=>{
   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextAreaElement)return;
   if(e.key.toLowerCase()==='f'&&!e.repeat){e.preventDefault();void toggleFullscreen();}
   if(e.key.toLowerCase()==='g'&&!e.repeat){e.preventDefault();$('gunner').click();}
+  if(e.key.toLowerCase()==='z'&&gunnery&&view&&!e.repeat){e.preventDefault();view.rig.toggleGunneryZoom();}
   if(e.code==='Space'&&!e.repeat){e.preventDefault();$('pause').click();}
 });
 
@@ -603,13 +604,21 @@ $('pause').addEventListener('click',()=>{paused=!paused;$('pause').textContent=p
 $('speed').addEventListener('change',()=>{speed=Math.max(1,Number($<HTMLSelectElement>('speed').value)||1);});
 $('graphics').addEventListener('change',()=>{graphics=$<HTMLSelectElement>('graphics').value as GraphicsPreset;if(mode==='3d'&&sim)createView(true);});
 $('sound').addEventListener('click',()=>{audioEnabled=!audioEnabled;if(audioEnabled){audio.init();audio.startAmbience();}audio.settings.muted=!audioEnabled;audio.applySettings();$('sound').textContent=audioEnabled?'SOUND ON':'SOUND OFF';});
-function camera(mode:CameraMode){if(!view||!sim)return;view.rig.setMode(mode);}
+function camera(mode:CameraMode){if(!view||!sim)return;if(mode!=='gunnery')view.gunneryLockedShipId=undefined;view.rig.setMode(mode);}
 $('cine').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('cinematic');});
 $('tactical').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('tactical');});
 $('reaper-cam').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');camera('reaper');});
 $('gunner').addEventListener('click',()=>{
   gunnery=true;mode='3d';if(!view&&sim)createView();switchMode();
-  if(view){view.followId=selectedShip;view.gunneryWeaponIndex=undefined;view.rig.setMode('gunnery');}
+  if(view){
+    const chosen=selectedShip?sim?.getShip(selectedShip):undefined;
+    const active=chosen?.alive&&!chosen.escaped&&primaryGunneryMount(chosen)?chosen:
+      sim?.ships.find(s=>s.alive&&!s.escaped&&s.side===sim.config.perspectiveSide&&!!primaryGunneryMount(s));
+    view.followId=active?.id;
+    view.gunneryLockedShipId=active?.id;
+    view.gunneryWeaponIndex=undefined;
+    view.rig.setMode('gunnery');
+  }
   if(audioEnabled)audio.init();
   telemetry.show(true);$('gunner').classList.add('active');$('stage').classList.add('gunnery-active');
 });
@@ -660,10 +669,10 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
     const alpha=paused?1:Math.min(1,accum/SIM_DT);
     if(mode==='3d'&&view){
       view.update(dt,alpha);view.render();
-      const activeId=gunnery?(view.followId??selectedShip):selectedShip;
+      const activeId=gunnery?view.gunneryLockedShipId:selectedShip;
       telemetry.update(sim,view,activeId);
       if(gunnery&&activeId){
-        if(selectedShip!==activeId){selectedShip=activeId;flat!.selected=activeId;}
+        // Keep UI selection independent from a locked optical gunnery station.
         const vessel=sim.getShip(activeId);
         const target=vessel?.targetId;
         if(target!==lastGunneryTarget){
