@@ -20,6 +20,7 @@ interface ReaperOpts {
   bodyRadiusFactor: number;
   tint?: number;
   spines?: boolean;
+  variant?: 'harbinger' | 'destroyer';
 }
 
 export function buildReaper(opts: ReaperOpts): BuiltShip {
@@ -100,6 +101,42 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
     hood.rotateZ(Math.PI * 0.55 + i * 0.12);
     plates.push(hood);
   }
+  // Reference-led class identity. Harbinger's long lateral scythes and the
+  // destroyer's shorter forward cheek guards are carved into the existing
+  // merged armour batch. No added draw calls, weapon events or simulation state.
+  if (opts.variant === 'harbinger') {
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 5; i++) {
+        const z = L * (-0.32 + i * 0.113);
+        const radius = sampleRadius(profile, z);
+        const scythe = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(side * radius * 0.82, R * 0.08, z),
+          new THREE.Vector3(side * (radius + R * 0.34), R * 0.16, z + L * 0.018),
+          new THREE.Vector3(side * (radius + R * 1.24), R * 0.06, z + L * 0.075),
+          new THREE.Vector3(side * (radius + R * 1.42), -R * 0.06, z + L * 0.11),
+        ]);
+        plates.push(taperedTube(scythe, t => R * 0.115 * (1 - t * 0.88), 13, 6, 0.78));
+      }
+    }
+    const crown = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, R * 0.42, -L * 0.37),
+      new THREE.Vector3(0, R * 1.02, -L * 0.17),
+      new THREE.Vector3(0, R * 1.01, L * 0.06),
+      new THREE.Vector3(0, R * 0.30, L * 0.32),
+    ]);
+    plates.push(taperedTube(crown, t => R * 0.11 * (1 - t * 0.67), 18, 6, 0.8));
+  } else if (opts.variant === 'destroyer') {
+    for (const side of [-1, 1]) {
+      const guard = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(side * R * 0.62, -R * 0.25, L * 0.035),
+        new THREE.Vector3(side * R * 1.02, -R * 0.23, L * 0.14),
+        new THREE.Vector3(side * R * 0.75, -R * 0.42, L * 0.32),
+        new THREE.Vector3(side * R * 0.42, -R * 0.62, L * 0.42),
+      ]);
+      plates.push(taperedTube(guard, t => R * 0.19 * (1 - t * 0.82), 13, 6, 0.76));
+    }
+  }
+
   const plateMesh = new THREE.Mesh(merge(plates), p.accent);
   plateMesh.name = 'plates';
   group.add(plateMesh);
@@ -316,7 +353,7 @@ function sampleRadius(profile: { z: number; r: number }[], z: number): number {
 export const buildReaperCapital = (): BuiltShip => buildReaper({ length: 11, arms: 6, armLengthFactor: 0.8, bodyRadiusFactor: 0.10 });
 
 /** Reaper destroyer: 160 m, four heavy arms. */
-export const buildReaperDestroyer = (): BuiltShip => buildReaper({ length: 0.95, arms: 4, armLengthFactor: 0.75, bodyRadiusFactor: 0.2 });
+export const buildReaperDestroyer = (): BuiltShip => buildReaper({ length: 0.95, arms: 4, armLengthFactor: 0.75, bodyRadiusFactor: 0.2, variant: 'destroyer' });
 
 /** Harbinger: larger, spined, and with a brighter aperture. */
 /** Extragalactic Ascendant — derived from the unmistakable Sovereign anatomy,
@@ -347,4 +384,4 @@ export const buildReaperAscendant = (): BuiltShip => {
   return built;
 };
 
-export const buildHarbinger = (): BuiltShip => buildReaper({ length: 13.2, arms: 6, armLengthFactor: 0.8, bodyRadiusFactor: 0.115, spines: true, tint: 0xffa040 });
+export const buildHarbinger = (): BuiltShip => buildReaper({ length: 13.2, arms: 6, armLengthFactor: 0.8, bodyRadiusFactor: 0.115, spines: true, tint: 0xffa040, variant: 'harbinger' });
