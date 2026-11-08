@@ -9,7 +9,7 @@ test('Scripted live scene stays in one real main gun POV instead of cutting on b
   await page.goto('/');
   await page.locator('#scene-script').click();
   await page.locator('#scene-pov-example').click();
-  await expect(page.locator('#scene-json')).toContainText('continuous_pov');
+  await expect(page.locator('#scene-json')).toHaveValue(/continuous_pov/);
   await page.locator('#scene-run').click();
   await expect(page.locator('#battle-name')).toContainText('MAIN BATTERY POV');
   await expect(page.locator('.target-telemetry')).toBeVisible();
