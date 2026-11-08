@@ -767,7 +767,7 @@ export class BattleSimulation implements AiContext {
           }
         }
       }
-      if (!missile && !target && def.kind === 'gardian') {
+      if (!missile && !target && (def.kind === 'gardian' || def.id === 'oculus_beam')) {
         // GARDIAN lasers can scorch nearby hulls (bypassing barriers) — low priority.
         for (const e of this.enemiesNear(ship.side, origin, def.range)) {
           if (!e.alive || e.escaped) continue;
