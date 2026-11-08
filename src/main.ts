@@ -51,7 +51,8 @@ const freshWave=():Reinforcement=>({delay:120,counts:{}});
 let waves:Record<Side,Reinforcement>={A:freshWave(),B:freshWave()};
 let activeSide:Side='A',mode:ScreenMode='3d',speed=1,paused=false,audioEnabled=false;
 let sim:BattleSimulation|null=null,view:BattleView|null=null,flat: FleetMap2D|null=null;
-let activeScene:SceneScript|null=null, nextSceneBeat=0;
+let activeScene:SceneScript|null=null, nextSceneBeat=0, sceneViewInitialized=false;
+const freeKeys=new Set<string>();
 let selectedShip:string|undefined,following=false,accum=0,last=0,lastHud=0;
 let viewError:string|undefined;
 let gunnery=false;
@@ -134,13 +135,13 @@ app.innerHTML=`
 <section id="scene-panel" class="scene-panel" hidden aria-label="Scene director editor" role="dialog" aria-modal="true">
   <div class="scene-dialog">
     <header><div><small>REAPER WAR / CINEMATIC DIRECTOR</small><h2>SCENE SCRIPT MODE</h2></div><button type="button" id="scene-close">✕ CLOSE</button></header>
-    <p>Write a timed JSON shot list. WIDE, FOLLOW, REAPER and CINEMATIC views observe actual combat. Waves are real delayed fleets with authentic AI, weapons, losses and outcomes. No fake hits or scripted victories.</p>
+    <p>Direct a real battle with timed camera beats, or use uninterrupted main-gun POV or free exploration. Reinforcements, weapons, AI, hits and losses remain simulated. Explore: WASD to move, Q/E vertical, drag to look, Shift to accelerate.</p>
     <label for="scene-json">SCENE JSON · SHOTS ARE IN SIMULATION SECONDS</label>
     <textarea id="scene-json" spellcheck="false" aria-label="Scene JSON script"></textarea>
     <div class="scene-actions">
       <button id="scene-run" class="primary">▶ PLAY SCENE</button>
       <button id="scene-save">SAVE SCRIPT LOCALLY</button>
-      <button id="scene-default">RESTORE EXAMPLE</button>
+      <button id="scene-default">DIRECTED EXAMPLE</button><button id="scene-pov-example">GUNNER POV EXAMPLE</button><button id="scene-explore-example">FREE EXPLORE EXAMPLE</button>
     </div>
     <div id="scene-status" role="status">EDIT SHOTS OR START THE EXAMPLE</div>
   </div>
@@ -202,6 +203,24 @@ $('scene-default').addEventListener('click',()=>{
   sceneEditor.value=DEFAULT_SCENE_SCRIPT;
   $('scene-status').textContent='EXAMPLE RESTORED — CLICK PLAY SCENE';
 });
+/** The same physically simulated example, seen through three different cameras. */
+for(const [button,presentation] of [
+  ['scene-pov-example','continuous_pov'],
+  ['scene-explore-example','explore'],
+] as const){
+  $(button).addEventListener('click',()=>{
+    const demo=JSON.parse(DEFAULT_SCENE_SCRIPT) as Record<string,unknown>;
+    demo.presentation=presentation;
+    demo.pov=presentation==='continuous_pov'?{side:'A'}:undefined;
+    demo.title=presentation==='continuous_pov'
+      ? 'Charon Relay — Main Battery POV'
+      : 'Charon Relay — Free Exploration';
+    sceneEditor.value=JSON.stringify(demo,null,2);
+    $('scene-status').textContent=presentation==='continuous_pov'
+      ? 'ONE GUNNERY CAMERA · NO AUTOMATIC CUTS'
+      : 'FREE CAMERA · WASD, Q/E, SHIFT, DRAG';
+  });
+}
 $('scene-save').addEventListener('click',()=>{
   try{
     parseSceneScript(sceneEditor.value);
@@ -215,7 +234,7 @@ $('scene-run').addEventListener('click',()=>{
     // Preflight faction compatibility and wave composition before destroying
     // any running battle; keep the existing sim untouched if validation fails.
     stageSceneConfig(currentConfig(),next);
-    activeScene=next; mode='3d';speed=1;$<HTMLSelectElement>('speed').value='1';
+    activeScene=next; sceneViewInitialized=false;mode='3d';speed=1;$<HTMLSelectElement>('speed').value='1';
     scenePanel.hidden=true;
     launch();
     $('scene-status').textContent='SCENE LIVE / '+next.beats.length+' SHOTS';
@@ -227,13 +246,33 @@ scenePanel.addEventListener('keydown',(event:KeyboardEvent)=>{
 
 function stageCameraBeat(beat:SceneBeat):void{
   if(!sim||!view)return;
-  if(beat.shot==='wide'){
+  const presentation=activeScene?.presentation??'directed';
+  if(presentation==='continuous_pov'||presentation==='explore'){
+    // One chosen camera for the whole live scene. Later timed beats may
+    // update captions but NEVER force a POV cut or switch to another hull.
+    if(!sceneViewInitialized){
+      sceneViewInitialized=true;
+      if(presentation==='explore'){
+        gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');
+        $('gunner').classList.remove('active');camera('free');
+      }else{
+        const side=activeScene?.pov?.side??sim.config.perspectiveSide;
+        const classId=activeScene?.pov?.classId;
+        const focus=sim.ships.find(s=>s.alive&&!s.escaped&&s.side===side&&
+          (!classId||s.classId===classId)&&!!primaryGunneryMount(s));
+        if(!focus){
+          reportError('SCENE POV: No living forward main-battery station matches this fleet. Select a capital ship with a primary gun.');
+          return;
+        }
+        selectedShip=focus.id;flat!.selected=focus.id;
+        $('gunner').click();
+      }
+    }
+  }else if(beat.shot==='wide'){
     const a=view.sideCentre('A'),b=view.sideCentre('B');
     const centre=a.clone().add(b).multiplyScalar(0.5);
-    // Let wide establishing shots include the theatre's actual landmark.
     const landmark=view.env.group.getObjectByName(sim.config.environment==='relay' ? 'charon-mass-relay' : 'citadel');
     if(landmark)centre.lerp(landmark.position,0.28);
-    // Scale to the deployed engagement, not a fixed tiny camera orbit.
     view.rig.focus.copy(centre);
     view.rig.distance=Math.max(1800,a.distanceTo(b)*1.4);
     view.rig.pitch=.36;view.rig.yaw=Math.PI+.42;
@@ -257,6 +296,7 @@ function stageCameraBeat(beat:SceneBeat):void{
   caption.textContent=beat.caption.toUpperCase();
   caption.hidden=beat.caption.length===0;
 }
+
 function advanceSceneBeats():void{
   if(!activeScene||!sim||!view)return;
   while(nextSceneBeat<activeScene.beats.length
@@ -489,6 +529,8 @@ function currentConfig(){
   return config;
 }
 function launch(){try{
+  sceneViewInitialized=false;
+  freeKeys.clear();
   $('quick-report').hidden=true;
   $('error').hidden=true;viewError=undefined;
   const config=activeScene?stageSceneConfig(currentConfig(),activeScene):currentConfig();
@@ -595,6 +637,17 @@ async function toggleFullscreen(){
 }
 $('fullscreen').addEventListener('click',()=>void toggleFullscreen());
 document.addEventListener('fullscreenchange',updateFullscreenUi);
+window.addEventListener('keydown',(e:KeyboardEvent)=>{
+  if(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement ||
+    e.target instanceof HTMLSelectElement)return;
+  const key=e.key.toLowerCase();
+  if(['w','a','s','d','q','e','shift'].includes(key)){
+    freeKeys.add(key);
+    if(view?.rig.mode==='free')e.preventDefault();
+  }
+});
+window.addEventListener('keyup',(e:KeyboardEvent)=>freeKeys.delete(e.key.toLowerCase()));
+window.addEventListener('blur',()=>freeKeys.clear());
 document.addEventListener('keydown',e=>{
   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextAreaElement)return;
   if(e.key.toLowerCase()==='f'&&!e.repeat){e.preventDefault();void toggleFullscreen();}
@@ -673,6 +726,10 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
       simWorkMs=performance.now()-started;
     }
     if(activeScene)advanceSceneBeats();
+    if(view?.rig.mode==='free'&&mode==='3d'){
+      const axis=(pos:string,neg:string)=>Number(freeKeys.has(pos))-Number(freeKeys.has(neg));
+      view.rig.freeMove(axis('w','s'),axis('d','a'),axis('e','q'),dt,freeKeys.has('shift'));
+    }
     const alpha=paused?1:Math.min(1,accum/SIM_DT);
     if(mode==='3d'&&view){
       view.update(dt,alpha);view.render();
@@ -714,6 +771,9 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
 // Read-only testing interface. No gameplay state is changed by inspection.
 (window as Window & { __reaperDiagnostics?: (summaryOnly?:boolean) => unknown }).__reaperDiagnostics=(summaryOnly=false)=>({
   seed:sim?.config.seed,time:sim?.time,shipCount:sim?.ships.length,
+  scenePresentation:activeScene?.presentation??null,
+  sceneCameraMode:view?.rig.mode??null,
+  sceneLockedShipId:view?.gunneryLockedShipId??null,
   frameMsAverage:frameTimes.reduce((a,b)=>a+b,0)/Math.max(1,frameTimes.length),
   frameMsP95:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.ceil(frameTimes.length*0.95)-1)]??0,
   frameMsP99:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.ceil(frameTimes.length*0.99)-1)]??0,

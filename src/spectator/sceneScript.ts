@@ -3,6 +3,8 @@ import { SHIP_CLASS_LIST } from '@/data/ships';
 
 /** A scene is a shot list over a REAL deterministic battle, never a canned animation. */
 export type SceneShot = 'wide' | 'cinematic' | 'follow' | 'reaper';
+/** All modes use the same simulated ships and event timeline. */
+export type ScenePresentation = 'directed' | 'continuous_pov' | 'explore';
 export interface SceneBeat {
   at: number;
   shot: SceneShot;
@@ -20,12 +22,17 @@ export interface SceneScript {
   environment?: Environment;
   beats: SceneBeat[];
   waves: SceneWave[];
+  /** Director switches shots; POV pins a real gun; Explore never forces cuts. */
+  presentation?: ScenePresentation;
+  /** Optional primary-battery POV anchor, validated against the starting roster. */
+  pov?: { side: Side; classId?: string };
 }
 const ENVIRONMENTS: readonly string[] = [
   'earth_orbit', 'palaven_orbit', 'thessia_orbit', 'rannoch_orbit',
   'surkesh_orbit', 'citadel', 'deep_space', 'relay',
 ];
 const SHOTS: readonly string[] = ['wide', 'cinematic', 'follow', 'reaper'];
+const PRESENTATIONS: readonly string[] = ['directed', 'continuous_pov', 'explore'];
 const isRecord = (x: unknown): x is Record<string, unknown> =>
   typeof x === 'object' && x !== null && !Array.isArray(x);
 const isSide = (x: unknown): x is Side => x === 'A' || x === 'B';
@@ -49,6 +56,20 @@ export function parseSceneScript(raw: string): SceneScript {
     throw new Error('Provide 1–64 timed camera beats.');
   if (value.waves !== undefined && (!Array.isArray(value.waves) || value.waves.length > 16))
     throw new Error('At most 16 reinforcement waves are permitted.');
+  const presentation = value.presentation ?? 'directed';
+  if (typeof presentation !== 'string' || !PRESENTATIONS.includes(presentation))
+    throw new Error('Unknown scene presentation (directed, continuous_pov or explore).');
+  let pov: SceneScript['pov'];
+  if (value.pov !== undefined) {
+    const requestedPov = value.pov;
+    if (!isRecord(requestedPov) || !isSide(requestedPov.side))
+      throw new Error('POV must specify side A or B.');
+    const classId = requestedPov.classId;
+    if (classId !== undefined &&
+      (typeof classId !== 'string' || !SHIP_CLASS_LIST.some(s => s.id === classId)))
+      throw new Error('Unknown ship class for POV.');
+    pov = { side: requestedPov.side, classId: classId as string | undefined };
+  }
   const environment = value.environment;
   if (environment !== undefined && (typeof environment !== 'string' || !ENVIRONMENTS.includes(environment)))
     throw new Error('Unknown battle environment.');
@@ -87,11 +108,19 @@ export function parseSceneScript(raw: string): SceneScript {
     environment: environment as Environment | undefined,
     beats,
     waves: waves.sort((a, b) => a.at - b.at),
+    presentation: presentation as ScenePresentation,
+    pov,
   };
 }
 
 /** Add regular delayed FleetSpec deployments to the authoritative battle config. */
 export function stageSceneConfig(base: BattleConfig, script: SceneScript): BattleConfig {
+  if (script.presentation === 'continuous_pov') {
+    const side = script.pov?.side ?? base.perspectiveSide;
+    if (!base.fleets.some(f => f.side === side && (f.arrivalTime ?? 0) === 0 &&
+      f.ships.some(ship => ship.count > 0 && (!script.pov?.classId || script.pov.classId === ship.classId))))
+      throw new Error('The selected POV ship is absent from the starting fleet on side ' + side + '.');
+  }
   const additional: FleetSpec[] = script.waves.map((wave, i) => {
     const parent = base.fleets.find(f => f.side === wave.side && (f.arrivalTime ?? 0) === 0);
     if (!parent) throw new Error('No starting fleet exists for side ' + wave.side);
