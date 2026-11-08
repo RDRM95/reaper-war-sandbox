@@ -59,7 +59,7 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
   const stationKeeping = Math.max(8, ship.lengthKm * 3);
   const lateralFraction = dist < stationKeeping ||
     (goal.avoidanceAcceleration && length(goal.avoidanceAcceleration) > 1e-6)
-    ? (ship.faction === 'reaper' ? 0.52 : 1) : typicalLateralFraction;
+    ? 1 : typicalLateralFraction;
   // Slowing/braking is allowed through forward-facing RCS. Only forward
   // acceleration lights the dominant aft engine; inertia alone does not.
   force = add(forward,scale(lateral,lateralFraction));
