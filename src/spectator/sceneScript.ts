@@ -61,12 +61,14 @@ export function parseSceneScript(raw: string): SceneScript {
     throw new Error('Unknown scene presentation (directed, continuous_pov or explore).');
   let pov: SceneScript['pov'];
   if (value.pov !== undefined) {
-    if (!isRecord(value.pov) || !isSide(value.pov.side))
+    const requestedPov = value.pov;
+    if (!isRecord(requestedPov) || !isSide(requestedPov.side))
       throw new Error('POV must specify side A or B.');
-    if (value.pov.classId !== undefined &&
-      (typeof value.pov.classId !== 'string' || !SHIP_CLASS_LIST.some(s => s.id === value.pov.classId)))
+    const classId = requestedPov.classId;
+    if (classId !== undefined &&
+      (typeof classId !== 'string' || !SHIP_CLASS_LIST.some(s => s.id === classId)))
       throw new Error('Unknown ship class for POV.');
-    pov = { side: value.pov.side, classId: value.pov.classId as string | undefined };
+    pov = { side: requestedPov.side, classId: classId as string | undefined };
   }
   const environment = value.environment;
   if (environment !== undefined && (typeof environment !== 'string' || !ENVIRONMENTS.includes(environment)))
