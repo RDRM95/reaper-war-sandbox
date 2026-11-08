@@ -47,12 +47,13 @@ export function weaponWorldOffset(ship: ShipState, weapon: WeaponState): Vec3 {
 
 export function inWeaponArc(ship: ShipState, weapon: WeaponState, target: Vec3): boolean {
   if (weapon.def.arc >= 360) return true;
-  const yaw = Math.atan2(ship.heading.x, ship.heading.z) + weapon.facing;
-  const facing = v3(Math.sin(yaw), 0, Math.cos(yaw));
-  const to = normalize(sub(target, ship.pos));
-  const flatTo = normalize(v3(to.x, 0, to.z));
+  // Use the full 3D weapon bore direction. The previous horizontal-only
+  // comparison rejected ships above/below the firing line even when the gun
+  // was properly tracking them, leaving otherwise valid capital battles silent.
+  const facing = normalize(rotateY(ship.heading, weapon.facing));
+  const to = normalize(sub(target, weaponWorldOffset(ship, weapon)));
   const halfArc = weapon.def.arc * Math.PI / 360;
-  return dot(facing, flatTo) >= Math.cos(halfArc + 0.05) && Math.abs(to.y) < 0.6;
+  return dot(facing, to) >= Math.cos(halfArc + 0.05);
 }
 
 function validEnemy(ship: ShipState, target: ShipState | undefined): target is ShipState {
