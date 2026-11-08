@@ -776,7 +776,7 @@ export class BattleSimulation implements AiContext {
         for (const e of this.enemiesNear(ship.side, origin, def.range)) {
           if (!e.alive || e.escaped) continue;
           const d = distance(origin, e.pos);
-          if (d <= def.range && d < best) {
+          if (d <= def.range && this.inArc(ship, w, e.pos) && d < best) {
             best = d;
             target = e;
           }
