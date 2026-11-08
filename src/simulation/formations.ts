@@ -249,8 +249,11 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType, seed: n
       // without making ships wander randomly as the battle progresses.
       const trim = reapers ? 0 : layoutNoise(seed ^ Math.imul(index + 1, 0x71e2a9b7), localIndex, 8) - 0.5;
       const trimZ = reapers ? 0 : layoutNoise(seed ^ Math.imul(index + 1, 0x4cf5ad43), localIndex, 9) - 0.5;
+      // Keep the fleet's overall frontage compatible with existing battlespace
+      // and weapon-range assumptions. Collision clearance is resolved after.
+      const boundedX = (x + dx + trim * clearance * 0.24) * (reapers ? 1 : 0.72);
       slots.set(id, v3(
-        x + dx + trim * clearance * 0.24,
+        boundedX,
         y + p.y + trimZ * clearance * 0.11,
         z + centreZ + dz - Math.abs(dx) * 0.06 + trimZ * clearance * 0.26,
       ));
