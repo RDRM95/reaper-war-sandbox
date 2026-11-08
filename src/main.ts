@@ -420,6 +420,7 @@ function createView(preserveCamera=false){if(!sim)return;
   const cameraState=preserveCamera&&view?{
     mode:view.rig.mode,focus:view.rig.focus.clone(),yaw:view.rig.yaw,
     pitch:view.rig.pitch,distance:view.rig.distance,followId:view.followId,
+    gunneryLockedShipId:view.gunneryLockedShipId,zoomed:view.rig.gunneryZoomed,
     selected:[...view.selectedIds],position:view.rig.camera.position.clone(),
     quaternion:view.rig.camera.quaternion.clone()
   }:undefined;
@@ -440,6 +441,8 @@ function createView(preserveCamera=false){if(!sim)return;
       view.rig.focus.copy(cameraState.focus);
       view.rig.yaw=cameraState.yaw;view.rig.pitch=cameraState.pitch;
       view.rig.distance=cameraState.distance;view.followId=cameraState.followId;
+      view.gunneryLockedShipId=cameraState.gunneryLockedShipId;
+      if(cameraState.zoomed&&cameraState.mode==='gunnery') view.rig.toggleGunneryZoom();
       for(const id of cameraState.selected)view.selectedIds.add(id);
       view.rig.camera.position.copy(cameraState.position);
       view.rig.camera.quaternion.copy(cameraState.quaternion);
