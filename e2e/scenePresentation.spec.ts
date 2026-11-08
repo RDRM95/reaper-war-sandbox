@@ -17,7 +17,8 @@ test('Scripted live scene stays in one real main gun POV instead of cutting on b
   expect(first.scenePresentation).toBe('continuous_pov');
   expect(first.sceneCameraMode).toBe('gunnery');
   expect(first.sceneLockedShipId).toBeTruthy();
-  await page.waitForTimeout(750);
+  await expect.poll(async () => (await diagnostics(page)).time, {timeout: 30000})
+    .toBeGreaterThan(first.time);
   const next = await diagnostics(page);
   expect(next.sceneCameraMode).toBe('gunnery');
   expect(next.sceneLockedShipId).toBe(first.sceneLockedShipId);
@@ -35,7 +36,8 @@ test('Scripted free exploration moves independent of the still-running battle', 
   expect(first.scenePresentation).toBe('explore');
   expect(first.sceneCameraMode).toBe('free');
   await page.keyboard.down('w');
-  await page.waitForTimeout(500);
+  await expect.poll(async () => JSON.stringify((await diagnostics(page)).view.camera), {timeout: 30000})
+    .not.toBe(JSON.stringify(first.view.camera));
   await page.keyboard.up('w');
   const next = await diagnostics(page);
   expect(next.sceneCameraMode).toBe('free');
