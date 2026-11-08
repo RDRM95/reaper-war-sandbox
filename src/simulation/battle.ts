@@ -624,7 +624,11 @@ export class BattleSimulation implements AiContext {
     const h = ship.hangar;
     const oculus = h.classId === 'reaper_oculus';
     const oculusRoom = oculus ? Math.max(0, 24 - (this.oculusLaunchCount.get(fleet.spec.id) ?? 0)) : Infinity;
-    if (fleet.orders.fightersDeployed && h.remaining > 0 && oculusRoom > 0) {
+    // Generic canon scenarios preserve their existing fleet roster. Oculus
+    // wings auto-deploy only in explicit Reaper Hardcore engagements; scenario
+    // designers may still place Oculus fighters directly in any battle.
+    if (fleet.orders.fightersDeployed && h.remaining > 0 && oculusRoom > 0 &&
+        (!oculus || !!this.rules.special.reaperHardcore)) {
       h.launchTimer -= dt;
       if (h.launchTimer <= 0) {
         h.launchTimer = 0.4;
