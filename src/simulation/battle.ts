@@ -58,6 +58,15 @@ import type {
 
 export const SIM_DT = 0.05;
 
+/** Stable per-fleet layout identity. Do not consume combat RNG or hash user
+ * account data: only the battle seed and authored anonymous fleet ID. */
+function fleetSlotSeed(seed: number, fleetId: string): number {
+  let h = (seed | 0) ^ 0x811c9dc5;
+  for (let i = 0; i < fleetId.length; i++)
+    h = Math.imul(h ^ fleetId.charCodeAt(i), 16777619);
+  return h | 0;
+}
+
 const DEFAULT_ORDERS: FleetOrders = {
   order: 'attack',
   formation: 'line_abreast',
@@ -167,6 +176,7 @@ export class BattleSimulation implements AiContext {
     const slots = assignSlots(
       created.map((s) => ({ id: s.id, role: s.role, lengthKm: s.lengthKm })),
       fleet.orders.formation,
+      fleetSlotSeed(this.config.seed, fleet.spec.id),
     );
     for (const s of created) {
       s.slot = slots.get(s.id) ?? v3();
@@ -481,6 +491,7 @@ export class BattleSimulation implements AiContext {
     const slots = assignSlots(
       mine.map((s) => ({ id: s.id, role: s.role, lengthKm: s.lengthKm })),
       fleet.orders.formation,
+      fleetSlotSeed(this.config.seed, fleet.spec.id),
     );
     for (const s of mine) s.slot = slots.get(s.id) ?? s.slot;
   }

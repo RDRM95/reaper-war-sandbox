@@ -26,7 +26,9 @@ const parameters = new URLSearchParams(window.location.search);
 const referenceMode = parameters.get('reference') === 'sol-42';
 // More than 12k hulls are explicitly opt-in via forceLive=1; ordinary UI remains protected.
 const requestedShips = Math.min(50000, Math.max(0, Math.floor(Number(parameters.get('ships')) || 0)));
-const referenceSeconds = Math.min(120, Math.max(0, Number(parameters.get('t') ?? 18) || 18));
+const requestedReferenceTime = Number(parameters.get('t') ?? 18);
+const referenceSeconds = Number.isFinite(requestedReferenceTime)
+  ? Math.min(120, Math.max(0, requestedReferenceTime)) : 18;
 const $ = <T extends HTMLElement = HTMLElement>(id:string):T => {
   const value=document.getElementById(id);
   if(!value) throw new Error('Missing interface element: '+id);
