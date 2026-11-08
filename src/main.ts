@@ -616,8 +616,9 @@ $('gunner').addEventListener('click',()=>{
   gunnery=true;mode='3d';if(!view&&sim)createView();switchMode();
   if(view){
     const chosen=selectedShip?sim?.getShip(selectedShip):undefined;
+    const perspective=sim?.config.perspectiveSide;
     const active=chosen?.alive&&!chosen.escaped&&primaryGunneryMount(chosen)?chosen:
-      sim?.ships.find(s=>s.alive&&!s.escaped&&s.side===sim.config.perspectiveSide&&!!primaryGunneryMount(s));
+      sim?.ships.find(s=>s.alive&&!s.escaped&&s.side===perspective&&!!primaryGunneryMount(s));
     view.followId=active?.id;
     view.gunneryLockedShipId=active?.id;
     view.gunneryWeaponIndex=undefined;
