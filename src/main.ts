@@ -629,7 +629,7 @@ $('gunner').addEventListener('click',()=>{
 });
 $('clean').addEventListener('click',()=>{gunnery=false;telemetry.show(false);$('stage').classList.toggle('clean-recording');});
 $('chase').addEventListener('click',()=>{$('follow').click();});
-$('follow').addEventListener('click',()=>{if(!selectedShip||!sim)return;following=!following;if(view){view.followId=following?selectedShip:undefined;view.rig.setMode(following?'follow':'cinematic');}$('follow').textContent=following?'RELEASE FOLLOW':'FOLLOW SELECTED';});
+$('follow').addEventListener('click',()=>{if(!selectedShip||!sim)return;gunnery=false;telemetry.show(false);$('stage').classList.remove('gunnery-active');$('gunner').classList.remove('active');following=!following;if(view){view.gunneryLockedShipId=undefined;view.followId=following?selectedShip:undefined;view.rig.setMode(following?'follow':'cinematic');}$('follow').textContent=following?'RELEASE FOLLOW':'FOLLOW SELECTED';});
 $('focus').addEventListener('click',()=>{
   if(!sim||!selectedShip||sim.finished)return;const target=sim.getShip(selectedShip);if(!target||!target.alive)return;
   const opposing:Side=target.side==='A'?'B':'A';
