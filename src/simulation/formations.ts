@@ -46,11 +46,11 @@ const SLOT_SCALE = Math.max(BATTLESPACE_SCALE, 0.55);
 // hulls receive the same physical clearance used by large formations.
 const NOMINAL_TIER_MAX_KM = [2.4, 0.56, 0.216, 0.018];
 
-export function assignSlots(ships: SlotShip[], formation: FormationType): Map<string, Vec3> {
+export function assignSlots(ships: SlotShip[], formation: FormationType, seed = 0): Map<string, Vec3> {
   const counts = [0, 0, 0, 0];
   for (const ship of ships) counts[tier(ship.role)]++;
   const large = counts.some((count, i) => count > CHUNK_LIMITS[i]);
-  const raw = large ? assignBattleGroups(ships, formation) : assignSlotsNominal(ships, formation);
+  const raw = large ? assignBattleGroups(ships, formation, seed) : assignSlotsNominal(ships, formation);
   // Spacing between ships compresses with the battlespace, but never below
   // what keeps hulls from overlapping.
   const slots = new Map<string, Vec3>();
@@ -106,36 +106,90 @@ function separateFormationHulls(ships: SlotShip[], slots: Map<string, Vec3>): vo
   }
 }
 
-/** Small mixed-role battlegroups retain their own gun line and escort screen.
- * Their centres follow broad swept fronts rather than repeating boxes in xyz.
- * All variation is deterministic and assigned once: no drift or simulation RNG.
- */
-function assignBattleGroups(ships: SlotShip[], formation: FormationType): Map<string, Vec3> {
+/** Stable, independent layout noise. Never use the combat RNG: layouts must be
+ * reproducible without changing weapon rolls, AI decisions or replay events. */
+function layoutNoise(seed: number, index: number, salt: number): number {
+  let x = (seed ^ Math.imul(index + 1, 0x9e3779b9) ^ Math.imul(salt + 1, 0x85ebca6b)) | 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d);
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b);
+  x ^= x >>> 16;
+  return (x >>> 0) / 4294967296;
+}
+
+/** Different groups may use a local tactical screen or assault wedge, while
+ * the overall fleet still respects its ordered line, column or broad wedge.
+ * Chosen at deployment only; no artificial random movement during combat. */
+function localFormation(formation: FormationType, seed: number, index: number): FormationType {
+  const roll = layoutNoise(seed, index, 17);
+  switch (formation) {
+    case 'line_abreast': return roll < 0.43 ? 'line_abreast' : roll < 0.68 ? 'defensive_screen' : roll < 0.87 ? 'strike_wedge' : 'fighter_screen';
+    case 'strike_wedge': return roll < 0.55 ? 'strike_wedge' : roll < 0.78 ? 'line_abreast' : 'defensive_screen';
+    case 'defensive_screen': return roll < 0.61 ? 'defensive_screen' : roll < 0.85 ? 'line_abreast' : 'fighter_screen';
+    case 'fighter_screen': return roll < 0.60 ? 'fighter_screen' : roll < 0.85 ? 'defensive_screen' : 'line_abreast';
+    case 'capital_column': return roll < 0.82 ? 'capital_column' : 'line_abreast';
+    case 'dispersed': return roll < 0.6 ? 'dispersed' : roll < 0.85 ? 'defensive_screen' : 'line_abreast';
+  }
+}
+
+/** Organics should not resolve into identical rows of cloned battle groups.
+ * Uneven task-group strengths, distinct local formations and broad strategic
+ * salients create a different overview silhouette for each scenario seed.
+ * Individual tactical clearance is maintained by separateFormationHulls().
+ * The layout costs O(N + G log G) on assignment; nothing runs per render frame.
+ * Reaper-only formations deliberately keep their ordered pressure-wave look. */
+function assignBattleGroups(ships: SlotShip[], formation: FormationType, seed: number): Map<string, Vec3> {
   const members: SlotShip[][] = [[], [], [], []];
   for (const ship of ships) members[tier(ship.role)].push(ship);
   const limits = [4, 6, 8, 12];
   const count = Math.max(...members.map((group, i) => Math.ceil(group.length / limits[i])));
   const groups: SlotShip[][] = Array.from({ length: count }, () => []);
-  for (const roleShips of members) roleShips.forEach((ship, i) => groups[i % count].push(ship));
-  const reapers = ships.some(ship => ship.role === 'reaper_capital' || ship.role === 'reaper_destroyer');
-  const layouts = groups.map(group => assignSlotsNominal(group, formation));
+  const reapers = members[0].every(s => s.role === 'reaper_capital')
+    && members[1].every(s => s.role === 'reaper_destroyer')
+    && members[2].length === 0;
+
+  members.forEach((roleShips, role) => {
+    if (reapers) {
+      roleShips.forEach((ship, i) => groups[i % count].push(ship));
+      return;
+    }
+    // Vary cruiser, escort and capital concentrations *independently* so
+    // adjacent groups are not identical 4/6/8/12 templates.
+    const weights = groups.map((_, i) => 0.60 + layoutNoise(seed, i, 30 + role) * 1.20);
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const expected = weights.map(w => roleShips.length * w / sum);
+    const quotas = expected.map(Math.floor);
+    const remaining = roleShips.length - quotas.reduce((a, b) => a + b, 0);
+    const fractions = expected.map((n, i) => ({ i, fraction: n - quotas[i] }))
+      .sort((a, b) => b.fraction - a.fraction || a.i - b.i);
+    for (let i = 0; i < remaining; i++) quotas[fractions[i].i]++;
+    let cursor = 0;
+    for (let i = 0; i < count; i++)
+      for (let k = 0; k < quotas[i]; k++) groups[i].push(roleShips[cursor++]);
+  });
+
+  const layouts = groups.map((group, i) =>
+    assignSlotsNominal(group, reapers ? formation : localFormation(formation, seed, i)));
   let width = 0, depth = 0;
   for (const layout of layouts) {
     const positions = [...layout.values()];
+    if (!positions.length) continue;
     width = Math.max(width, Math.max(...positions.map(p => p.x)) - Math.min(...positions.map(p => p.x)));
     depth = Math.max(depth, Math.max(...positions.map(p => p.z)) - Math.min(...positions.map(p => p.z)));
   }
   const clearance = Math.max(1.8, ...ships.map(ship => ship.lengthKm * 2.5)) / SLOT_SCALE;
   const lateralStride = width + clearance;
   const rearStride = Math.max(depth + clearance, lateralStride * 0.42);
-  // Several wings form each shallow wave; no groups are stacked in height.
   const wings = Math.max(1, Math.ceil(Math.sqrt(count * 1.6)));
   const slots = new Map<string, Vec3>();
+
   layouts.forEach((layout, index) => {
     const wave = Math.floor(index / wings);
     const waveCount = Math.min(wings, count - wave * wings);
     const column = index % wings;
-    const mean = Array.from({ length: waveCount }, (_, i) => spreadIndex(i)).reduce((a, b) => a + b, 0) / waveCount;
+    const mean = Array.from({ length: waveCount }, (_, i) => spreadIndex(i))
+      .reduce((a, b) => a + b, 0) / waveCount;
     const wing = spreadIndex(column) - mean;
     const phase = index * 2.399963229728653;
     let x = wing * lateralStride;
@@ -160,25 +214,45 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType): Map<st
       }
     }
     if (reapers) {
-      // Ordered, offset pressure waves, without Cartesian stacks of capitals.
       x += (wave % 2) * lateralStride * 0.2;
       y += (wave % 2) * clearance * 0.22;
     } else {
-      x += Math.sin(phase) * clearance * 0.18;
-      z += Math.cos(phase * 0.73) * clearance * 0.3;
-      y += Math.sin(phase * 0.57) * clearance * 0.24;
+      // Independent salients, reserve pockets and changing frontage make the
+      // *whole fleet* asymmetric in free-camera zoom, not just the hull spacing.
+      // Preserve the strategic order: columns remain deep, lines remain wide.
+      const isColumn = formation === 'capital_column';
+      const flank = layoutNoise(seed, index, 1) - 0.5;
+      const advance = layoutNoise(seed, index, 2) - 0.5;
+      x += flank * lateralStride * (isColumn ? 0.14 : 0.74);
+      z += advance * rearStride * (isColumn ? 0.30 : 0.88);
+      // Some battlegroups temporarily form reserves or forward assault salients.
+      const commitment = layoutNoise(seed, index, 3);
+      if (commitment < 0.19) z -= rearStride * 0.28;
+      else if (commitment > 0.84) z += rearStride * 0.28;
+      y += (layoutNoise(seed, index, 4) - 0.5) * clearance * 0.28;
     }
+
     const local = [...layout.values()];
+    if (!local.length) return;
     const centreX = (Math.min(...local.map(p => p.x)) + Math.max(...local.map(p => p.x))) / 2;
+    const centreZ = (Math.min(...local.map(p => p.z)) + Math.max(...local.map(p => p.z))) / 2;
+    const yaw = reapers ? 0 : (layoutNoise(seed, index, 5) - 0.5) * 0.34;
+    const cos = Math.cos(yaw), sin = Math.sin(yaw);
+    const scaleX = reapers ? 1 : 0.84 + layoutNoise(seed, index, 6) * 0.32;
+    const scaleZ = reapers ? 1 : 0.84 + layoutNoise(seed, index, 7) * 0.36;
     [...layout].forEach(([id, p], localIndex) => {
-      // Keep neat Reaper wings; organics get bounded differences between hulls,
-      // not a new random destination or an oscillating movement command.
-      const trim = reapers ? 0 : Math.sin((index + 1) * 1.71 + localIndex * 2.41);
-      const localX = p.x - centreX;
+      const localX = (p.x - centreX) * scaleX;
+      const localZ = (p.z - centreZ) * scaleZ;
+      const dx = localX * cos - localZ * sin;
+      const dz = localX * sin + localZ * cos;
+      // Fixed per-hull station offsets prevent repeated internal diamonds,
+      // without making ships wander randomly as the battle progresses.
+      const trim = reapers ? 0 : layoutNoise(seed ^ Math.imul(index + 1, 0x71e2a9b7), localIndex, 8) - 0.5;
+      const trimZ = reapers ? 0 : layoutNoise(seed ^ Math.imul(index + 1, 0x4cf5ad43), localIndex, 9) - 0.5;
       slots.set(id, v3(
-        x + localX + trim * clearance * 0.08,
-        y + p.y + trim * clearance * 0.07,
-        z + p.z - Math.abs(localX) * 0.06 + trim * clearance * 0.12,
+        x + centreX + dx + trim * clearance * 0.24,
+        y + p.y + trimZ * clearance * 0.11,
+        z + centreZ + dz - Math.abs(dx) * 0.06 + trimZ * clearance * 0.26,
       ));
     });
   });
