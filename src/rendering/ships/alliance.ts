@@ -225,9 +225,71 @@ export function buildAllianceCarrier(): BuiltShip {
 /** Cruiser keeps the Alliance capital-slab language on its 520 m hull. */
 export const buildAllianceCruiser = (): BuiltShip => buildAllianceGunship(5.2, 'cruiser');
 
-/** Alliance frigate / Normandy-style hull: ~170–216 m. */
+/** Reference-informed Normandy SR-2. Unlike the ordinary Alliance frigate,
+ * its long needle bow, four aft engine nacelles and swept shoulder panels are
+ * structural geometry, not just paint. It remains an original procedural mesh.
+ */
+export function buildNormandySR2(): BuiltShip {
+  const L = 2.16;
+  const parts = newParts();
+  // Narrow command fuselage and long continuous forward prow.
+  parts.hull.push(at(taperedBox(0.26, 0.16, 1.82, 0.22, 0.95,
+    { frontHeight: 0.24 }), 0, 0.02, 0.105));
+  parts.hullDark.push(at(taperedBox(0.11, 0.055, 1.28, 0.3, 1), 0, -0.055, 0.23));
+  parts.hull.push(at(taperedBox(0.10, 0.09, 0.55, 0.08, 0.88), 0, -0.01, 0.78));
+  parts.hullDark.push(at(new THREE.BoxGeometry(0.17, 0.025, 1.0), 0, 0.105, -0.06));
+  parts.windows.push(at(taperedBox(0.10, 0.025, 0.46, 0.38, 1), 0, 0.13, 0.35));
+
+  const engines: THREE.Vector3[] = [];
+  for (const side of [-1, 1]) {
+    // Two structural swept wings rather than aircraft-style isolated winglets.
+    const wing = new THREE.Shape();
+    const pts: Array<[number, number]> = [
+      [side * 0.09, 0.30], [side * 0.24, 0.10],
+      [side * 0.68, -0.34], [side * 0.78, -0.79],
+      [side * 0.46, -0.72], [side * 0.17, -0.27],
+    ];
+    wing.moveTo(...pts[0]);
+    for (let i = 1; i < pts.length; i++) wing.lineTo(...pts[i]);
+    wing.closePath();
+    const plate = new THREE.ExtrudeGeometry(wing, {
+      depth: 0.045, bevelEnabled: false, steps: 1,
+    });
+    plate.rotateX(Math.PI / 2);
+    plate.translate(0, 0.03, 0);
+    parts.hull.push(plate);
+
+    // Four independent drive pods: two on each side, distinct aft profiles.
+    for (const [i, offset] of [0.47, 0.72].entries()) {
+      const x = side * offset;
+      const podLength = i === 0 ? 0.82 : 0.68;
+      parts.hullDark.push(at(taperedBox(0.16, 0.13, podLength, 0.55, 1),
+        x, -0.02, -0.54));
+      parts.hull.push(at(taperedBox(0.125, 0.055, podLength * 0.76, 0.22, 0.95),
+        x, 0.071, -0.43));
+      parts.accent.push(at(new THREE.BoxGeometry(0.045, 0.018, podLength * 0.62),
+        x, 0.12, -0.44));
+      const thrustZ = -0.54 - podLength * 0.49;
+      parts.engine.push(at(zCylinder(0.055, 0.045, 0.035, 12), x, -0.02, thrustZ));
+      engines.push(new THREE.Vector3(x, -0.02, thrustZ));
+    }
+    // Recessed wing-root plating and the characteristic pale shoulder taper.
+    parts.hullDark.push(at(taperedBox(0.19, 0.075, 0.68, 0.48, 1),
+      side * 0.26, 0.05, -0.26));
+    parts.accent.push(at(new THREE.BoxGeometry(0.042, 0.023, 0.55),
+      side * 0.14, 0.112, -0.12));
+  }
+  parts.hullDark.push(at(new THREE.BoxGeometry(0.26, 0.15, 0.29), 0, 0, -0.80));
+  const built = assemble(parts, 'alliance', engines, L,
+    new THREE.Vector3(0, -0.012, 1.068));
+  built.group.name = 'SSV Normandy SR-2 (original procedural reconstruction)';
+  return built;
+}
+
+/** Ordinary Alliance frigate: independently retained at 170 m. */
 export function buildAllianceFrigate(normandy = false): BuiltShip {
-  const L = normandy ? 2.16 : 1.7;
+  if (normandy) return buildNormandySR2();
+  const L = 1.7;
   const parts = newParts();
   // Fuselage.
   parts.hull.push(taperedBox(0.28, 0.2, L * 0.72, 0.45, 0.9, { frontHeight: 0.5 }).translate(0, 0.02, L * 0.08));
@@ -253,7 +315,6 @@ export function buildAllianceFrigate(normandy = false): BuiltShip {
   parts.engine.push(at(zCylinder(0.05, 0.04, 0.05, 10), -0.09, 0.0, -L * 0.5 + 0.02));
   // Stripe (Normandy: black/white with blue; standard: blue).
   parts.accent.push(at(new THREE.BoxGeometry(0.3, 0.02, 0.5), 0, 0.12, -0.1));
-  if (normandy) parts.hullDark.push(at(new THREE.BoxGeometry(0.29, 0.21, 0.25), 0, 0.02, -0.55));
   const engineNodes = [new THREE.Vector3(0.78, -0.06, -0.8), new THREE.Vector3(-0.78, -0.06, -0.8), new THREE.Vector3(0.09, 0, -L * 0.5), new THREE.Vector3(-0.09, 0, -L * 0.5)];
   return assemble(parts, 'alliance', engineNodes, L, new THREE.Vector3(0, -0.02, L * 0.5));
 }
