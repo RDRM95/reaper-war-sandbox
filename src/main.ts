@@ -527,6 +527,8 @@ function currentConfig(){
   return config;
 }
 function launch(){try{
+  sceneViewInitialized=false;
+  freeKeys.clear();
   $('quick-report').hidden=true;
   $('error').hidden=true;viewError=undefined;
   const config=activeScene?stageSceneConfig(currentConfig(),activeScene):currentConfig();
