@@ -82,6 +82,8 @@ export class BattleView {
   alpha = 0;
   selectedIds = new Set<string>();
   followId?: string;
+  /** A gunnery camera can never jump to another hull after locking. */
+  gunneryLockedShipId?: string;
   /** Last confirmed non-PD firing mount for the first-person view. */
   gunneryWeaponIndex?: number;
   gunneryShot?: { t: number; shipId: string; targetId: string; weaponIndex: number; kind: string };
@@ -441,7 +443,8 @@ export class BattleView {
               this.nextBeamShieldAt.set(t.id, sim.time + 0.25);
             }
           }
-          const intensity = kind === 'reaper_beam' ? (ship.role === 'reaper_capital' ? 1.3 : 0.7) : 0.9;
+          const intensity = w.def.id === 'oculus_beam' ? 0.19 :
+            kind === 'reaper_beam' ? (ship.role === 'reaper_capital' ? 1.3 : 0.7) : 0.9;
           beams.push({ start, end, kind, intensity });
       }
     }
@@ -518,7 +521,7 @@ export class BattleView {
     v.removed = true;
     const camDist = this.rig.camera.position.distanceTo(pos);
     this.rig.addShake(Math.min(1, (v.built.lengthUnits * 30) / Math.max(50, camDist)));
-    if (this.followId === ship.id) this.followId = undefined;
+    if (this.followId === ship.id && this.rig.mode !== 'gunnery') this.followId = undefined;
     this.selectedIds.delete(ship.id);
   }
 
@@ -663,20 +666,14 @@ export class BattleView {
     }
     let gunnery: { position: THREE.Vector3; aim: THREE.Vector3 } | undefined;
     if (this.rig.mode === 'gunnery') {
-      let ship = this.followId ? sim.getShip(this.followId) : undefined;
-      if ((!ship || !ship.alive || ship.escaped) && this.gunnerySignalLost) {
-        // Hold the last optical orientation while the ship's feed drops.
-        const station=this.rig.camera.position.clone();
-        const aim=station.clone().add(new THREE.Vector3(0,0,-1000).applyQuaternion(this.rig.camera.quaternion));
-        gunnery={position:station,aim};
-      } else if (!ship || !ship.alive || ship.escaped) {
-        // Fallback picks one persistent live warship, never a random camera cut.
-        ship = sim.ships.find(s => s.alive && !s.escaped &&
-          s.side === sim.config.perspectiveSide && s.role === 'dreadnought') ??
-          sim.ships.find(s => s.alive && !s.escaped &&
-          s.side === sim.config.perspectiveSide && s.weapons.some(w => !w.def.antiSmall));
-        this.followId = ship?.id;
-        this.gunneryWeaponIndex = undefined;
+      const id = this.gunneryLockedShipId ?? this.followId;
+      const ship = id ? sim.getShip(id) : undefined;
+      if (!ship || !ship.alive || ship.escaped || this.gunnerySignalLost) {
+        // Never switch ship, barrel or target after signal loss. Hold the last
+        // optical orientation until the user explicitly chooses another POV.
+        const station = this.rig.camera.position.clone();
+        const aim = station.clone().add(new THREE.Vector3(0,0,-1000).applyQuaternion(this.rig.camera.quaternion));
+        gunnery = { position: station, aim };
       }
       if (ship && ship.alive && !ship.escaped && !this.gunnerySignalLost) {
         // First-person optics always remain on the selected MAIN emitter.
@@ -691,12 +688,10 @@ export class BattleView {
             (pos.y + (ship.prevPos.y - ship.pos.y) * (1 - interpolation)) * KM,
             (pos.z + (ship.prevPos.z - ship.pos.z) * (1 - interpolation)) * KM
           ).addScaledVector(fwd, Math.max(0.18, ship.radiusKm * KM * 0.2));
-          const targetId = weapon.beamRemaining > 0 && weapon.beamTargetId ?
-            weapon.beamTargetId : ship.targetId;
-          const target = targetId ? sim.getShip(targetId) : undefined;
-          const aim = target && target.alive && !target.escaped ?
-            new THREE.Vector3(target.pos.x, target.pos.y, target.pos.z).multiplyScalar(KM) :
-            station.clone().addScaledVector(fwd, 2000);
+          // Fixed forward-axis sight: the main-gun camera must NEVER swivel
+          // after a target lock or switch. Target positions are independently
+          // projected into the transparent HUD as real telemetry markers.
+          const aim = station.clone().addScaledVector(fwd, 2000);
           // Optical alignment is observational; the combat solver still
           // determines if the actual mount can fire or hit the target.
           gunnery = { position: station, aim };

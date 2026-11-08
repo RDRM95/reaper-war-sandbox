@@ -17,6 +17,8 @@ const tidy = (s:string)=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replac
 export class TargetTelemetry {
   readonly root:HTMLDivElement;
   private marker:HTMLDivElement;
+  private readonly zoomButton: HTMLButtonElement;
+  private opticalView?: BattleView;
   private panel:HTMLDivElement;
   private readout:HTMLDivElement;
   private base=new THREE.Vector3();
@@ -34,13 +36,15 @@ export class TargetTelemetry {
     const root=document.createElement('div');
     root.className='target-telemetry';
     root.hidden=true;
-    root.innerHTML='<div class="target-scope"><span class="scope-top">FIRST-PERSON GUNNERY // DIRECT LIVE FIRE CONTROL</span><div class="scope-center">+</div><span class="scope-bottom">WEAPONS ARE AUTONOMOUS · NO SYNTHETIC FIRING</span></div><div class="gunnery-line" role="status"></div><div class="gunnery-warning" aria-live="polite"></div><div class="charge-track"><i class="charge-fill"></i></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="gunner-readout-panel"></div><div class="fire-readout"></div>';
+    root.innerHTML='<div class="target-scope"><span class="scope-top">FIRST-PERSON GUNNERY // DIRECT LIVE FIRE CONTROL</span><div class="scope-center">+</div><span class="scope-bottom">WEAPONS ARE AUTONOMOUS · NO SYNTHETIC FIRING</span></div><button type="button" class="gunnery-zoom" aria-label="Toggle gunnery optical zoom">ZOOM ×2 · Z</button><div class="gunnery-line" role="status"></div><div class="gunnery-warning" aria-live="polite"></div><div class="charge-track"><i class="charge-fill"></i></div><div class="target-marker" aria-hidden="true"><span></span></div><div class="gunner-readout-panel"></div><div class="fire-readout"></div>';
     stage.append(root);
     this.root=root;
     this.line=root.querySelector('.gunnery-line') as HTMLDivElement;
     this.warning=root.querySelector('.gunnery-warning') as HTMLDivElement;
     this.charge=root.querySelector('.charge-fill') as HTMLElement;
     this.marker=root.querySelector('.target-marker') as HTMLDivElement;
+    this.zoomButton=root.querySelector('.gunnery-zoom') as HTMLButtonElement;
+    this.zoomButton.addEventListener('click',()=>this.opticalView?.rig.toggleGunneryZoom());
     this.panel=root.querySelector('.gunner-readout-panel') as HTMLDivElement;
     this.readout=root.querySelector('.fire-readout') as HTMLDivElement;
   }
@@ -74,6 +78,8 @@ export class TargetTelemetry {
 
   update(sim:BattleSimulation,view:BattleView,shipId:string|undefined){
     if(!this.enabled)return;
+    this.opticalView = view;
+    this.zoomButton.textContent = view.rig.gunneryZoomed ? 'ZOOM ×1 · Z' : 'ZOOM ×2 · Z';
     const lost=performance.now()<this.signalLossUntilMs || view.gunnerySignalLost;
     this.root.classList.toggle('signal-lost',lost);
     if(lost){

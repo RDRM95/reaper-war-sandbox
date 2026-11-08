@@ -4,6 +4,7 @@
  * starts only after a user gesture, per browser policy.
  */
 export type SoundId =
+  | 'oculus_pulse'
   | 'gunner_spinal'
   | 'gunner_beam'
   | 'gunner_thanix'
@@ -178,6 +179,13 @@ export class AudioEngine {
         this.tone('triangle', 75, 36, .46, .24*att, bus);
         this.noise(.16, 'lowpass', 240, .8, .25*att, bus);
         this.tone('sine', 48, 33, .82, .13*att, bus, .07);
+        break;
+      case 'oculus_pulse':
+        // A compact red particle-emitter discharge, not the two-second
+        // capital Reaper horn. Short electrical chirp plus low hull resonance.
+        this.tone('sawtooth', 760, 310, 0.40, 0.09 * att, bus);
+        this.tone('triangle', 220, 100, 0.58, 0.075 * att, bus, 0.025);
+        this.noise(0.09, 'highpass', 1350, 1, 0.045 * att, bus);
         break;
       case 'gunner_beam':
         // Inside a Reaper: structural field resonance, not a duplicated
