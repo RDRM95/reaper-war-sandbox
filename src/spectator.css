@@ -391,3 +391,35 @@ button:hover:not(:disabled) { box-shadow: inset 0 1px 0 rgba(190, 231, 255, .17)
   .scene-dialog textarea { min-height:45vh; }
   .scene-caption { max-width:94%; bottom:18%; }
 }
+
+/* Unobstructed optical gunnery: faint hairlines and compact target corners. */
+.target-telemetry .scope-center,
+.stage.gunnery-active .target-telemetry .scope-center {
+  font-size:13px; font-weight:300; opacity:.32; text-shadow:none;
+}
+.target-telemetry .scope-center:before,
+.stage.gunnery-active .target-telemetry .scope-center::before {
+  width:44px; height:44px; border:1px solid rgba(160,210,230,.13);
+  box-shadow:none; background:transparent;
+}
+.target-telemetry .target-marker,
+.stage.gunnery-active .target-telemetry .target-marker {
+  width:38px; height:38px; border:0; box-shadow:none;
+  color:rgba(155,205,227,.5); opacity:.40; background:transparent;
+}
+.target-telemetry .target-marker:before,
+.target-telemetry .target-marker:after,
+.target-telemetry .target-marker span:before,
+.target-telemetry .target-marker span:after {
+  width:7px; height:7px; border-width:1px; background:transparent;
+}
+.target-telemetry .gunnery-zoom {
+  position:absolute; right:22px; top:108px; z-index:3;
+  pointer-events:auto; cursor:pointer; padding:7px 10px;
+  background:rgba(6,18,28,.67); color:#a6c5d5;
+  border:1px solid rgba(143,189,212,.24);
+  font:10px ui-monospace,monospace; letter-spacing:.06em;
+}
+.target-telemetry .gunnery-zoom:hover,.target-telemetry .gunnery-zoom:focus-visible {
+  color:#edf9ff; border-color:rgba(173,212,232,.75);
+}
