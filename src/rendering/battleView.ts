@@ -688,12 +688,10 @@ export class BattleView {
             (pos.y + (ship.prevPos.y - ship.pos.y) * (1 - interpolation)) * KM,
             (pos.z + (ship.prevPos.z - ship.pos.z) * (1 - interpolation)) * KM
           ).addScaledVector(fwd, Math.max(0.18, ship.radiusKm * KM * 0.2));
-          const targetId = weapon.beamRemaining > 0 && weapon.beamTargetId ?
-            weapon.beamTargetId : ship.targetId;
-          const target = targetId ? sim.getShip(targetId) : undefined;
-          const aim = target && target.alive && !target.escaped ?
-            new THREE.Vector3(target.pos.x, target.pos.y, target.pos.z).multiplyScalar(KM) :
-            station.clone().addScaledVector(fwd, 2000);
+          // Fixed forward-axis sight: the main-gun camera must NEVER swivel
+          // after a target lock or switch. Target positions are independently
+          // projected into the transparent HUD as real telemetry markers.
+          const aim = station.clone().addScaledVector(fwd, 2000);
           // Optical alignment is observational; the combat solver still
           // determines if the actual mount can fire or hit the target.
           gunnery = { position: station, aim };
