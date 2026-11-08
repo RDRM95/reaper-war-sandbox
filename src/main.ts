@@ -767,6 +767,9 @@ function frame(now:number){const elapsedMs=last?Math.max(0,now-last):16.667;cons
 // Read-only testing interface. No gameplay state is changed by inspection.
 (window as Window & { __reaperDiagnostics?: (summaryOnly?:boolean) => unknown }).__reaperDiagnostics=(summaryOnly=false)=>({
   seed:sim?.config.seed,time:sim?.time,shipCount:sim?.ships.length,
+  scenePresentation:activeScene?.presentation??null,
+  sceneCameraMode:view?.rig.mode??null,
+  sceneLockedShipId:view?.gunneryLockedShipId??null,
   frameMsAverage:frameTimes.reduce((a,b)=>a+b,0)/Math.max(1,frameTimes.length),
   frameMsP95:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.ceil(frameTimes.length*0.95)-1)]??0,
   frameMsP99:[...frameTimes].sort((a,b)=>a-b)[Math.max(0,Math.ceil(frameTimes.length*0.99)-1)]??0,
