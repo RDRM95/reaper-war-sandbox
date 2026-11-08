@@ -70,13 +70,13 @@ export function shipEngagementRange(ship: ShipState): number {
 export function engagementBand(ship: ShipState): { min: number; preferred: number; max: number } {
   const range = shipEngagementRange(ship);
   switch (ship.role) {
-    case 'dreadnought': return { min: range * 0.48, preferred: range * 0.70, max: range * 0.84 };
-    case 'carrier': return { min: range * 0.70, preferred: range * 0.82, max: range * 0.92 };
-    case 'reaper_capital': return { min: range * 0.36, preferred: range * 0.61, max: range * 0.79 };
-    case 'reaper_destroyer': return { min: range * 0.34, preferred: range * 0.59, max: range * 0.81 };
-    case 'cruiser': return { min: range * 0.44, preferred: range * 0.66, max: range * 0.84 };
-    case 'frigate': return { min: range * 0.36, preferred: range * 0.62, max: range * 0.84 };
-    case 'fighter': return { min: range * 0.20, preferred: range * 0.52, max: range * 0.80 };
+    case 'dreadnought': return { min: range * 0.72, preferred: range * 0.84, max: range * 0.93 };
+    case 'carrier': return { min: range * 0.80, preferred: range * 0.90, max: range * 0.96 };
+    case 'reaper_capital': return { min: range * 0.50, preferred: range * 0.68, max: range * 0.86 };
+    case 'reaper_destroyer': return { min: range * 0.45, preferred: range * 0.64, max: range * 0.84 };
+    case 'cruiser': return { min: range * 0.62, preferred: range * 0.76, max: range * 0.91 };
+    case 'frigate': return { min: range * 0.56, preferred: range * 0.72, max: range * 0.89 };
+    case 'fighter': return { min: range * 0.40, preferred: range * 0.70, max: range * 0.88 };
   }
 }
 
