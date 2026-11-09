@@ -80,18 +80,19 @@ export class TargetTelemetry {
     if(!this.enabled)return;
     this.opticalView = view;
     this.zoomButton.textContent = view.rig.gunneryZoomed ? 'ZOOM ×1 · Z' : 'ZOOM ×2 · Z';
-    const lost=performance.now()<this.signalLossUntilMs || view.gunnerySignalLost;
+    const source=shipId?sim.shipById.get(shipId):undefined;
+    const platformLost=!!shipId&&(!source||!source.alive||source.escaped);
+    const lost=platformLost || performance.now()<this.signalLossUntilMs || view.gunnerySignalLost;
     this.root.classList.toggle('signal-lost',lost);
     if(lost){
       this.marker.hidden=true;
       this.warning.textContent='';
-      this.line.textContent='SIGNAL LOST · AUTO-REACQUIRING';
+      this.line.textContent=platformLost?'SIGNAL LOST · STATION ENDED':'SIGNAL LOST · LINK INTERRUPTED';
       this.panel.textContent='TELEMETRY LINK INTERRUPTED';
       this.readout.textContent='STANDBY';
       this.charge.style.width='0%';
       return;
     }
-    const source=shipId?sim.shipById.get(shipId):undefined;
     if(!source||!source.alive||source.escaped){
       this.panel.textContent='SELECT A LIVING VESSEL TO ACCESS ITS GUNNERY TELEMETRY';
       this.readout.textContent='NO ACTIVE WEAPON PLATFORM';

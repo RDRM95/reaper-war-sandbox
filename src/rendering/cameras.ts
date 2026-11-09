@@ -88,8 +88,7 @@ export class CameraRig {
   toggleGunneryZoom(): void {
     if (this.mode !== 'gunnery') return;
     this.gunneryZoomed = !this.gunneryZoomed;
-    this.camera.fov = this.gunneryZoomed ? 25 : 50;
-    this.camera.updateProjectionMatrix();
+
   }
 
   addShake(amount: number): void {
@@ -129,7 +128,7 @@ export class CameraRig {
    * modes; `cinematic` supplies a framing pair; `projectile` is the tracked
    * round. Any may be undefined, in which case the rig falls back to tactical.
    */
-  update(dt: number, opts: { subject?: CameraSubject; cinematic?: CinematicFrame; projectile?: CameraSubject; gunnery?: { position: THREE.Vector3; aim: THREE.Vector3 }; fleetCentre: THREE.Vector3 }): void {
+  update(dt: number, opts: { subject?: CameraSubject; cinematic?: CinematicFrame; projectile?: CameraSubject; gunnery?: { position: THREE.Vector3; aim: THREE.Vector3; signalLost?: boolean }; fleetCentre: THREE.Vector3 }): void {
     const cam = this.camera;
     let instant = false;
     switch (this.mode) {
@@ -147,6 +146,7 @@ export class CameraRig {
       case 'gunnery': {
         const station = opts.gunnery;
         if (!station) return this.fallback(dt, opts.fleetCentre);
+        if (station.signalLost) this.shake = 0;
         this.desiredPos.copy(station.position);
         this.desiredLook.copy(station.aim);
         instant = true;
@@ -250,6 +250,13 @@ export class CameraRig {
       this.shake = Math.max(0, this.shake - dt * 2.5);
     }
     cam.lookAt(this.currentLook);
+    // Optical magnification changes the lens only. Ease in tangent space so
+    // the target reaches an exact 2x scale without moving the mounted camera.
+    const targetTangent = Math.tan(THREE.MathUtils.degToRad(25)) /
+      (this.mode === 'gunnery' && this.gunneryZoomed ? 2 : 1);
+    const tangent = THREE.MathUtils.lerp(Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)),
+      targetTangent, 1 - Math.exp(-Math.max(0, dt) * 12));
+    cam.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tangent));
     // Gun cameras sit immediately at the muzzle and need a close near plane.
     const d = cam.position.distanceTo(this.currentLook);
     cam.near = this.mode === 'gunnery' ? 0.06 : THREE.MathUtils.clamp(d * 0.002, 0.2, 50);
