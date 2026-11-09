@@ -1,5 +1,6 @@
 import type { BattleConfig, Environment, FleetSpec, Side } from '@/simulation/types';
 import { SHIP_CLASS_LIST } from '@/data/ships';
+import { WEAPONS } from '@/data/weapons';
 
 /** A scene is a shot list over a REAL deterministic battle, never a canned animation. */
 export type SceneShot = 'wide' | 'cinematic' | 'follow' | 'reaper';
@@ -117,9 +118,22 @@ export function parseSceneScript(raw: string): SceneScript {
 export function stageSceneConfig(base: BattleConfig, script: SceneScript): BattleConfig {
   if (script.presentation === 'continuous_pov') {
     const side = script.pov?.side ?? base.perspectiveSide;
+    // Validate the physical station as well as roster presence before the
+    // caller replaces its running simulation. Carriers/PD-only craft cannot
+    // supply a forward anti-capital barrel to the continuous POV camera.
+    const hasStation = (classId: string): boolean => {
+      const cls = SHIP_CLASS_LIST.find(ship => ship.id === classId);
+      return !!cls?.hardpoints.some(mount => {
+        const weapon = WEAPONS[mount.weaponId];
+        return mount.count > 0 && !!weapon &&
+          ['mass_accelerator', 'reaper_beam', 'thanix'].includes(weapon.kind) &&
+          weapon.antiCapital && !weapon.antiSmall && weapon.arc <= 115 &&
+          Math.abs(mount.facing) <= 60;
+      });
+    };
     if (!base.fleets.some(f => f.side === side && (f.arrivalTime ?? 0) === 0 &&
-      f.ships.some(ship => ship.count > 0 && (!script.pov?.classId || script.pov.classId === ship.classId))))
-      throw new Error('The selected POV ship is absent from the starting fleet on side ' + side + '.');
+      f.ships.some(ship => ship.count > 0 && (!script.pov?.classId || script.pov.classId === ship.classId) && hasStation(ship.classId))))
+      throw new Error('No starting forward main-battery station matches the POV on side ' + side + '.');
   }
   const additional: FleetSpec[] = script.waves.map((wave, i) => {
     const parent = base.fleets.find(f => f.side === wave.side && (f.arrivalTime ?? 0) === 0);
