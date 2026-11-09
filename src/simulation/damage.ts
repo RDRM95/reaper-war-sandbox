@@ -2,6 +2,7 @@ import type { Rng } from '@/core/rng';
 import { BARRIER_EFFICIENCY } from '@/data/weapons';
 import type { EffectiveWeapon } from '@/timelines/rules';
 import type { ShipState, Subsystems } from './types';
+import { transplantedHullDamage } from './techTransplants';
 
 export interface DamageOutcome {
   /** Damage absorbed by kinetic barriers. */
@@ -45,22 +46,33 @@ export function applyDamage(target: ShipState, raw: number, weapon: EffectiveWea
   }
   if (amount <= 0) return out;
 
-  const armourEff = target.armour * (1 - weapon.armourBypass);
-  const reduction = Math.max(0, armourEff * Math.max(0, 1.2 - weapon.penetration));
-  let hullDamage = Math.max(amount * 0.15, amount - reduction);
-  hullDamage = Math.min(hullDamage, amount);
-  // Ablation: armour wears down under sustained fire.
-  target.armour = Math.max(0, target.armour - hullDamage * 0.002);
+  const exotic = target.defenseTransplant;
+  let hullDamage: number;
+  if (exotic) {
+    // Adamantium prevents ordinary plating penetration and vibranium absorbs
+    // transmitted shock. Small residual damage represents heat and vulnerable
+    // external equipment, not an adamantium plate being worn away.
+    hullDamage = transplantedHullDamage(exotic, weapon.damageType, amount);
+  } else {
+    const armourEff = target.armour * (1 - weapon.armourBypass);
+    const reduction = Math.max(0, armourEff * Math.max(0, 1.2 - weapon.penetration));
+    hullDamage = Math.max(amount * 0.15, amount - reduction);
+    hullDamage = Math.min(hullDamage, amount);
+    // Canonical armour continues to ablate under sustained fire.
+    target.armour = Math.max(0, target.armour - hullDamage * 0.002);
+  }
 
   target.hull -= hullDamage;
   out.hullDamage = hullDamage;
   target.stats.damageTaken += hullDamage;
 
-  // Subsystem damage: proportional to how large the hit was relative to the hull.
-  const severity = hullDamage / target.maxHull;
-  if (severity > 0.03 && rng.chance(Math.min(0.6, severity * 4))) {
+  // Exposed engines, sensors and weapon mounts can still be disabled without
+  // penetrating an exotic hull. Canon damage and RNG remain unchanged if off.
+  const severity = (exotic ? amount : hullDamage) / Math.max(1, target.maxHull);
+  const chance = Math.min(exotic ? 0.18 : 0.6, severity * (exotic?.subsystemChanceScale ?? 4));
+  if (severity > 0.03 && rng.chance(chance)) {
     const which = rng.pick(['engines', 'weapons', 'sensors'] as const);
-    const drop = Math.min(0.5, severity * 3);
+    const drop = Math.min(exotic ? 0.10 : 0.5, severity * (exotic?.subsystemDropScale ?? 3));
     target.subsystems[which] = Math.max(0.1, target.subsystems[which] - drop);
     out.subsystem = { name: which, level: target.subsystems[which] };
   }
@@ -82,7 +94,7 @@ export function applyProjectileDamage(target: ShipState, raw: number, weapon: Ef
   const fraction = weapon.kind === 'mass_accelerator' ? Math.max(0, Math.min(0.8, weapon.internalWarheadFraction ?? 0)) : 0;
   if (fraction === 0) return applyDamage(target, raw, weapon, rng, now);
   const kinetic = applyDamage(target, raw * (1 - fraction), weapon, rng, now);
-  if (kinetic.hullDamage <= 0) return kinetic;
+  if (kinetic.hullDamage <= 0 || target.defenseTransplant?.blocksInternalWarheads) return kinetic;
   const internal = applyDamage(target, raw * fraction, { ...weapon, damageType: 'warhead', armourBypass: 1, barrierEfficiencyMultiplier: 0 }, rng, now);
   return {
     hullDamage: kinetic.hullDamage + internal.hullDamage,
