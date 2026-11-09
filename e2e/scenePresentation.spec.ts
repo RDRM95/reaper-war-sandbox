@@ -56,3 +56,20 @@ test('Scene POV preflight does not replace a running battle with an absent ship'
   await expect(page.locator('#scene-panel')).toBeVisible();
   await expect(page.locator('#scene-status')).toContainText('SCRIPT ERROR');
 });
+
+test('Scene POV rejects a present carrier with no main barrel before replacing the battle',async({page})=>{
+ await page.goto('/');
+ await expect.poll(async()=>(await diagnostics(page)).time).toBeGreaterThan(0);
+ const before=await diagnostics(page);
+ await page.locator('#scene-script').click();
+ await page.locator('#scene-pov-example').click();
+ const raw=JSON.parse(await page.locator('#scene-json').inputValue());
+ raw.pov={side:'A',classId:'alliance_carrier'};
+ await page.locator('#scene-json').fill(JSON.stringify(raw));
+ await page.locator('#scene-run').click();
+ await expect(page.locator('#scene-panel')).toBeVisible();
+ await expect(page.locator('#scene-status')).toContainText('SCRIPT ERROR');
+ const after=await diagnostics(page);
+ expect(after.time).toBeGreaterThanOrEqual(before.time);
+ expect(after.scenePresentation).toBeNull();
+});
