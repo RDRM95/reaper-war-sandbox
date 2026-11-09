@@ -80,13 +80,16 @@ export function makePlanetTexture(style: PlanetStyle, size = 1024): THREE.Canvas
     const img = ctx.createImageData(w, h);
     const d = img.data;
     for (let y = 0; y < h; y++) {
-      const lat = (y / h - 0.5) * 2; // -1..1
+      const lat = (y / Math.max(1, h - 1) - 0.5) * 2; // -1..1
       const polar = Math.pow(Math.abs(lat), 6);
       for (let x = 0; x < w; x++) {
         // Wrap horizontally by sampling in a cylinder.
         const u = x / w;
-        const nx = Math.cos(u * Math.PI * 2) * 3 + 10;
-        const ny = Math.sin(u * Math.PI * 2) * 3 + 10;
+        // Longitude circles shrink to one point at each pole. A constant
+        // cylinder radius produced radial texture/cloud streaks in orbit.
+        const ring = Math.cos(lat * Math.PI / 2);
+        const nx = Math.cos(u * Math.PI * 2) * 3 * ring + 10;
+        const ny = Math.sin(u * Math.PI * 2) * 3 * ring + 10;
         const e = fbm(noise, nx + lat * 4, ny + lat * 7, 6) + 0.1 * fbm(noise, nx * 4, ny * 4, 3);
         const i = (y * w + x) * 4;
         let r: number, g: number, b: number;
@@ -131,11 +134,14 @@ export function makeCloudTexture(style: PlanetStyle, size = 1024): THREE.CanvasT
     const n = makeNoise(rng, 96);
     const img = ctx.createImageData(w, h);
     for (let y = 0; y < h; y++) {
-      const lat = (y / h - 0.5) * 2;
+      const lat = (y / Math.max(1, h - 1) - 0.5) * 2;
       for (let x = 0; x < w; x++) {
         const u = x / w;
-        const nx = Math.cos(u * Math.PI * 2) * 3 + 10;
-        const ny = Math.sin(u * Math.PI * 2) * 3 + 10;
+        // Longitude circles shrink to one point at each pole. A constant
+        // cylinder radius produced radial texture/cloud streaks in orbit.
+        const ring = Math.cos(lat * Math.PI / 2);
+        const nx = Math.cos(u * Math.PI * 2) * 3 * ring + 10;
+        const ny = Math.sin(u * Math.PI * 2) * 3 * ring + 10;
         const cloud = fbm(n, nx * 2.3 + lat, ny * 2.3 + lat * 4.2, 6);
         const coverage = Math.max(0, Math.min(1, (cloud - (0.68 - style.cloudiness * 0.30)) * 6));
         const alpha = Math.round(230 * coverage * coverage * (3 - 2 * coverage));
@@ -147,6 +153,41 @@ export function makeCloudTexture(style: PlanetStyle, size = 1024): THREE.CanvasT
       }
     }
     ctx.putImageData(img, 0, 0);
+  });
+}
+
+/** A planetary surface receives sunlight, not the camera-relative studio fill
+ * used to keep metallic ships legible. Its day/night boundary stays fixed as
+ * the spectator camera moves. Cloud alpha uses the same solar shading. */
+function planetSurfaceMaterial(map: THREE.Texture, sunDirection: THREE.Vector3, opacity = 1): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { map: { value: map }, sunDirection: { value: sunDirection.clone().normalize() }, opacity: { value: opacity } },
+    vertexShader: `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      varying vec2 vUv; varying vec3 vWorldNormal;
+      void main(){
+        vUv = uv;
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <logdepthbuf_vertex>
+      }`,
+    fragmentShader: `
+      #include <logdepthbuf_pars_fragment>
+      uniform sampler2D map; uniform vec3 sunDirection; uniform float opacity;
+      varying vec2 vUv; varying vec3 vWorldNormal;
+      void main(){
+        #include <logdepthbuf_fragment>
+        vec4 albedo = texture2D(map, vUv);
+        float alpha = albedo.a * opacity;
+        if(alpha < 0.015) discard;
+        float daylight = max(0.0, dot(normalize(vWorldNormal), sunDirection));
+        vec3 irradiance = vec3(0.008, 0.012, 0.020) + vec3(1.12, 1.06, 0.98) * daylight;
+        gl_FragColor = vec4(albedo.rgb * irradiance, alpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false,
   });
 }
 
@@ -189,7 +230,7 @@ export function makeAtmosphere(radius: number, color: number, sunDirection = new
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const m = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.035, 96, 64), mat);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.012, 96, 64), mat);
   m.renderOrder = -1;
   return m;
 }
@@ -411,22 +452,23 @@ export function buildEnvironment(env: Environment, textureResolution = 1024, sho
 
   const addPlanet = (style: PlanetStyle, radius: number, position: THREE.Vector3, label: string, moon?: boolean) => {
     const tex = makePlanetTexture(style, textureResolution);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.0, color: 0xffffff });
+    const mat = planetSurfaceMaterial(tex, sunDirection);
+    mat.transparent = false;
+    mat.depthWrite = true;
     const p = new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 64), mat);
     p.position.copy(position);
-    p.rotation.y = 1.2;
+    // The battle lies above the sphere's +Y pole. Tilt the texture axis so
+    // orbital views show seas/terrain rather than an oversized polar ice cap.
+    p.rotation.set(0, 1.2, 1.1);
     p.name = 'planet';
     group.add(p);
     if (showClouds && style.cloudiness > 0) {
       const cloudMap = makeCloudTexture(style, Math.min(2048, textureResolution));
-      const cloudMat = new THREE.MeshStandardMaterial({
-        map: cloudMap, transparent: true, depthWrite: false, roughness: 1,
-        metalness: 0, color: 0xffffff, alphaTest: 0.015,
-        opacity: darkSpace ? 0.7 : 1
-      });
+      const cloudMat = planetSurfaceMaterial(cloudMap, sunDirection, darkSpace ? 0.7 : 1);
       clouds = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.008, 96, 64), cloudMat);
       clouds.position.copy(position);
-      clouds.rotation.y = p.rotation.y + 0.018;
+      clouds.rotation.copy(p.rotation);
+      clouds.rotation.y += 0.018;
       clouds.name = 'clouds';
       group.add(clouds);
     }
@@ -528,6 +570,12 @@ export function disposeEnvironment(env: EnvironmentBuild): void {
     for (const material of candidates) {
       if (materials.has(material)) continue;
       materials.add(material);
+      if ((material as THREE.ShaderMaterial).isShaderMaterial) {
+        for (const uniform of Object.values((material as THREE.ShaderMaterial).uniforms)) {
+          const texture = uniform.value as THREE.Texture | null;
+          if (texture?.isTexture) textures.add(texture);
+        }
+      }
       for (const property of Object.values(material)) {
         const texture = property as THREE.Texture | null;
         if (texture && texture.isTexture) textures.add(texture);
