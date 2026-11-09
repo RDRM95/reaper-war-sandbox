@@ -1,6 +1,7 @@
 import { add, addScaled, dot, length, scale, sub, v3, type Vec3 } from '@/core/vec3';
 import type { MovementGoal } from './ai';
 import type { ShipState } from './types';
+import { manoeuvreVelocity } from './propulsion';
 
 /** Acceleration-limited arrival, independent of gun facing (mass-effect thrusters).
  * The old fixed arrival radius ignored stopping distance and lateral momentum.
@@ -69,12 +70,10 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
   ship.inertialCoast = ship.engineThrust < 0.065 && length(ship.vel) > ship.maxSpeed * 0.04;
   const before = ship.vel;
   let velocity = addScaled(before, force, dt);
-  const speed = length(velocity);
   // Brake toward a reduced speed limit instead of instantly deleting momentum
-  // when a subsystem is disabled or an order changes speed.
-  if (speed > maxSpeed && speed > 0) {
-    velocity = scale(velocity, maxSpeed / speed);
-  }
+  // when a subsystem is disabled, the bow turns, or an order changes speed.
+  // Main-engine speed is not available to lateral/reverse station keeping.
+  velocity = manoeuvreVelocity(ship.role, facing, velocity, maxSpeed);
   const dv = sub(velocity, before);
   const dvLength = length(dv);
   if (dvLength > acceleration * dt) velocity = addScaled(before, dv, acceleration * dt / dvLength);

@@ -68,4 +68,52 @@ test('spatial query includes target motion between index snapshot and collision 
   assert.equal(candidates[0]?.id, ship.id);
 });
 
+const bruteNearest = (ships, side, origin) => {
+  let nearest, distance = Infinity;
+  for (const ship of ships) {
+    if (ship.side === side || !ship.alive || ship.escaped || ship.role === 'fighter') continue;
+    const d = Math.hypot(ship.pos.x - origin.x, ship.pos.y - origin.y, ship.pos.z - origin.z);
+    if (d < distance) { distance = d; nearest = ship; }
+  }
+  return nearest;
+};
+
+test('nearest shared contacts match a full scan for distant and local observers', () => {
+  const ships = Array.from({ length: 5000 }, (_, i) => makeShip(i));
+  ships[20].alive = false; ships[30].escaped = true;
+  const grid = new CombatSpatialIndex(ships, .05);
+  for (let n = 0; n < 80; n++) {
+    const origin = { x: n * 27 - 500, y: n * 9 - 200, z: n % 3 * 50 - 30 };
+    assert.equal(grid.nearestEnemy('A', origin)?.id, bruteNearest(ships, 'A', origin)?.id);
+  }
+});
+
+test('nearest contact handles motion, deployment ties and newly added hulls', () => {
+  const a = { ...makeShip(1), pos: { x: 12, y: 0, z: 0 } };
+  const b = { ...makeShip(2), pos: { x: -12, y: 0, z: 0 } };
+  const fighter = { ...makeShip(0), pos: { x: 0, y: 0, z: 0 } };
+  const friend = { ...makeShip(3), side: 'A', pos: { x: 0, y: 0, z: 0 } };
+  const grid = new CombatSpatialIndex([a, b, fighter, friend], .05);
+  const origin = { x: 0, y: 0, z: 0 };
+  assert.equal(grid.nearestEnemy('A', origin), a, 'deployment order breaks exact ties');
+  a.pos.x += .14;
+  assert.equal(grid.nearestEnemy('A', origin), b, 'reads current positions within conservative drift bounds');
+  const reinforcement = { ...makeShip(4), pos: { x: 1, y: 0, z: 0 } };
+  grid.add(reinforcement, 4);
+  assert.equal(grid.nearestEnemy('A', origin), reinforcement);
+  reinforcement.alive = false;
+  assert.equal(grid.nearestEnemy('A', origin), b);
+});
+
+test('20,000-ship nearest queries prune distant hulls instead of scanning every enemy', () => {
+  const ships = Array.from({ length: 20000 }, (_, i) => makeShip(i));
+  const grid = new CombatSpatialIndex(ships, .05);
+  const observers = Array.from({ length: 12 }, (_, n) => ({ x: n * 140 - 400, y: n * 80 - 200, z: n * 25 - 100 }));
+  for (const observer of observers)
+    assert.equal(grid.nearestEnemy('A', observer)?.id, bruteNearest(ships, 'A', observer)?.id);
+  assert.ok(grid.nearestCandidateChecks < ships.length * observers.length / 20,
+    'must reject at least 95% of the all-enemy candidate work');
+  console.info('NEAREST_CONTACT_CANDIDATES ' + grid.nearestCandidateChecks + '/' + ships.length * observers.length);
+});
+
 test.after(() => rmSync(dir, { recursive: true, force: true }));

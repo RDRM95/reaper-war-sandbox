@@ -6,6 +6,7 @@ import type { RuleSet } from '@/timelines/rules';
 import { slotToWorld } from './formations';
 import { BATTLESPACE_SCALE as S } from './constants';
 import type { FleetState, ShipState, TargetPriority } from './types';
+import { localReachTarget, reachableStation } from './engagementReach';
 
 /** Fleet orders own translation; ship controllers trim their firing station and
  * track their target independently. No controller injects time-driven orbits. */
@@ -18,6 +19,7 @@ export interface AiContext {
   enemiesOf(side: 'A' | 'B'): ShipState[];
   /** Optional contact broad phase; selectors still check exact range and arc. */
   enemiesNear?(side: 'A' | 'B', origin: Vec3, range: number): ShipState[];
+  nearestEnemy?(side: 'A' | 'B', origin: Vec3): ShipState | undefined;
   alliesOf(side: 'A' | 'B'): ShipState[];
   getShip(id: string): ShipState | undefined;
 }
@@ -152,14 +154,19 @@ export function chooseTarget(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const sensor = ship.sensorRange * (0.4 + 0.6 * ship.subsystems.sensors);
   const currentValid = validEnemy(ship, current) && distance(ship.pos, current.pos) <= sensor * 1.7;
   const locked = currentValid && ctx.time < (ship.targetLockUntil ?? 0);
-  // While a valid target remains inside the engagement band, a locked ship
+  // While a valid target remains inside gun range, a locked ship
   // cannot accept any replacement. Avoid a redundant fleet-wide contact scan.
-  if (locked && current && distance(ship.pos, current.pos) <= range * 1.4) return current.id;
+  if (locked && current && distance(ship.pos, current.pos) <= range) return current.id;
   const cannotFightFighters = ship.role === 'fighter' && !ship.weapons.some(w => w.def.antiSmall);
   let best = currentValid ? current : undefined;
   let bestScore = best ? scoreTarget(ctx, ship, fleet, best, range) : -Infinity;
+  let nearest: ShipState | undefined;
+  let nearestDistance = Infinity;
   for (const e of (ctx.enemiesNear?.(ship.side, ship.pos, sensor * 1.5) ?? ctx.enemiesOf(ship.side))) {
-    if (!validEnemy(ship, e) || distance(ship.pos, e.pos) > sensor * 1.5) continue;
+    if (!validEnemy(ship, e)) continue;
+    const dist = distance(ship.pos, e.pos);
+    if (e.role !== 'fighter' && dist < nearestDistance) { nearest = e; nearestDistance = dist; }
+    if (dist > sensor * 1.5) continue;
     if (cannotFightFighters && e.role === 'fighter') continue;
     const reachableReplacement = currentValid && distance(ship.pos, current.pos) > range * 1.4 && distance(ship.pos, e.pos) < range;
     if (locked && !reachableReplacement) continue;
@@ -167,6 +174,25 @@ export function chooseTarget(ctx: AiContext, ship: ShipState, fleet: FleetState)
     const threshold = currentValid && best?.id === current.id && !reachableReplacement ? bestScore * 1.25 : bestScore;
     if (candidate > threshold) { best = e; bestScore = candidate; }
   }
+  // An empty local sensor query must not strand a rear echelon. Use shared
+  // fleet contacts only when the broad phase cannot establish a nearest hull.
+  // In-contact decisions retain the existing bounded spatial query.
+  if (ship.role !== 'fighter' && ctx.enemiesNear && nearestDistance > sensor * 1.5) {
+    if (ctx.nearestEnemy) nearest = ctx.nearestEnemy(ship.side, ship.pos);
+    else {
+      for (const enemy of ctx.enemiesOf(ship.side)) {
+        if (!validEnemy(ship, enemy) || enemy.role === 'fighter') continue;
+        const dist = distance(ship.pos, enemy.pos);
+        if (dist < nearestDistance) { nearest = enemy; nearestDistance = dist; }
+      }
+    }
+  }
+  // Screens intercept a retreat. Heavy batteries keep their existing fleet
+  // focus rather than peeling off after whichever fleeing escort is nearest.
+  const screen = ship.role === 'frigate' || ship.role === 'reaper_destroyer';
+  const capitalPursuit = !screen && best && ctx.fleets.get(best.fleetId)?.orders.order === 'retreat';
+  if (ship.role !== 'fighter' && fleet.orders.order !== 'attack_target' && !capitalPursuit)
+    best = localReachTarget(ship, best, nearest, range);
   if (best?.id !== ship.targetId) ship.targetLockUntil = ctx.time + 5;
   return best?.id;
 }
@@ -359,7 +385,17 @@ const broadsideBearings = new WeakMap<ShipState, BroadsideBearing>();
  * This changes only gun facing: station translation never becomes an orbit.
  * Other factions retain their existing spinal/forward engagement policy. */
 function combatFacing(ship: ShipState, target: ShipState, station: Vec3): Vec3 {
-  if (ship.faction !== 'imperium' && ship.faction !== 'chaos') return target.pos;
+  if (ship.faction !== 'imperium' && ship.faction !== 'chaos') {
+    // Out of gun range, turn towards a distant navigation station and use the
+    // main drive. Staring at the enemy while translating broadside required
+    // capital RCS to do a main engine's job. Return to gun bearing on contact
+    // or while braking near the station; never turn this into an orbit.
+    const speed2 = lengthSq(ship.vel);
+    const stoppingDistance = speed2 / Math.max(.001, 2 * ship.acceleration * (.25 + .75 * ship.subsystems.engines));
+    const settling = Math.max(.2, ship.lengthKm * 1.5, stoppingDistance * 1.5);
+    if (distance(ship.pos, target.pos) > shipEngagementRange(ship) && distance(ship.pos, station) > settling) return station;
+    return target.pos;
+  }
   let portRange = 0, starboardRange = 0;
   for (const weapon of ship.weapons) {
     if (weapon.def.antiSmall || !weapon.def.antiCapital || weapon.def.kind !== 'mass_accelerator' ||
@@ -526,6 +562,11 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   } else if (!noRetreat && stationDistance < band.min) {
     position = add(position, scale(normalize(toTarget), -Math.min(trimLimit, band.min - stationDistance)));
   }
+  // A range repair must not undo the fleet's anti-chase leash when an enemy
+  // abandons the fight. Explicit intercept/attack commands retain intent.
+  const fleeing = target.withdrawing || ctx.fleets.get(target.fleetId)?.orders.order === 'retreat';
+  const commandedPursuit = !!ship.forcedTargetId || fleet.orders.order === 'intercept' || fleet.orders.order === 'attack_target';
+  if (!fleeing || commandedPursuit) position = reachableStation(position, target.pos, range);
   ship.firingOffset = sub(position, slotPos);
   if (noRetreat) {
     // A station behind the enemy must not turn into a reverse thrust command
