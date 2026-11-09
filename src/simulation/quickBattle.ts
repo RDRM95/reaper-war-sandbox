@@ -2,6 +2,7 @@ import { SHIP_CLASSES } from '@/data/ships';
 import { WEAPONS } from '@/data/weapons';
 import { applyRulesToShip, applyRulesToWeapon, cloneRules } from '@/timelines/rules';
 import type { BattleConfig, BattleResult, SideSummary, Side } from './types';
+import { defenseTransplantFor } from './techTransplants';
 
 /**
  * Fast aggregate force-on-force estimator. No BattleSimulation instance,
@@ -112,7 +113,11 @@ export function resolveQuickBattle(config: BattleConfig): QuickBattleReport {
       }
       // Barriers are vulnerable to different energy types, but cannot be
       // assigned a unique opposing weapon during a fast analytical estimate.
-      const endurance=Math.max(1,stats.hull+stats.armour*5+stats.barriers*0.82);
+      // Mirror live-combat optional armour in this deliberately approximate
+      // strategic estimator; barriers keep their ordinary capacity.
+      const defense=defenseTransplantFor(config.techTransplants,fleet.faction,fleet.side);
+      const endurance=Math.max(1,
+        (stats.hull+stats.armour*5)*(defense?.quickEnduranceMultiplier??1)+stats.barriers*0.82);
       groups.push({classId:cls.id,name:cls.name,count,side:fleet.side,
         power:damagePerSecond*count,
         endurance:Math.max(1,endurance),pointValue:cls.pointValue,role:cls.role});
