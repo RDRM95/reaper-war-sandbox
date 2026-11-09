@@ -1,6 +1,7 @@
 import './spectator.css';
 import { installShipReferenceInspector } from '@/references/ShipReferenceInspector';
 import { BattleSimulation, SIM_DT } from '@/simulation/battle';
+import { TECH_TRANSPLANTS, type TechTransplantId, type TechTransplantTarget } from '@/simulation/techTransplants';
 import { ShipKillScoreboard } from '@/simulation/killScoreboard';
 import { resolveQuickBattle, type QuickBattleReport } from '@/simulation/quickBattle';
 import { BattleView } from '@/rendering/battleView';
@@ -96,6 +97,19 @@ app.innerHTML=`
       <option value="multiverse_crossover">SANDBOX — MULTIVERSE</option>
     </select>
     <label>BATTLESPACE LAYOUT</label><select id="theatre-layout" aria-label="Battlespace layout"><option value="three_dimensional" selected>OPEN 3D / TACTICAL DEPTH</option><option value="legacy_plane">ORIGINAL / REPLAY LAYOUT</option></select>
+    <details class="tech-transplant-panel" id="tech-panel">
+      <summary id="tech-heading">SCI-FI TECH TRANSPLANTS · OFF</summary>
+      <label class="tech-transplant-toggle"><input id="transplant-on" type="checkbox"> ENABLE EXPERIMENTAL TECH</label>
+      <label for="transplant-tech">IMPORT TECHNOLOGY</label>
+      <select id="transplant-tech" aria-label="Imported sci-fi technology">${Object.values(TECH_TRANSPLANTS).map(tech=>`<option value="${tech.id}">${escapeHtml(tech.name.toUpperCase())}</option>`).join('')}</select>
+      <label for="transplant-target">APPLY TO</label>
+      <select id="transplant-target" aria-label="Fleets receiving imported technology">
+        <option value="all_organics">ALL ORGANIC ME FLEETS</option>
+        <option value="side_a_organics">SIDE A · ORGANIC FLEETS</option>
+        <option value="side_b_organics">SIDE B · ORGANIC FLEETS</option>
+      </select>
+      <p>Pure simulation modifier: affects damage and instant results, not models. Geth and Reapers are excluded. OFF restores normal rules.</p>
+    </details>
     <div class="double"><label>SEED <input id="seed" type="number" value="42" min="1"></label><label>DISTANCE, KM <input id="distance" type="number" value="110" min="10" max="600"></label></div>
     <div class="side-tabs"><button id="sideA" class="active">SIDE A <b id="countA"></b></button><button id="sideB">SIDE B <b id="countB"></b></button></div>
     <label>FACTION</label><select id="faction"></select>
@@ -398,6 +412,11 @@ factionSelect.addEventListener('change',()=>{const f=fleets[activeSide];f.factio
 $('wave-time').addEventListener('change',()=>{waves[activeSide].delay=Math.min(600,Math.max(1,Math.floor(Number($<HTMLInputElement>('wave-time').value)||120)));});
 $('formation').addEventListener('change',()=>{fleets[activeSide].formation=$<HTMLSelectElement>('formation').value as FormationType;});
 $('scenario').addEventListener('change',()=>applyScenario($<HTMLSelectElement>('scenario').value));
+$('transplant-on').addEventListener('change',()=>{
+  const enabled=$<HTMLInputElement>('transplant-on').checked;
+  $('tech-heading').textContent='SCI-FI TECH TRANSPLANTS · '+(enabled?'ON':'OFF');
+  $('tech-panel').classList.toggle('enabled',enabled);
+});
 function reportError(err:unknown){viewError=err instanceof Error?err.message:String(err);
   const target=$('error');target.hidden=false;target.textContent='SIMULATOR ERROR: '+viewError;
   $('message').textContent='STARTUP FAILED';$('state').textContent='ERROR';console.error(err);
@@ -525,6 +544,15 @@ function currentConfig(){
       // extras. Keep those IDs and faction doctrines intact.
 
     }
+  }
+  if($<HTMLInputElement>('transplant-on').checked){
+    config.techTransplants={
+      enabled:true,
+      id:$<HTMLSelectElement>('transplant-tech').value as TechTransplantId,
+      target:$<HTMLSelectElement>('transplant-target').value as TechTransplantTarget,
+    };
+    config.id+='-experimental-'+config.techTransplants.id+'-'+config.techTransplants.target;
+    config.name+=' [SCI-FI TECH]';
   }
   return config;
 }
