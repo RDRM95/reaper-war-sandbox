@@ -1,6 +1,7 @@
 import type { Vec3 } from '@/core/vec3';
 import type { DamageType, FactionId, ShipRole } from '@/data/types';
 import type { EffectiveWeapon, RuleSet, TechModifiers } from '@/timelines/rules';
+import type { DefenseTransplant, TechTransplantConfig } from './techTransplants';
 
 export type Side = 'A' | 'B';
 
@@ -106,6 +107,8 @@ export interface BattleConfig {
   objective: string;
   /** Optional narrative label for world-state choices used by the scenario. */
   worldState?: Record<string, string>;
+  /** Optional experimental rules layered over an otherwise unchanged timeline. */
+  techTransplants?: TechTransplantConfig;
 }
 
 export interface WeaponState {
@@ -175,6 +178,8 @@ export interface ShipState {
   maxHull: number;
   armour: number;
   maxArmour: number;
+  /** Resolved once at deployment; no checks or allocations in ordinary combat. */
+  defenseTransplant?: DefenseTransplant;
   barriers: number;
   maxBarriers: number;
   barrierRegen: number;
