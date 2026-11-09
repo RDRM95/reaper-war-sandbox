@@ -1,4 +1,36 @@
 import type { ShipState, WeaponState } from '@/simulation/types';
+import * as THREE from 'three';
+import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
+import { KM } from './geometry';
+
+/** Observe the same interpolated pose as the hull. Using the latest tick's
+ * heading here makes a rigid gun sight judder while its ship turns smoothly. */
+export function gunneryFrame(ship: ShipState, weapon: WeaponState, alpha: number,
+  rendered?: { group: THREE.Object3D; muzzle?: THREE.Vector3 }): {
+  position: THREE.Vector3; aim: THREE.Vector3;
+} {
+  const t = Math.max(0, Math.min(1, alpha));
+  const heading = new THREE.Vector3(ship.prevHeading.x, ship.prevHeading.y, ship.prevHeading.z)
+    .lerp(new THREE.Vector3(ship.heading.x, ship.heading.y, ship.heading.z), t).normalize();
+  const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), heading);
+  let position: THREE.Vector3;
+  let bore: THREE.Vector3;
+  if (rendered) {
+    rendered.group.updateWorldMatrix(true, false);
+    position = weapon.def.kind === 'reaper_beam' || weapon.def.kind === 'thanix'
+      ? weaponBeamOrigin(rendered.group, rendered.muzzle, weapon, ship.faction === 'reaper')
+      : weaponFlashPose(rendered.group, rendered.muzzle, weapon).position;
+    bore = new THREE.Vector3(Math.sin(weapon.facing), 0, Math.cos(weapon.facing))
+      .transformDirection(rendered.group.matrixWorld);
+  } else {
+    position = new THREE.Vector3(weapon.offset.x, weapon.offset.y, weapon.offset.z)
+      .applyQuaternion(rotation).add(new THREE.Vector3(ship.prevPos.x, ship.prevPos.y, ship.prevPos.z)
+        .lerp(new THREE.Vector3(ship.pos.x, ship.pos.y, ship.pos.z), t)).multiplyScalar(KM);
+    bore = new THREE.Vector3(Math.sin(weapon.facing), 0, Math.cos(weapon.facing)).applyQuaternion(rotation);
+  }
+  position.addScaledVector(bore, Math.max(0.18, ship.radiusKm * KM * 0.2));
+  return { position, aim: position.clone().addScaledVector(bore, 2000) };
+}
 
 /** Only genuine forward capital-class main batteries own a first-person
  * gunnery station. No invisible point-defence, secondary broadside or torpedo

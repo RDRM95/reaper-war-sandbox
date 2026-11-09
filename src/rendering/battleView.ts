@@ -20,7 +20,7 @@ import { InstancedFleet } from './instancedFleet';
 import { DETAIL_MESH_NAMES, lodLevelSquared, type LodLevel } from './lod';
 import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
 import { weaponWorldOffset } from '@/simulation/fireControl';
-import { primaryGunneryMount, isMainGunShot } from './gunnery';
+import { primaryGunneryMount, isMainGunShot, gunneryFrame } from './gunnery';
 import { animateReaperRig, captureReaperRig, isArticulatedReaper, type ReaperRig } from './reaperMotion';
 
 /**
@@ -664,7 +664,7 @@ export class BattleView {
       }
       subject = this.subjectFor(ship);
     }
-    let gunnery: { position: THREE.Vector3; aim: THREE.Vector3 } | undefined;
+    let gunnery: { position: THREE.Vector3; aim: THREE.Vector3; signalLost?: boolean } | undefined;
     if (this.rig.mode === 'gunnery') {
       const id = this.gunneryLockedShipId ?? this.followId;
       const ship = id ? sim.getShip(id) : undefined;
@@ -673,28 +673,14 @@ export class BattleView {
         // optical orientation until the user explicitly chooses another POV.
         const station = this.rig.camera.position.clone();
         const aim = station.clone().add(new THREE.Vector3(0,0,-1000).applyQuaternion(this.rig.camera.quaternion));
-        gunnery = { position: station, aim };
+        gunnery = { position: station, aim, signalLost: true };
       }
       if (ship && ship.alive && !ship.escaped && !this.gunnerySignalLost) {
         // First-person optics always remain on the selected MAIN emitter.
         const weapon = primaryGunneryMount(ship);
         if (weapon) {
-          // The weapon offset and selected target come from the current sim tick.
-          const pos = weaponWorldOffset(ship, weapon);
-          const interpolation = Math.max(0, Math.min(1, this.alpha));
-          const fwd = new THREE.Vector3(ship.heading.x, ship.heading.y, ship.heading.z).normalize();
-          const station = new THREE.Vector3(
-            (pos.x + (ship.prevPos.x - ship.pos.x) * (1 - interpolation)) * KM,
-            (pos.y + (ship.prevPos.y - ship.pos.y) * (1 - interpolation)) * KM,
-            (pos.z + (ship.prevPos.z - ship.pos.z) * (1 - interpolation)) * KM
-          ).addScaledVector(fwd, Math.max(0.18, ship.radiusKm * KM * 0.2));
-          // Fixed forward-axis sight: the main-gun camera must NEVER swivel
-          // after a target lock or switch. Target positions are independently
-          // projected into the transparent HUD as real telemetry markers.
-          const aim = station.clone().addScaledVector(fwd, 2000);
-          // Optical alignment is observational; the combat solver still
-          // determines if the actual mount can fire or hit the target.
-          gunnery = { position: station, aim };
+          // Match the smoothly rendered hull, without following AI targets.
+          gunnery = gunneryFrame(ship, weapon, this.alpha, this.visuals.get(ship.id)?.built);
         }
       }
     }
