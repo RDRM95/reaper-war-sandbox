@@ -28,7 +28,7 @@ export interface TechModifiers {
   fighterStrength: number;
   torpedoDamage: number;
   gardianEffectiveness: number;
-  /** Beam/stream weapons (Thanix for organics, primary beams for Reapers). */
+  /** Thanix streams and ship-scale Reaper beams. Interceptor beams use fighterStrength. */
   beamDamage: number;
   crewQuality: number;
 }
@@ -283,13 +283,16 @@ export function applyRulesToWeapon(
 
   const isMA = w.kind === 'mass_accelerator';
   const isBeam = w.kind === 'thanix' || w.kind === 'reaper_beam';
+  const isInterceptorBeam = cls.role === 'fighter' && w.kind === 'reaper_beam' && !w.antiCapital;
   const isTorp = w.kind === 'disruptor_torpedo' || w.kind === 'missile';
   const isGardian = w.kind === 'gardian';
   const fighterMult = cls.role === 'fighter' ? t.fighterStrength : 1;
 
   let damage = w.damage * fighterMult;
   if (isMA) damage *= t.massAcceleratorDamage;
-  if (isBeam) damage *= t.beamDamage;
+  // Oculus pulses already scale with fighter technology. The ship-beam boost
+  // (notably Annihilation's 1.4x) must not stack on an interceptor's gun.
+  if (isBeam && !isInterceptorBeam) damage *= t.beamDamage;
   if (isTorp) damage *= t.torpedoDamage;
   if (isGardian) damage *= t.gardianEffectiveness;
 
