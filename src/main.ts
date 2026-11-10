@@ -15,6 +15,7 @@ import { AU_CHAPTERS } from '@/scenarios/auLibrary';
 import { PRESETS } from '@/timelines/presets';
 import { FACTIONS } from '@/data/factions';
 import { audio } from '@/audio/engine';
+import { deathSounds, isStagedDeath } from '@/rendering/deathSequence';
 import { FleetMap2D } from './spectator/flatView';
 import { TargetTelemetry } from './spectator/targetTelemetry';
 import { DEFAULT_SCENE_SCRIPT, parseSceneScript, stageSceneConfig, type SceneBeat, type SceneScript } from './spectator/sceneScript';
@@ -449,7 +450,8 @@ function pushEvent(e:BattleEvent){
   }
   if(e.type==='ship_destroyed'){
     const killer=e.killerId?sim?.shipById.get(e.killerId)?.name:'Unknown';feed.unshift({time:e.t,message:e.name+' destroyed'+(killer?' · '+killer:''),side:e.side});
-    if(audioEnabled)audio.play(e.role==='dreadnought'||e.role==='reaper_capital'?'explosion_large':'explosion_small',150,.65);
+    // A staged death (a Reaper) is heard dying now; its explosion follows at the breakup (view.onBreakup below).
+    if(audioEnabled)audio.play(isStagedDeath(e.role)?deathSounds(e.role).atKill:e.role==='dreadnought'?'explosion_large':'explosion_small',150,.65);
   }else if(e.type==='comms'){feed.unshift({time:e.t,message:e.text,side:e.side});}
   else if(e.type==='reinforcement_arrival'){feed.unshift({time:e.t,message:'REINFORCEMENTS ARRIVED: '+e.fleetId,side:e.side});}
   else if(e.type==='order_issued'){feed.unshift({time:e.t,message:'COMMAND: '+e.order});}
@@ -470,6 +472,8 @@ function createView(preserveCamera=false){if(!sim)return;
   try{
     const ratio = graphics==='low'?0.75:graphics==='medium'?1:graphics==='high'?1.25:1.6;
     view=new BattleView(third,sim,{quality:graphics,pixelRatioCap:ratio,showEngineGlow:graphics!=='low',lod:true,bloom:graphics==='ultra'});
+    // The explosion of a staged death is heard when the hull actually breaks apart, at the mix this app uses for deaths.
+    view.onBreakup=role=>{if(audioEnabled)audio.play(role==='reaper_capital'?'explosion_large':'explosion_small',150,.65);};
     view.resize(third.clientWidth||900,third.clientHeight||550);
     view.rig.setMode(referenceMode?'tactical':'cinematic');
     if(referenceMode){

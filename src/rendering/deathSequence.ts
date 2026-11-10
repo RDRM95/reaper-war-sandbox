@@ -30,7 +30,21 @@ export interface DeathPlan {
 /** Fraction of a staged death after which the lights begin to fail. */
 export const LIGHTS_FAIL = 0.55;
 
-const isReaper = (role: string): boolean => role === 'reaper_capital' || role === 'reaper_destroyer';
+/** A staged death: the hull dies for seconds before it breaks apart (Reapers). */
+export const isStagedDeath = (role: string): boolean => role === 'reaper_capital' || role === 'reaper_destroyer';
+const isReaper = isStagedDeath;
+
+/**
+ * What is heard when a hull is destroyed, and when. An ordinary hull's explosion is heard at the kill, as its short
+ * death begins. A staged death is heard in two parts: the dying hull at the kill, and the explosion at the moment it
+ * actually breaks apart, `deathDuration` later.
+ */
+export function deathSounds(role: string): { atKill: 'reaper_death' | 'reaper_death_small' | 'explosion_large' | 'explosion_small'; atBreakup?: 'explosion_large'; intensity: number } {
+  if (role === 'reaper_capital') return { atKill: 'reaper_death', atBreakup: 'explosion_large', intensity: 1 };
+  if (role === 'reaper_destroyer') return { atKill: 'reaper_death_small', atBreakup: 'explosion_large', intensity: 0.6 };
+  const big = role === 'dreadnought' || role === 'carrier';
+  return { atKill: big || role === 'cruiser' ? 'explosion_large' : 'explosion_small', intensity: big ? 1 : 0.6 };
+}
 
 export function deathDuration(role: string): number {
   if (role === 'reaper_capital') return 5.2;
