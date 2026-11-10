@@ -374,7 +374,9 @@ export const buildReaperAscendant = (): BuiltShip => {
     strut.name='ascendant-carapace-ridge';
     built.group.add(strut);
   }
-  const scale=30000/2000;
+  // The catalogue says 30 km. The base rig normalises a spined Reaper to 24 units (2.4 km), so scale from that,
+  // not from the Sovereign's 20: the old 30000/2000 left the Ascendant at 360 units (36 km).
+  const scale=300/built.lengthUnits;
   built.group.scale.multiplyScalar(scale);
   built.lengthUnits*=scale;
   built.engineNodes=built.engineNodes.map(p=>p.clone().multiplyScalar(scale));
