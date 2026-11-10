@@ -45,12 +45,15 @@ export const PALETTES: Record<string, FactionPalette> = {
     glow: new THREE.MeshBasicMaterial({ color: 0x64b7ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
   },
   reaper: {
-    hull: std(0x111924, { metalness: 0.78, roughness: 0.35, emissive: 0x07101c, emissiveIntensity: 0.2 }),
-    hullDark: std(0x080e18, { metalness: 0.8, roughness: 0.38, emissive: 0x030914, emissiveIntensity: 0.15 }),
-    accent: std(0x263447, { metalness: 0.72, roughness: 0.4 }),
-    engine: new THREE.MeshStandardMaterial({ color: 0xff1838, emissive: 0xff1230, emissiveIntensity: 4, roughness: 0.3, metalness: 0 }),
-    windows: new THREE.MeshStandardMaterial({ color: 0xf8334b, emissive: 0xe8203a, emissiveIntensity: 2.5 }),
-    glow: new THREE.MeshBasicMaterial({ color: 0xff2038, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
+    // Graphite and charcoal metal that still reads in deep space. The §7.8 values (0x0e1016 at metalness 0.85) put
+    // the albedo near 1 % with almost no diffuse term: rendered, every Reaper was a flat black cut-out. These are a
+    // mid-dark graphite at moderate metalness with broad highlights; recesses stay charcoal. No brown, no blue cast.
+    hull: std(0x3d4149, { metalness: 0.62, roughness: 0.5, envMapIntensity: 1.2 }),
+    hullDark: std(0x181b20, { metalness: 0.5, roughness: 0.62 }),
+    accent: std(0x4b515c, { metalness: 0.68, roughness: 0.42, envMapIntensity: 1.5 }),
+    engine: new THREE.MeshStandardMaterial({ color: 0xff5a1f, emissive: 0xff5a1f, emissiveIntensity: 3.6, roughness: 0.3, metalness: 0 }),
+    windows: new THREE.MeshStandardMaterial({ color: 0xd01030, emissive: 0xd01030, emissiveIntensity: 2.5 }),
+    glow: new THREE.MeshBasicMaterial({ color: 0xff5a1f, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
   },
   asari: {
     hull: std(0xc4bcd9, { metalness: 0.45, roughness: 0.3 }),
