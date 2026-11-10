@@ -110,7 +110,11 @@ function buildAllianceGunship(L: number): BuiltShip {
  * extruded downward from `yTop`. `half` runs along the starboard edge from the stern to the bow, x >= 0.
  */
 function deckPlate(half: readonly (readonly [number, number])[], yTop: number, thickness: number, L: number): THREE.BufferGeometry {
-  const points = [...half, ...half.filter(([x]) => x > 0).reverse().map(([x, z]) => [-x, z] as const)];
+  return plate([...half, ...half.filter(([x]) => x > 0).reverse().map(([x, z]) => [-x, z] as const)], yTop, thickness, L);
+}
+
+/** A flat plate from a closed outline in the deck plane (x across, z along), extruded downward from `yTop`. */
+function plate(points: readonly (readonly [number, number])[], yTop: number, thickness: number, L: number): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   shape.moveTo(points[0][0] * L, points[0][1] * L);
   for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0] * L, points[i][1] * L);
@@ -119,6 +123,19 @@ function deckPlate(half: readonly (readonly [number, number])[], yTop: number, t
   // Shape y becomes ship z; the extrusion runs down from the top face.
   g.rotateX(Math.PI / 2);
   g.translate(0, yTop * L, 0);
+  return g;
+}
+
+/** Slope a plate's upper face down toward the bow: vertices above `above` drop by up to `drop` between two stations. */
+function slopeBow(g: THREE.BufferGeometry, above: number, fromZ: number, toZ: number, drop: number): THREE.BufferGeometry {
+  const position = g.getAttribute('position');
+  for (let i = 0; i < position.count; i++) {
+    if (position.getY(i) <= above) continue;
+    const t = THREE.MathUtils.clamp((position.getZ(i) - fromZ) / (toZ - fromZ), 0, 1);
+    position.setY(i, position.getY(i) - drop * t);
+  }
+  position.needsUpdate = true;
+  g.computeVertexNormals();
   return g;
 }
 
@@ -402,34 +419,44 @@ export function buildNormandySR2(): BuiltShip {
 }
 
 /** Ordinary Alliance frigate: independently retained at 170 m. */
+/**
+ * Alliance frigate. A slim dart of a fuselage with a raised spine, swept wings carrying the outboard drives at
+ * their tips, a swept dorsal fin and a keel gun. Original procedural geometry; length, muzzle and the four engine
+ * nodes are those of the model it replaces.
+ */
 export function buildAllianceFrigate(normandy = false): BuiltShip {
   if (normandy) return buildNormandySR2();
   const L = 1.7;
   const parts = newParts();
-  // Fuselage.
-  parts.hull.push(taperedBox(0.28, 0.2, L * 0.72, 0.45, 0.9, { frontHeight: 0.5 }).translate(0, 0.02, L * 0.08));
-  // Raised cockpit / neck.
-  parts.hull.push(at(taperedBox(0.2, 0.14, 0.5, 0.7, 1), 0, 0.12, L * 0.28));
-  parts.windows.push(at(new THREE.BoxGeometry(0.16, 0.03, 0.14), 0, 0.2, L * 0.36));
-  // Swept wings with tip nacelles.
+  // Fuselage: a dart, widest aft of the middle, drawn to a point at the bow, over a dark belly.
+  // Its upper face slopes down over the forward third, so the bow is a low chisel, not a slab.
+  parts.hull.push(slopeBow(deckPlate([[0.088, -0.47], [0.095, -0.3], [0.085, 0.08], [0.05, 0.33], [0.014, 0.485], [0, 0.5]], 0.05, 0.085, L), 0, L * 0.12, L * 0.5, L * 0.05));
+  parts.hullDark.push(deckPlate([[0.06, -0.46], [0.075, -0.28], [0.065, 0.1], [0.03, 0.34], [0, 0.42]], -0.035, 0.03, L));
+  // Raised spine and bridge, with the bridge strip looking forward.
+  parts.hull.push(at(taperedBox(L * 0.1, L * 0.065, L * 0.41, 0.45, 0.9, { frontHeight: 0.4 }), 0, L * 0.06, -L * 0.085));
+  parts.hullDark.push(at(taperedBox(L * 0.06, L * 0.022, L * 0.12, 0.7, 1), 0, L * 0.09, -L * 0.1));
+  parts.windows.push(at(new THREE.BoxGeometry(L * 0.036, L * 0.008, L * 0.004), 0, L * 0.092, -L * 0.039));
+  parts.accent.push(at(new THREE.BoxGeometry(L * 0.07, L * 0.004, L * 0.1), 0, L * 0.088, -L * 0.22));
   for (const s of [-1, 1]) {
-    const wing = taperedBox(0.75, 0.05, 0.5, 0.5, 1);
-    wing.rotateY(s * -0.45);
-    wing.rotateZ(s * 0.12);
-    parts.hull.push(at(wing, s * 0.42, -0.02, -0.25));
+    // Swept wing out to the tip drive, with a blue leading band and a dark trailing edge.
+    parts.hull.push(plate([[s * 0.07, 0.14], [s * 0.44, -0.16], [s * 0.47, -0.42], [s * 0.3, -0.4], [s * 0.07, -0.3]], -0.004, 0.026, L));
+    parts.accent.push(plate([[s * 0.12, 0.085], [s * 0.4, -0.142], [s * 0.4, -0.19], [s * 0.12, 0.037]], -0.002, 0.004, L));
+    parts.hullDark.push(plate([[s * 0.1, -0.3], [s * 0.3, -0.385], [s * 0.3, -0.41], [s * 0.1, -0.325]], -0.008, 0.02, L));
+    // Tip drive: a dark nacelle under a pale armour cap.
     parts.hullDark.push(at(zCylinder(0.07, 0.08, 0.7, 10), s * 0.78, -0.06, -0.4));
+    parts.hull.push(at(taperedBox(0.13, 0.04, 0.5, 0.5, 1), s * 0.78, 0.005, -0.38));
     parts.engine.push(at(zCylinder(0.055, 0.04, 0.06, 10), s * 0.78, -0.06, -0.78));
-    parts.accent.push(at(new THREE.BoxGeometry(0.12, 0.03, 0.18), s * 0.5, 0.02, -0.2));
+    // Lit ports along the fuselage.
+    portRow(parts, [s * 0.0935, 0.02, -0.28], [s * 0.0865, 0.02, 0.07], 9, L);
   }
-  // Dorsal fin and ventral weapon bay.
-  parts.hullDark.push(at(taperedBox(0.04, 0.16, 0.5, 0.5, 1), 0, 0.18, -0.35));
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.16, 0.07, 0.5), 0, -0.1, 0.1));
+  // Swept dorsal fin and the keel gun out to the muzzle.
+  const fin = wedge(L * 0.02, L * 0.11, L * 0.26, 0.3);
+  parts.hullDark.push(at(fin, 0, L * 0.09, -L * 0.33));
+  parts.hullDark.push(at(zCylinder(0.03, 0.035, 0.62, 8), 0, -0.02, L * 0.5 - 0.33));
   // Main thrusters.
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.34, 0.16, 0.3), 0, 0.0, -L * 0.42));
+  parts.hullDark.push(at(new THREE.BoxGeometry(0.3, 0.16, 0.3), 0, 0.0, -L * 0.42));
   parts.engine.push(at(zCylinder(0.05, 0.04, 0.05, 10), 0.09, 0.0, -L * 0.5 + 0.02));
   parts.engine.push(at(zCylinder(0.05, 0.04, 0.05, 10), -0.09, 0.0, -L * 0.5 + 0.02));
-  // Stripe (Normandy: black/white with blue; standard: blue).
-  parts.accent.push(at(new THREE.BoxGeometry(0.3, 0.02, 0.5), 0, 0.12, -0.1));
   const engineNodes = [new THREE.Vector3(0.78, -0.06, -0.8), new THREE.Vector3(-0.78, -0.06, -0.8), new THREE.Vector3(0.09, 0, -L * 0.5), new THREE.Vector3(-0.09, 0, -L * 0.5)];
   return assemble(parts, 'alliance', engineNodes, L, new THREE.Vector3(0, -0.02, L * 0.5));
 }
