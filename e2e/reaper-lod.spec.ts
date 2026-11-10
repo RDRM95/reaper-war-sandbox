@@ -34,6 +34,7 @@ test('real Reaper hero and instanced LOD transitions retain armour without chang
   });
 
   const records: any[] = [];
+  const reducedVertices: Record<string, number> = { reaper_capital: 25151, harbinger: 24671, reaper_destroyer: 18143 };
   try {
     for (const classId of ['reaper_capital', 'harbinger', 'reaper_destroyer']) {
       for (const level of ['full', 'reduced', 'full']) {
@@ -50,7 +51,7 @@ test('real Reaper hero and instanced LOD transitions retain armour without chang
           view.update(0, 1); view.render();
           const visual = view.visuals.get(ship.id);
           if (!visual) throw new Error('Selected production hero was not created.');
-          const groups: Record<string, boolean[]> = { plates: [], eye: [], 'reaper-arm-seam': [] };
+          const groups: Record<string, boolean[]> = { carapace: [], plates: [], eye: [], 'reaper-arm-seam': [] };
           visual.built.group.traverse((part: any) => { if (groups[part.name]) groups[part.name].push(part.visible); });
           const activeBatches = view.instances.group.children.filter((part: any) => part.isInstancedMesh && part.visible && part.count > 0);
           const hero = { classId, level, observed: visual.lod, visible: visual.built.group.visible, lengthUnits: length,
@@ -59,7 +60,7 @@ test('real Reaper hero and instanced LOD transitions retain armour without chang
           // Use the production batching API for the same hull's reduced form.
           view.instances.begin(sim.ships); view.instances.add(ship, 1, 'reduced'); view.instances.end();
           const batch = view.instances.group.children.filter((part: any) => part.isInstancedMesh && part.visible && part.count > 0)
-            .map((part: any) => ({ name: part.name, count: part.count }));
+            .map((part: any) => ({ name: part.name, count: part.count, vertices: part.geometry.attributes.position.count }));
           // Restore the actual scene before saving its visual evidence.
           view.update(0, 1); view.render();
           return { ...hero, batch };
@@ -71,12 +72,16 @@ test('real Reaper hero and instanced LOD transitions retain armour without chang
         expect(record.drawCalls).toBeGreaterThan(0);
         expect(record.simulationUnchanged).toBe(true);
         expect(record.groups.plates.length).toBeGreaterThan(0);
+        expect(record.groups.carapace.length).toBeGreaterThan(0);
         expect(record.groups.eye.length).toBeGreaterThan(0);
         expect(record.groups['reaper-arm-seam'].length).toBeGreaterThan(0);
-        expect(record.groups.plates.every(Boolean)).toBe(true);
+        expect(record.groups.carapace.every(Boolean)).toBe(true);
+        expect(record.groups.plates.every((visible: boolean) => visible === (level === 'full'))).toBe(true);
         expect(record.groups.eye.every(Boolean)).toBe(true);
         expect(record.groups['reaper-arm-seam'].every((visible: boolean) => visible === (level === 'full'))).toBe(true);
-        expect(record.batch.some((part: any) => part.name.endsWith('-plates'))).toBe(true);
+        expect(record.batch.reduce((count: number, part: any) => count + part.vertices, 0)).toBe(reducedVertices[classId]);
+        expect(record.batch.filter((part: any) => part.name.endsWith('-eye'))).toHaveLength(2);
+        expect(record.batch.some((part: any) => part.name.endsWith('-plates'))).toBe(false);
         expect(record.batch.some((part: any) => part.name.endsWith('-eye'))).toBe(true);
         expect(record.batch.some((part: any) => /seam/.test(part.name))).toBe(false);
         if (classId === 'reaper_capital' && level === 'reduced') {

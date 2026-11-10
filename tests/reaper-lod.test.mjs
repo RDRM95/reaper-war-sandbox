@@ -40,6 +40,9 @@ const { InstancedFleet } = require(compile('rendering/instancedFleet.ts'));
 const { captureLodDetails, applyShipLod } = require(compile('rendering/shipLod.ts'));
 const { isLodDetail } = require(compile('rendering/lod.ts'));
 const classes = ['reaper_capital', 'harbinger', 'reaper_destroyer'];
+// Independently measured complete structural geometry after the authored
+// carapace rebuild, including both optics and excluding hidden stand-ins.
+const reducedVertices = { reaper_capital: 25151, harbinger: 24671, reaper_destroyer: 18143 };
 const named = (root, name) => {
   const matches = [];
   root.traverse(object => { if (object.name === name) matches.push(object); });
@@ -60,12 +63,14 @@ for (const classId of classes) {
     try {
       fleet.begin([ship]); fleet.add(ship, .5, 'reduced'); fleet.end();
       const parts = fleet.group.children;
-      const armour = parts.find(part => part.name === `instanced-${classId}-plates`);
-      const eye = parts.find(part => part.name === `instanced-${classId}-eye`);
-      assert.ok(armour, 'layered armour must remain a structural batch');
-      assert.ok(eye, 'weapon aperture must be retained separately from decorative lights');
-      assert.equal(armour.count, 1); assert.equal(armour.visible, true);
-      assert.equal(eye.count, 1); assert.equal(eye.visible, true);
+      const eyes = parts.filter(part => part.name === `instanced-${classId}-eye`);
+      assert.equal(eyes.length, 2, 'both distinct optics must survive material batching');
+      assert.ok(eyes.every(part => part.count === 1 && part.visible));
+      const shownVertices = parts.filter(part => part.visible && part.count > 0)
+        .reduce((count, part) => count + part.geometry.attributes.position.count, 0);
+      assert.equal(shownVertices, reducedVertices[classId], 'the complete carapace and limbs survive merging');
+      const overlays = parts.filter(part => part.name === `instanced-${classId}-plates`);
+      assert.ok(overlays.length > 0 && overlays.every(part => part.count === 0 && !part.visible));
       const seams = parts.filter(part => part.name.endsWith('-reaper-arm-seam'));
       assert.ok(seams.length > 0);
       assert.ok(seams.every(part => part.count === 0 && !part.visible));
@@ -73,6 +78,7 @@ for (const classId of classes) {
       const partCount = parts.length;
       fleet.begin([ship]); fleet.add(ship, .5, 'full'); fleet.end();
       assert.ok(seams.every(part => part.count === 1 && part.visible));
+      assert.ok(overlays.every(part => part.count === 1 && part.visible));
       assert.equal(fleet.group.children.length, partCount, 'LOD transitions reuse material batches');
     } finally { fleet.dispose(); }
   });
@@ -81,17 +87,19 @@ for (const classId of classes) {
     const built = instantiateShip(classId), role = getShipClass(classId).role;
     const details = captureLodDetails(built.group, role);
     const seams = named(built.group, 'reaper-arm-seam');
-    const plates = named(built.group, 'plates'), eyes = named(built.group, 'eye');
+    const armour = named(built.group, 'carapace'), overlays = named(built.group, 'plates'), eyes = named(built.group, 'eye');
     const size = new THREE.Box3().setFromObject(built.group).getSize(new THREE.Vector3());
     const muzzle = built.muzzle.clone(), engines = built.engineNodes.map(point => point.clone());
     assert.ok(seams.length > 0 && seams.every(part => part.parent !== built.group));
     applyShipLod(built.group, details, 'reduced');
     assert.ok(seams.every(part => !part.visible));
-    assert.ok(plates.length > 0 && plates.every(part => part.visible));
+    assert.ok(armour.length > 0 && armour.every(part => part.visible));
+    assert.ok(overlays.length > 0 && overlays.every(part => !part.visible));
     assert.ok(eyes.length > 0 && eyes.every(part => part.visible));
     applyShipLod(built.group, details, 'point'); assert.equal(built.group.visible, false);
     applyShipLod(built.group, details, 'full'); assert.equal(built.group.visible, true);
     assert.ok(seams.every(part => part.visible));
+    assert.ok(overlays.every(part => part.visible));
     assert.deepEqual(new THREE.Box3().setFromObject(built.group).getSize(new THREE.Vector3()), size);
     assert.deepEqual(built.muzzle, muzzle); assert.deepEqual(built.engineNodes, engines);
   });

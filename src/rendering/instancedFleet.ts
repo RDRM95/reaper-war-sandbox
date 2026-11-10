@@ -51,6 +51,10 @@ export class InstancedFleet {
     template.group.traverse(obj => {
       const source = obj as THREE.Mesh;
       if (!source.isMesh) return;
+      // A template may carry hidden stand-in layers next to the parts they stand in for (the Reaper rig keeps
+      // static limbs hidden behind its articulated ones). Only what the template shows belongs in a batch:
+      // merging the hidden layers too drew every instanced Reaper with two sets of limbs.
+      for (let o: THREE.Object3D | null = source; o && o !== template.group; o = o.parent) if (!o.visible) return;
       const geometry = source.geometry.clone();
       geometry.applyMatrix4(source.matrixWorld);
       const material = source.material;

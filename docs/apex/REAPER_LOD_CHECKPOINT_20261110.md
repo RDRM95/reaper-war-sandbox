@@ -1,30 +1,27 @@
-# Reaper structural LOD sandbox checkpoint
+# Reaper structural LOD — current sandbox checkpoint
 
-## Ownership and source state
+## Current source and release state
 
-- Date: 10 November 2026.
-- Repository: `RDRM95/reaper-war-sandbox`.
-- Feature branch: `fix/reaper-structural-lod-20261110`.
-- Prepared against current `main` commit `188f2c18e1c7c97294196ab22e5f7d87846832ea`.
-- Codex counterpart was prepared against `f8e9681937ca7c1e063265550cc4ee59aeb0ddf8` on `codex/apex-combat-overhaul`.
-- This checkpoint describes the locally verified feature. No PR, merge or deployment is claimed here. The commit is recorded in the feature branch history.
+- **Branch:** `fix/reaper-structural-lod-20261110` in `RDRM95/reaper-war-sandbox`.
+- **Feature parent:** `46d6c227aed6b274886c013aca877bd7cd803fe7`.
+- **Fresh upstream parent:** `7ba24bd5dc12399c0b3b7aa8c2b8f022ce510f5d` (`main`, merged Reaper geometry PR #33), including hidden-layer/Ascendant-length PR #32 (`bfb66b5`).
+- Fresh `main` was inspected and merged cleanly with `--no-commit`; this combined worktree is under final validation. No owner branch was rewritten. The feature has not been merged or deployed.
+- PR creation/merge through the configured GitHub API is forbidden in this environment. A pushed feature branch and green checks do not constitute PR approval or a completed release; resolve that publication gate before claiming deployment.
 
-## Completed bounded correction
+## Correction and ownership
 
-Reaper armour (`plates`) and weapon apertures (`eye`) were classified as disposable decoration and disappeared from reduced GPU batches. Hero LOD considered only direct children, so nested articulated arm-seam lighting did not reduce. The port uses the same role-aware classification and cached recursive hero-detail list as Codex, preserving authored hidden decorations and the previous thresholds.
+The LOD pass retains Reaper structural geometry and both weapon optics while reducing decorative overlays and nested arm lighting. Hero details are captured recursively once. GPU batches and heroes share the same layout-aware policy: legacy hulls use structural `plates`; rebuilt hulls use structural `carapace` and decorative `plates`.
 
-The sandbox has a different Reaper rig from Codex and no static replacement selector. Its model and rig are retained. No hull geometry, palette, animation controller, simulation, damage, muzzle/engine node, UI or save format changes are included. The separate sandbox PR #32 remains unmerged; its visibility guard/Ascendant scale correction is not silently incorporated.
+The geometry rebuild, graphite palette, hidden-layer guard, barrier adapter and Ascendant length correction are independently authored changes already merged upstream. They are integrated through their actual history, not recreated here. The current Reaper builder and materials match the corresponding Codex source byte for byte. The shared `lod.ts` and `shipLod.ts` helpers also match Codex.
 
-## Verification
+No simulation, damage, targeting, motion, save format, ship scale, muzzle/engine attachment or spectator UI changes are introduced by the LOD correction. The sandbox retains its own rig/controller; the Codex static-rig selector is not copied over it.
 
-- `npm test`: all six configured MJS test files pass. Direct execution of each file confirms **19 assertions** pass, including seven new Reaper LOD assertions. The Node 24 outer runner reports file-level cases.
-- `npm run build`: production TypeScript check and Vite build pass; 89 modules built.
-- Original GPU classification control: three expected failures (capital, Harbinger and destroyer armour instance count), four unaffected checks pass. The production working tree remained patched throughout the control.
-- Initial focused Chromium check: 1 passed in 13 seconds.
-- Full Chromium browser suite: **30 passed in 4.6 minutes**, one worker, no retries. Existing catalogue, numerical battle, graphics, gunnery, Oculus, orbital lighting, scene scripting, references and spectator controls pass alongside the new LOD regression.
-- The final new browser check passed in 12.8 seconds within that suite, including the magnified portraits. All nine full/reduced/full transitions have WebGL error 0, no page/render errors and exact unchanged simulation/RNG serialization. Actual renderer: ANGLE / Vulkan SwiftShader Device (Subzero).
+## Validation on the combined source
 
-Browser commands:
+- All **seven MJS test files pass: 24 assertions**, verified by direct per-file execution as well as `npm test`. This includes nine LOD cases and three upstream length/attachment cases.
+- Production TypeScript check and Vite build pass (89 modules).
+- Complete retained reduced geometry is independently pinned: capital **25,151 vertices**, Harbinger **24,671**, destroyer **18,143**. Both optics remain; decorative plate and seam batches reduce. Testing complete geometry avoids relying on the first name in a legitimately merged material batch.
+- Full Chromium browser suite is running against the combined source; update this line with its final result before release. Earlier legacy-source results remain separate below.
 
 ```sh
 npm test
@@ -32,40 +29,27 @@ npm run build
 CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npx playwright test --workers=1
 ```
 
-The optional executable-path configuration supports this cloud's system Chromium. Without that variable, the existing Playwright-managed browser selection is unchanged.
+Local browser checks use system Chromium with ANGLE/Vulkan SwiftShader. The Playwright-managed browser cache is absent locally; CI provides the default-browser check. No target-GPU or RTX performance claim follows from these tests.
 
-## Visual evidence
+## CI evidence and the earlier failure
 
-[QA record and captures](qa/reaper-lod-20261110/README.md) contain actual sandbox renders, the renderer/transition telemetry and the negative control. The magnified reduced portraits were inspected: structural carapaces and apertures remain present while nested arm lighting reduces. They select production LOD first and then move only the camera for inspection; no mesh enlargement or physical state change is used.
+The pre-integration feature parent `46d6c22` passed both actual GitHub checks:
 
-This is structural-render acceptance only. It does not approve private source-reference likeness or claim that the broader Reaper geometry/palette programme is finished. Six-view source approval, sustained high-count combat profiling, listening acceptance and target-GPU 4K performance remain outstanding programme requirements.
+- [Full verification 42837786373](https://github.com/RDRM95/reaper-war-sandbox/actions/runs/42837786373): **30 passed in 5.1 minutes**, total 5 minutes 53 seconds.
+- [Graphics verification 42837786184](https://github.com/RDRM95/reaper-war-sandbox/actions/runs/42837786184): **success**, total 3 minutes 14 seconds.
 
-## Files and reconciliation boundary
+Earlier parent `25bb41e` failed [verify run 42835934611](https://github.com/RDRM95/reaper-war-sandbox/actions/runs/42835934611) with only an exit-code annotation. Detailed reporters were added; the failure did not reproduce on `46d6c22` and its exact cause remains unknown. No assertions, timeout or retry setting was weakened. That older unexplained failure is not described as repaired, and green parent checks do not replace checks on the final combined commit.
 
-- Shared policy/helpers: `src/rendering/lod.ts`, new `src/rendering/shipLod.ts` (byte-identical to the Codex pass when ported).
-- Local adapters: `src/rendering/battleView.ts`, `src/rendering/instancedFleet.ts`.
-- Regression/QA: `tests/reaper-lod.test.mjs`, `e2e/reaper-lod.spec.ts`, this checkpoint and `qa/reaper-lod-20261110/`.
-- Harness: optional system Chromium path in `playwright.config.ts`; generated browser output ignored by `.gitignore` while curated QA remains tracked.
-- CI: the existing verification and graphics workflows also run on this specific feature branch, using their normal tests unchanged. GitHub PR API calls return `Forbidden` in the cloud environment, so push checks provide reviewable evidence while PR creation/merge access is restored. This does not bypass PR or deployment gates.
+## Rendered evidence and limits
 
-PR #32 also edits `instancedFleet.ts`, but its hidden-ancestor visibility guard and this pass's detail classification are independent. Reconcile the individual changes rather than copying the complete file over either branch. Concurrent carapace/material and P1 combat/formation work remains outside this port.
+[Legacy LOD evidence](qa/reaper-lod-20261110/README.md) preserves the original models, negative control and earlier captures. The control restored only the original GPU classification: three expected capital/Harbinger/destroyer failures, four unaffected checks passed. A later compatibility-only pass left all five legacy PNG hashes and transition JSON identical; this historical comparison is not a claim that the subsequent geometry rebuild is visually identical.
 
-## Exact next task
+Final combined-source captures and telemetry are to be added after the current browser run. Rendering checks require WebGL error 0, no page/render errors and exact unchanged serialization of physical ship state, events, projectiles, missiles, tick and RNG through nine production LOD transitions. Magnified portraits select production reduced LOD first, then move only the camera without another LOD update or mesh scaling.
 
-After committing this feature, obtain green PR checks and verify the merged deployment. Continue the independently owned carapace/limb/palette slice with six-view and context evidence; reconcile the existing hidden-limb/Ascendant-size port separately. Do not repeat completed optics, orbital-lighting or Oculus-damage fixes.
+Structural-render acceptance does not approve private source-reference likeness or close issues #16/#19. Six-view source approval, listening acceptance, sustained high-count combat profiling and target-GPU 4K acceptance remain distinct requirements.
 
-## Follow-up: compatibility with the separately authored carapace layout
+## Files and next task
 
-The original LOD port was committed as `25bb41e65a0333e70a7f3b913523ff72b21fce02`. After that commit, the independently owned geometry PR #29 appeared with a dedicated structural mesh named `carapace`; its `plates` are decorative overlays. This follow-up imports none of that geometry and does not merge the PR.
+Owned adapters/tests: `src/rendering/lod.ts`, `shipLod.ts`, `battleView.ts`, `instancedFleet.ts`, `tests/reaper-lod.test.mjs`, `e2e/reaper-lod.spec.ts`, optional system-browser selection in `playwright.config.ts`, generated-output ignore rules and this QA record. Upstream model/material/barrier changes remain attributable to their merged source commits.
 
-The shared classifier now retains legacy Reaper `plates` only when the model has no dedicated `carapace`. Hero capture and batch creation determine that layout once, outside per-frame traversal. Eyes stay structural in both layouts. Two additional regressions cover nested carapace/overlay visibility and the actual GPU batch adapter with an isolated synthetic carapace, restoring the original model template afterward.
-
-Validation after this compatibility change: all six configured unit files pass (**21 assertions**, including nine LOD assertions); production typecheck/build pass; focused real Chromium regression **1 passed in 15.2 seconds** (13.9-second case). The earlier full **30/30** browser result belongs to the original port; it was not unnecessarily repeated for this bounded compatibility addition. Shared `lod.ts` and `shipLod.ts` still match the Codex counterpart byte for byte. The original negative-control artifact records the seven-case harness before these two compatibility cases were added.
-
-All five curated current-model PNG files have identical SHA-256 hashes before and after the compatibility follow-up, and the nine-transition telemetry JSON is identical. The new layout detection therefore leaves the shipped legacy-model captures and physical state unchanged in these cases.
-
-## Remote and compatibility follow-up
-
-The initial pushed feature commit `25bb41e65a0333e70a7f3b913523ff72b21fce02` passed graphics CI [42835934439](https://github.com/RDRM95/reaper-war-sandbox/actions/runs/42835934439). Its full verification CI [42835934611](https://github.com/RDRM95/reaper-war-sandbox/actions/runs/42835934611) passed units/build but failed the browser step. The old reporter exposed only an exit code; the workflow now emits GitHub assertion annotations and an HTML report using the same tests, without retries or relaxed assertions. That failure is unresolved until its exact assertion is diagnosed and the current head passes.
-
-PR #29's new original carapace branch appeared during reconciliation. The shared policy now distinguishes legacy structural `plates` from decorative `plates` when a dedicated `carapace` exists. Two new regressions cover this future layout through the hero hierarchy and actual batch adapter. All 21 local unit assertions, build/typecheck and the focused browser check pass. Existing five PNG captures and transition telemetry remain byte-identical. No geometry from the owner branch was merged or changed.
+**Next:** finish combined browser/visual checks; commit and push the merged feature; require green CI on that exact head; create/review the focused PR once repository API access is available; then verify the post-merge deployment. Continue the current programme checkpoint and existing P1 combat/formation work without duplicating its active branches or marking the 43-model source-reference programme complete.
