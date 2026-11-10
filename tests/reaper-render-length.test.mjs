@@ -9,12 +9,13 @@ import ts from 'typescript';
 // Build the Reaper hulls without a browser: transpile the builder and its two helpers to CommonJS next to each
 // other (Three.js ships a CommonJS build; the one ESM helper it pulls in loads through Node's require(esm)).
 const directory = mkdtempSync(join(tmpdir(), 'reaper-render-'));
-const files = { geometry: '../src/rendering/geometry.ts', materials: '../src/rendering/materials.ts', reaper: '../src/rendering/ships/reaper.ts' };
+const files = { geometry: '../src/rendering/geometry.ts', materials: '../src/rendering/materials.ts', reaper: '../src/rendering/ships/reaper.ts', reaperMotion: '../src/rendering/reaperMotion.ts' };
 for (const [name, path] of Object.entries(files)) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
     .replace(/from '\.\.\/geometry'/g, "from './geometry.cjs'")
     .replace(/from '\.\.\/materials'/g, "from './materials.cjs'")
-    ;
+    // The rig only asks the gunnery module which mount is the main battery; a stand-in keeps this test to the rig.
+    .replace("import { primaryGunneryMount } from './gunnery';", 'const primaryGunneryMount = (ship) => ship.weapons.find((w) => !w.def.antiSmall) ?? ship.weapons[0];');
   writeFileSync(join(directory, name + '.cjs'), ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
   }).outputText);
@@ -29,6 +30,7 @@ for (const name of Object.keys(files)) {
     .replace(/require\("three\/examples\/jsm\/utils\/BufferGeometryUtils\.js"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three/examples/jsm/utils/BufferGeometryUtils.js')) + ')'));
 }
 const { buildReaperCapital, buildHarbinger, buildReaperDestroyer, buildReaperAscendant } = projectRequire(join(directory, 'reaper.cjs'));
+const { captureReaperRig, animateReaperRig } = projectRequire(join(directory, 'reaperMotion.cjs'));
 
 test('the Ascendant renders at its catalogue 30 km (300 units), not 36', () => {
   const built = buildReaperAscendant();
@@ -68,4 +70,32 @@ test('rebuilt Reaper hulls keep their catalogue lengths and weapon attachment po
     const m = [built.muzzle.x, built.muzzle.y, built.muzzle.z];
     for (let i = 0; i < 3; i++) assert.ok(Math.abs(m[i] - expected[name].muzzle[i]) < expected[name].length * 0.02, name + ' muzzle axis ' + i + ': ' + m[i]);
   }
+});
+
+test('Reaper limbs open into a combat stance and gather again, slowly and one after another', () => {
+  // Port of the Codex build's tests/reaper-stance.test.ts: before, a capital's claw tips moved about 15 m in a whole
+  // idle cycle and engaging changed nothing.
+  const ship = { role: 'reaper_capital', faction: 'reaper', vel: { x: 0, y: 0, z: 0 }, maxSpeed: 1, targetId: undefined,
+    weapons: [{ beamRemaining: 0, cooldown: 5, def: { kind: 'reaper_beam', antiSmall: false } }] };
+  const built = buildReaperCapital();
+  const rig = captureReaperRig(built.group, 'stance-capital');
+  const tips = () => rig.elbows.map((elbow) => {
+    elbow.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(elbow);
+    return new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z);
+  });
+  const span = (points) => { let widest = 0; for (const a of points) for (const b of points) widest = Math.max(widest, Math.hypot(a.x - b.x, a.y - b.y)); return widest; };
+  let t = 0;
+  const run = (seconds, engaged) => { for (let i = 0; i < seconds * 20; i++) { animateReaperRig(rig, ship, t, 0.05, engaged); t += 0.05; } };
+  run(2, false);
+  const travel = tips();
+  run(2, true);
+  assert.ok(Math.max(...rig.stance) < 0.6, 'a capital is not open after two seconds');
+  assert.ok(Math.max(...rig.stance) - Math.min(...rig.stance) > 0.03, 'limbs run on their own clocks');
+  run(40, true);
+  const combat = tips();
+  assert.ok(span(combat) - span(travel) > 2, 'claw-tip span grows by more than 2 units: ' + (span(combat) - span(travel)));
+  for (let i = 0; i < travel.length; i++) assert.ok(combat[i].distanceTo(travel[i]) > 1, 'tip ' + i + ' moves over 100 m');
+  run(60, false);
+  assert.ok(Math.abs(span(tips()) - span(travel)) < 0.3, 'the limbs gather again');
 });
