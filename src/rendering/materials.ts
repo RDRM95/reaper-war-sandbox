@@ -19,9 +19,11 @@ const std = (color: number, opts: Partial<THREE.MeshStandardMaterialParameters> 
 
 export const PALETTES: Record<string, FactionPalette> = {
   alliance: {
-    hull: std(0xb9c1cc, { metalness: 0.5, roughness: 0.42 }),
-    hullDark: std(0x3b4350, { metalness: 0.6, roughness: 0.5 }),
-    accent: std(0x1f5fb3, { metalness: 0.4, roughness: 0.4 }),
+    // Painted armour, not polished metal: a matt off-white over dark mechanical tiers. At the old metalness 0.5 and
+    // roughness 0.42 sunlit faces measured 8.8 to 10.2 in scene-linear light and clipped to white on screen.
+    hull: std(0xb4b9c0, { metalness: 0.16, roughness: 0.76, envMapIntensity: 0.8 }),
+    hullDark: std(0x2c313a, { metalness: 0.4, roughness: 0.68 }),
+    accent: std(0x2259ad, { metalness: 0.2, roughness: 0.6 }),
     engine: new THREE.MeshStandardMaterial({ color: 0x5fb8ff, emissive: 0x3c9dff, emissiveIntensity: 3.2, roughness: 0.3, metalness: 0 }),
     windows: new THREE.MeshStandardMaterial({ color: 0xcfe8ff, emissive: 0x9fd0ff, emissiveIntensity: 1.6, roughness: 0.6 }),
     glow: new THREE.MeshBasicMaterial({ color: 0x5fb8ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),

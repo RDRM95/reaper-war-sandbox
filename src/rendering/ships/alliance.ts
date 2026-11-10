@@ -48,15 +48,13 @@ export function assemble(parts: Parts, faction: string, engineNodes: THREE.Vecto
   return { group, engineNodes, lengthUnits, muzzle, glowColor };
 }
 
-/** Capital silhouettes share a manufacturing language, not a scaled template.
- * The long gun keel, armoured rails, forward bridge and broadside sponsons
- * remain legible at battle distance. Decorative parts merge into five meshes.
+/** The heavy three-rail gunship hull that the Omaha, Aegis and Valkyrie classes are built on: long gun keel,
+ * armoured rails, forward bridge and broadside sponsons, six drives. Decorative parts merge into five meshes.
+ * The line dreadnought and cruiser have their own hulls below.
  */
-function buildAllianceGunship(L: number, kind: 'dreadnought' | 'omaha' | 'cruiser'): BuiltShip {
+function buildAllianceGunship(L: number): BuiltShip {
   const parts = newParts();
-  const heavy = kind === 'omaha';
-  const cruiser = kind === 'cruiser';
-  const beam = L * (heavy ? 0.28 : cruiser ? 0.25 : 0.26);
+  const beam = L * 0.28;
   const height = L * 0.075;
   const gunZ = L * 0.48;
   // Continuous ventral accelerator, flanked by pale armour rails.
@@ -67,7 +65,7 @@ function buildAllianceGunship(L: number, kind: 'dreadnought' | 'omaha' | 'cruise
     parts.hull.push(at(taperedBox(beam * 0.25, height * 0.65, L * 0.55, 0.65, 0.9), side * beam * 0.36, -height * 0.08, -L * 0.055));
     parts.hullDark.push(at(new THREE.BoxGeometry(beam * 0.045, height * 0.25, L * 0.44), side * beam * 0.49, 0, -L * 0.045));
     parts.accent.push(at(new THREE.BoxGeometry(beam * 0.035, height * 0.025, L * 0.56), side * beam * 0.25, height * 0.51, -L * 0.02));
-    const batteries = heavy ? 6 : cruiser ? 2 : 4;
+    const batteries = 6;
     for (let i = 0; i < batteries; i++) {
       const z = -L * 0.24 + i * L * 0.42 / Math.max(1, batteries - 1);
       parts.hullDark.push(at(new THREE.BoxGeometry(beam * 0.09, height * 0.18, L * 0.035), side * beam * 0.42, height * 0.35, z));
@@ -84,24 +82,22 @@ function buildAllianceGunship(L: number, kind: 'dreadnought' | 'omaha' | 'cruise
   parts.hull.push(at(taperedBox(beam * 0.28, height * 0.55, L * 0.20, 0.65, 1), 0, height * 0.66, L * 0.12));
   parts.hullDark.push(at(taperedBox(beam * 0.18, height * 0.46, L * 0.09, 0.75, 1), 0, height * 1.03, L * 0.10));
   parts.windows.push(at(new THREE.BoxGeometry(beam * 0.19, height * 0.06, L * 0.035), 0, height * 1.14, L * 0.13));
-  if (heavy) {
-    // Omaha's reinforced channel and recoil braces are unique geometry.
-    for (const side of [-1, 1]) {
-      parts.hull.push(at(taperedBox(beam * 0.09, height * 0.8, L * 0.55, 0.3, 1), side * beam * 0.13, height * 0.38, L * 0.08));
-    }
-    for (const z of [-0.18, -0.02, 0.14]) parts.hullDark.push(at(new THREE.BoxGeometry(beam * 0.62, height * 0.10, L * 0.016), 0, height * 0.61, L * z));
+  // Reinforced channel and recoil braces.
+  for (const side of [-1, 1]) {
+    parts.hull.push(at(taperedBox(beam * 0.09, height * 0.8, L * 0.55, 0.3, 1), side * beam * 0.13, height * 0.38, L * 0.08));
   }
-  const nozzles = heavy ? 6 : cruiser ? 2 : 4;
+  for (const z of [-0.18, -0.02, 0.14]) parts.hullDark.push(at(new THREE.BoxGeometry(beam * 0.62, height * 0.10, L * 0.016), 0, height * 0.61, L * z));
+  const nozzles = 6;
   const engineNodes: THREE.Vector3[] = [];
   parts.hullDark.push(at(taperedBox(beam * 0.76, height * 1.45, L * 0.16, 0.9, 1), 0, -height * 0.05, -L * 0.38));
   parts.hull.push(at(taperedBox(beam * 0.72, height * 0.18, L * 0.16, 0.8, 1), 0, height * 0.73, -L * 0.38));
   parts.accent.push(at(new THREE.BoxGeometry(beam * 0.5, height * 0.025, L * 0.025), 0, height * 0.83, -L * 0.37));
   for (const side of [-1, 1]) parts.hull.push(at(taperedBox(beam * 0.07, height * 0.95, L * 0.14, 0.7, 1), side * beam * 0.34, 0, -L * 0.38));
   for (let i = 0; i < nozzles; i++) {
-    const columns = nozzles === 2 ? 2 : nozzles / 2;
-    const x = (i % columns - (columns - 1) / 2) * beam * (heavy ? 0.22 : 0.38);
-    const y = nozzles > 2 ? (i < columns ? 1 : -1) * height * 0.33 : 0;
-    const r = L * (heavy ? 0.021 : cruiser ? 0.026 : 0.024);
+    const columns = nozzles / 2;
+    const x = (i % columns - (columns - 1) / 2) * beam * 0.22;
+    const y = (i < columns ? 1 : -1) * height * 0.33;
+    const r = L * 0.021;
     parts.hullDark.push(at(zCylinder(r * 1.25, r, L * 0.055, 12, true), x, y, -L * 0.465));
     parts.engine.push(at(zCylinder(r * 0.86, r * 0.75, L * 0.008, 12), x, y, -L * 0.495));
     engineNodes.push(new THREE.Vector3(x, y, -L * 0.50));
@@ -109,14 +105,103 @@ function buildAllianceGunship(L: number, kind: 'dreadnought' | 'omaha' | 'cruise
   return assemble(parts, 'alliance', engineNodes, L, new THREE.Vector3(0, -height * 0.12, gunZ));
 }
 
-/** Existing catalogue dimensions are preserved; these are original fan hulls. */
-export const buildAllianceDreadnought = (): BuiltShip => buildAllianceGunship(8.88, 'dreadnought');
+/**
+ * A flat armour plate: an outline in the deck plane (x across, z along), mirrored about the centre line and
+ * extruded downward from `yTop`. `half` runs along the starboard edge from the stern to the bow, x >= 0.
+ */
+function deckPlate(half: readonly (readonly [number, number])[], yTop: number, thickness: number, L: number): THREE.BufferGeometry {
+  const points = [...half, ...half.filter(([x]) => x > 0).reverse().map(([x, z]) => [-x, z] as const)];
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0] * L, points[0][1] * L);
+  for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0] * L, points[i][1] * L);
+  shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, { depth: thickness * L, bevelEnabled: false, curveSegments: 1 });
+  // Shape y becomes ship z; the extrusion runs down from the top face.
+  g.rotateX(Math.PI / 2);
+  g.translate(0, yTop * L, 0);
+  return g;
+}
+
+/** A row of small lit ports along a straight stretch of hull side, each turned to lie along the row. */
+function portRow(parts: Parts, from: readonly [number, number, number], to: readonly [number, number, number], count: number, L: number): void {
+  const yaw = Math.atan2(to[0] - from[0], to[2] - from[2]);
+  for (let i = 0; i < count; i++) {
+    const t = (i + 0.5) / count;
+    const g = rot(new THREE.BoxGeometry(0.0022 * L, 0.0042 * L, 0.0075 * L), 0, yaw, 0);
+    parts.windows.push(at(g, (from[0] + (to[0] - from[0]) * t) * L, (from[1] + (to[1] - from[1]) * t) * L, (from[2] + (to[2] - from[2]) * t) * L));
+  }
+}
+
+/** Drive block shared by the line hulls: nozzles and engine nodes exactly where the previous models had them. */
+function lineDrives(parts: Parts, L: number, nozzles: 2 | 4, beam: number, height: number, r: number): THREE.Vector3[] {
+  const nodes: THREE.Vector3[] = [];
+  for (let i = 0; i < nozzles; i++) {
+    const columns = nozzles === 2 ? 2 : nozzles / 2;
+    const x = (i % columns - (columns - 1) / 2) * beam * 0.38;
+    const y = nozzles > 2 ? (i < columns ? 1 : -1) * height * 0.33 : 0;
+    parts.hullDark.push(at(zCylinder(r * 1.25, r, L * 0.055, 12, true), x, y, -L * 0.465));
+    parts.engine.push(at(zCylinder(r * 0.86, r * 0.75, L * 0.008, 12), x, y, -L * 0.495));
+    nodes.push(new THREE.Vector3(x, y, -L * 0.50));
+  }
+  return nodes;
+}
+
+/**
+ * Alliance dreadnought. A broad, flat arrowhead of layered deck armour that narrows into a long spinal blade around
+ * the main gun; a stepped command citadel over the aft third with raised slab fins beside it; a dark ventral tier
+ * and keel; blue deck inlays; long rows of lit ports along the deck edge. Original procedural geometry: the shapes
+ * are outlines and boxes written here, in the proportions of the Alliance capital silhouette (beam under a third
+ * of the length, height under a sixth). Length, muzzle and engine nodes are those of the model it replaces.
+ */
+export function buildAllianceDreadnought(): BuiltShip {
+  const L = 8.88;
+  const parts = newParts();
+  const beam = L * 0.26, height = L * 0.075;
+  // Main deck: arrowhead into the spinal blade.
+  parts.hull.push(deckPlate([[0.105, -0.44], [0.15, -0.40], [0.15, -0.08], [0.075, 0.14], [0.034, 0.20], [0.012, 0.47], [0, 0.5]], 0.018, 0.04, L));
+  // Raised second tier of deck armour.
+  parts.hull.push(deckPlate([[0.085, -0.42], [0.115, -0.38], [0.115, -0.10], [0.05, 0.10], [0.02, 0.16], [0, 0.17]], 0.03, 0.014, L));
+  // Dark ventral tier and keel under the pale deck.
+  parts.hullDark.push(deckPlate([[0.12, -0.47], [0.16, -0.43], [0.16, -0.18], [0.09, 0.02], [0.03, 0.12], [0.018, 0.44], [0, 0.46]], -0.022, 0.022, L));
+  parts.hullDark.push(at(taperedBox(L * 0.05, L * 0.014, L * 0.86, 0.45, 1), 0, -L * 0.051, -L * 0.03));
+  // Main gun housing at the tip of the blade.
+  parts.hullDark.push(at(zCylinder(L * 0.017, L * 0.021, L * 0.12, 12), 0, -height * 0.12, L * 0.43));
+  // Stepped command citadel over the aft third.
+  parts.hull.push(at(taperedBox(L * 0.12, L * 0.032, L * 0.24, 0.7, 0.9), 0, L * 0.046, -L * 0.25));
+  parts.hull.push(at(taperedBox(L * 0.085, L * 0.022, L * 0.15, 0.7, 0.95), 0, L * 0.073, -L * 0.27));
+  parts.hullDark.push(at(taperedBox(L * 0.05, L * 0.012, L * 0.07, 0.8, 1), 0, L * 0.090, -L * 0.25));
+  parts.windows.push(at(new THREE.BoxGeometry(L * 0.036, L * 0.004, L * 0.003), 0, L * 0.090, -L * 0.2145));
+  parts.accent.push(at(new THREE.BoxGeometry(L * 0.07, L * 0.002, L * 0.03), 0, L * 0.0848, -L * 0.325));
+  for (const side of [-1, 1]) {
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.004, L * 0.009, L * 0.004), side * L * 0.02, L * 0.1005, -L * 0.29));
+    // Raised slab fin beside the citadel, on a short pylon.
+    parts.hull.push(at(taperedBox(L * 0.05, L * 0.012, L * 0.2, 0.7, 1), side * L * 0.125, L * 0.046, -L * 0.33));
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.012, L * 0.024, L * 0.08), side * L * 0.118, L * 0.03, -L * 0.34));
+    // Blue deck inlay on the second tier.
+    const inlay = new THREE.Shape();
+    inlay.moveTo(side * 0.03 * L, -0.08 * L); inlay.lineTo(side * 0.095 * L, -0.08 * L); inlay.lineTo(side * 0.05 * L, 0.07 * L); inlay.lineTo(side * 0.03 * L, 0.07 * L); inlay.closePath();
+    const panel = new THREE.ExtrudeGeometry(inlay, { depth: 0.002 * L, bevelEnabled: false, curveSegments: 1 });
+    panel.rotateX(Math.PI / 2); panel.translate(0, 0.0315 * L, 0);
+    parts.accent.push(panel);
+    // Panel lines in the deck armour, and broadside casemates along its edge.
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.0016, L * 0.0016, L * 0.3), side * L * 0.07, L * 0.0304, -L * 0.25));
+    for (let i = 0; i < 4; i++) parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.014, L * 0.007, L * 0.022), side * L * 0.134, L * 0.0215, -L * (0.36 - i * 0.075)));
+    // Long rows of lit ports along the deck edge, straight run and taper.
+    portRow(parts, [side * 0.1508, -0.002, -0.395], [side * 0.1508, -0.002, -0.085], 22, L);
+    portRow(parts, [side * 0.1488, -0.002, -0.075], [side * 0.0778, -0.002, 0.135], 14, L);
+  }
+  for (const z of [-0.38, -0.18]) parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.22, L * 0.0016, L * 0.0016), 0, L * 0.0304, L * z));
+  // Drive block.
+  parts.hullDark.push(at(taperedBox(L * 0.2, L * 0.05, L * 0.08, 1, 0.9), 0, -L * 0.004, -L * 0.455));
+  const engineNodes = lineDrives(parts, L, 4, beam, height, L * 0.024);
+  return assemble(parts, 'alliance', engineNodes, L, new THREE.Vector3(0, -height * 0.12, L * 0.48));
+}
 /** Alliance-fitted APEX Omaha. Retains Alliance spine engineering but has
  * its own broad gun-cradle and angular weapon sponsons; the Cerberus Omaha is
  * a separate class with an entirely independent model builder.
  */
 export const buildAllianceOmaha = (): BuiltShip => {
-  const base = buildAllianceGunship(18, 'omaha');
+  const base = buildAllianceGunship(18);
   const parts = newParts();
   for (const side of [-1, 1]) {
     // Exposed structural gun cradle / heavy lateral armour, inspired by the
@@ -156,7 +241,7 @@ export const buildAllianceOmaha = (): BuiltShip => {
  * paired spinal bracing rails. Distinct from the named Valkyrie prototype.
  */
 export const buildAllianceAegis = (): BuiltShip => {
-  const hull = buildAllianceGunship(16.5, 'omaha');
+  const hull = buildAllianceGunship(16.5);
   const p = paletteFor('alliance');
   const parts = newParts();
   for(const side of [-1, 1]){
@@ -222,8 +307,38 @@ export function buildAllianceCarrier(): BuiltShip {
   return assemble(parts, 'alliance', [new THREE.Vector3(0.6, 0.2, z0), new THREE.Vector3(-0.6, 0.2, z0), new THREE.Vector3(0, -0.25, z0)], L);
 }
 
-/** Cruiser keeps the Alliance capital-slab language on its 520 m hull. */
-export const buildAllianceCruiser = (): BuiltShip => buildAllianceGunship(5.2, 'cruiser');
+/**
+ * Alliance cruiser. Its own silhouette, not a small dreadnought: the deck forks into two forward prongs either side
+ * of the gun spine, with a low bridge aft and two drives. Original procedural geometry; length, muzzle and engine
+ * nodes are those of the model it replaces.
+ */
+export function buildAllianceCruiser(): BuiltShip {
+  const L = 5.2;
+  const parts = newParts();
+  const beam = L * 0.25, height = L * 0.075;
+  // Forked main deck: outer prongs, the notch, then the gun spine to the bow.
+  parts.hull.push(deckPlate([[0.10, -0.45], [0.135, -0.41], [0.135, 0.30], [0.115, 0.37], [0.095, 0.37], [0.085, 0.30], [0.085, 0.06], [0.032, 0.06], [0.014, 0.46], [0, 0.5]], 0.02, 0.042, L));
+  parts.hull.push(deckPlate([[0.08, -0.42], [0.105, -0.38], [0.105, 0.02], [0.03, 0.02], [0.02, 0.2], [0, 0.22]], 0.031, 0.011, L));
+  parts.hullDark.push(deckPlate([[0.11, -0.46], [0.125, -0.40], [0.125, 0.26], [0.09, 0.30], [0.09, 0.04], [0.026, 0.04], [0.018, 0.42], [0, 0.46]], -0.022, 0.02, L));
+  parts.hullDark.push(at(taperedBox(L * 0.045, L * 0.012, L * 0.84, 0.45, 1), 0, -L * 0.048, -L * 0.03));
+  parts.hullDark.push(at(zCylinder(L * 0.017, L * 0.021, L * 0.12, 12), 0, -height * 0.12, L * 0.43));
+  // Low bridge aft.
+  parts.hull.push(at(taperedBox(L * 0.11, L * 0.026, L * 0.2, 0.7, 0.9), 0, L * 0.044, -L * 0.24));
+  parts.hullDark.push(at(taperedBox(L * 0.066, L * 0.016, L * 0.1, 0.75, 1), 0, L * 0.065, -L * 0.25));
+  parts.windows.push(at(new THREE.BoxGeometry(L * 0.046, L * 0.004, L * 0.003), 0, L * 0.066, -L * 0.199));
+  for (const side of [-1, 1]) {
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.004, L * 0.01, L * 0.004), side * L * 0.022, L * 0.078, -L * 0.28));
+    // Blue stripe along each prong, panel line inboard of it, casemates and ports along the edge.
+    parts.accent.push(at(new THREE.BoxGeometry(L * 0.02, L * 0.002, L * 0.26), side * L * 0.11, L * 0.0212, L * 0.17));
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.0018, L * 0.0018, L * 0.36), side * L * 0.07, L * 0.0314, -L * 0.2));
+    for (let i = 0; i < 2; i++) parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.016, L * 0.008, L * 0.026), side * L * 0.118, L * 0.024, -L * (0.3 - i * 0.16)));
+    portRow(parts, [side * 0.1358, -0.002, -0.40], [side * 0.1358, -0.002, 0.29], 26, L);
+  }
+  parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.2, L * 0.0018, L * 0.0018), 0, L * 0.0314, -L * 0.36));
+  parts.hullDark.push(at(taperedBox(L * 0.18, L * 0.05, L * 0.08, 1, 0.9), 0, -L * 0.004, -L * 0.455));
+  const engineNodes = lineDrives(parts, L, 2, beam, height, L * 0.026);
+  return assemble(parts, 'alliance', engineNodes, L, new THREE.Vector3(0, -height * 0.12, L * 0.48));
+}
 
 /** Reference-informed Normandy SR-2. Unlike the ordinary Alliance frigate,
  * its long needle bow, four aft engine nacelles and swept shoulder panels are
@@ -339,7 +454,7 @@ export function buildAllianceFighter(): BuiltShip {
  * reinforced conventional dreadnought through outboard lance rails, dorsal
  * command block and a separate dedicated NOVA emitter. */
 export const buildAllianceValkyrie = (): BuiltShip => {
-  const built = buildAllianceGunship(20.2, 'omaha');
+  const built = buildAllianceGunship(20.2);
   const hull = built.group.getObjectByName('hull') as THREE.Mesh;
   const dark = built.group.getObjectByName('hullDark') as THREE.Mesh;
   const plateMaterial = (hull?.material as THREE.Material) ?? paletteFor('alliance').hull;
