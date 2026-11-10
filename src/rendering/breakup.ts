@@ -44,3 +44,15 @@ export function collectBreakupPieces(group: THREE.Object3D, max = MAX_BREAKUP_PI
   }
   return kept;
 }
+
+/**
+ * Velocity of a hull piece as the hull breaks up: outward from the centre of the break along the piece's own
+ * offset, so limbs and plates separate instead of drifting through one another, plus a small scatter. `size` is
+ * the explosion's size in render units; a piece with no offset (the hull's own core) only scatters.
+ */
+export function breakupVelocity(offset: THREE.Vector3, size: number, rng: { next(): number; gaussian(mean: number, sd: number): number }, out = new THREE.Vector3()): THREE.Vector3 {
+  const distance = offset.length();
+  out.set(rng.gaussian(0, 1), rng.gaussian(0, 1), rng.gaussian(0, 1)).multiplyScalar(size * 0.025);
+  if (distance > 1e-4) out.addScaledVector(offset, (size * (0.06 + 0.06 * rng.next())) / distance);
+  return out;
+}

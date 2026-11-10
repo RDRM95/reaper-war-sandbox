@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Rng } from '@/core/rng';
 import { KM } from './geometry';
 import { HullBarriers } from './barriers';
+import { breakupVelocity } from './breakup';
 
 /**
  * Pooled visual effects: tracer projectiles, beams, impact flashes, barrier
@@ -88,6 +89,8 @@ export class EffectsSystem {
   private readonly missileMesh: THREE.InstancedMesh;
 
   private readonly debrisGeo = [new THREE.BoxGeometry(1, 0.4, 1.6), new THREE.TetrahedronGeometry(0.8), new THREE.BoxGeometry(0.5, 0.5, 2.5)];
+  private readonly pieceBox = new THREE.Box3();
+  private readonly pieceCentre = new THREE.Vector3();
   private readonly debrisMat = new THREE.MeshStandardMaterial({ color: 0x55585f, metalness: 0.7, roughness: 0.5, emissive: 0x401000, emissiveIntensity: 0.6 });
 
   /** Point light reused for the biggest explosions. */
@@ -259,9 +262,11 @@ export class EffectsSystem {
     }
     for (const piece of pieces) {
       this.group.attach(piece);
+      // Pieces separate outward from the centre of the break.
+      const offset = this.pieceBox.setFromObject(piece).getCenter(this.pieceCentre).sub(pos);
       this.debris.push({
         mesh: piece,
-        vel: new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 0.12).add(velocity),
+        vel: breakupVelocity(offset, size, this.rng).add(velocity),
         spin: new THREE.Vector3(this.rng.gaussian(0, 0.6), this.rng.gaussian(0, 0.6), this.rng.gaussian(0, 0.6)),
         life: 10 + this.rng.next() * 6,
         maxLife: 16,
@@ -277,10 +282,11 @@ export class EffectsSystem {
   }
 
   /** Secondary explosion along a dying capital ship (pre-destruction sequence). */
-  secondary(pos: THREE.Vector3, size: number): void {
-    this.spark(pos, new THREE.Vector3(), 0.5, size * 0.3, size * 1.1, this.fireTex, 0xffffff);
+  /** A secondary explosion on a dying hull. `drift` is the hull's own velocity, so the burst stays with it. */
+  secondary(pos: THREE.Vector3, size: number, drift = new THREE.Vector3()): void {
+    this.spark(pos, drift.clone(), 0.5, size * 0.3, size * 1.1, this.fireTex, 0xffffff);
     for (let i = 0; i < 4; i++) {
-      const v = new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 0.5);
+      const v = new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 0.5).add(drift);
       this.spark(pos, v, 0.8, size * 0.15, size * 0.03, this.fireTex, 0xffc080);
     }
   }

@@ -24,6 +24,7 @@ import { primaryGunneryMount, isMainGunShot, gunneryFrame } from './gunnery';
 import { animateReaperRig, captureReaperRig, isArticulatedReaper, type ReaperRig } from './reaperMotion';
 import { EmitterLightPool, easeEmitterCharge, emitterTarget } from './emitterLights';
 import { collectBreakupPieces } from './breakup';
+import { deathLight, deathList, deathPlan, type DeathPlan } from './deathSequence';
 import { DAMAGE_ONSET, REAPER_ARMOUR_MESHES, REAPER_SEAM_MESHES, reaperDamageGlow, type ReaperDamageGlow } from './damageGlow';
 
 /**
@@ -36,7 +37,7 @@ export interface ShipVisual {
   ship: ShipState;
   built: BuiltShip;
   glows: THREE.Sprite[];
-  dying?: { timer: number; duration: number; nextSecondary: number };
+  dying?: { timer: number; plan: DeathPlan; next: number; seamBase?: number[]; glowBase?: number[] };
   removed: boolean;
   /** Unique materials for damage tinting (cloned lazily on first damage). */
   tinted: boolean;
@@ -546,24 +547,51 @@ export class BattleView {
   private updateDying(v: ShipVisual, dt: number): void {
     const ship = v.ship;
     if (!v.dying) {
-      const big = ship.role === 'dreadnought' || ship.role === 'carrier' || ship.role === 'reaper_capital';
-      v.dying = { timer: 0, duration: big ? 2.2 : ship.role === 'cruiser' || ship.role === 'reaper_destroyer' ? 0.9 : 0.15, nextSecondary: 0 };
-      if (!big && v.dying.duration < 0.2) {
+      const plan = deathPlan(ship.role, ship.id);
+      v.dying = { timer: 0, plan, next: 0 };
+      if (plan.duration < 0.2) {
         this.finishDeath(v);
         return;
+      }
+      if (plan.staged) {
+        // A Reaper killed outright never passed through the damage tint: give it its own seam materials now, hot.
+        if (v.reaperRig && !v.tinted) this.tintDamage(v);
+        if (v.seamMats && v.emberMats && v.reaperRig) {
+          const glow = reaperDamageGlow(0, this.sim.time, v.reaperRig.phase, this.damageGlow);
+          for (const mat of v.seamMats) { mat.color.copy(glow.seam); mat.emissive.copy(glow.seam); mat.emissiveIntensity = glow.seamIntensity; }
+          for (const mat of v.emberMats) { mat.emissive.setRGB(glow.ember, glow.ember * 0.12, 0); mat.emissiveIntensity = 1; }
+        }
+        v.dying.seamBase = (v.seamMats ?? []).map(mat => mat.emissiveIntensity);
+        v.dying.glowBase = v.glows.map(gl => (gl.material as THREE.SpriteMaterial).opacity);
       }
     }
     const d = v.dying;
     d.timer += dt;
-    // Keep drifting on last velocity, shedding secondary explosions.
-    v.built.group.position.add(this.tmpA.set(ship.vel.x, ship.vel.y, ship.vel.z).multiplyScalar(KM * dt * 0.6));
-    v.built.group.rotateX(dt * 0.05);
-    if (d.timer >= d.nextSecondary) {
-      d.nextSecondary = d.timer + 0.12 + Math.random() * 0.25;
-      const p = v.built.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * v.built.lengthUnits, (Math.random() - 0.5) * v.built.lengthUnits * 0.3, (Math.random() - 0.5) * v.built.lengthUnits));
-      this.effects.secondary(p, v.built.lengthUnits * 0.5);
+    const f = Math.min(1, d.timer / d.plan.duration);
+    const group = v.built.group;
+    // Keep drifting on the last velocity.
+    const drift = this.tmpA.set(ship.vel.x, ship.vel.y, ship.vel.z).multiplyScalar(KM * 0.6).clone();
+    group.position.addScaledVector(drift, dt);
+    if (d.plan.staged) {
+      // The hull lists, slowly and then faster; the lights surge and fail; the limbs curl in.
+      const list = deathList(f);
+      group.rotateZ(dt * list.roll);
+      group.rotateX(dt * list.pitch);
+      const light = deathLight(f, this.sim.time, v.reaperRig?.phase ?? 0);
+      (v.seamMats ?? []).forEach((mat, i) => { mat.emissiveIntensity = (d.seamBase?.[i] ?? mat.emissiveIntensity) * light; });
+      v.glows.forEach((gl, i) => { (gl.material as THREE.SpriteMaterial).opacity = (d.glowBase?.[i] ?? 0) * Math.min(1, light); });
+      if (v.reaperRig && isArticulatedReaper(ship)) animateReaperRig(v.reaperRig, ship, this.sim.time, dt * 1.8, false);
+    } else {
+      group.rotateX(dt * 0.05);
     }
-    if (d.timer >= d.duration) this.finishDeath(v);
+    // Secondary explosions on the hull itself, in the ship's own axes.
+    const length = v.built.lengthUnits;
+    while (d.next < d.plan.bursts.length && d.plan.bursts[d.next].t <= d.timer) {
+      const burst = d.plan.bursts[d.next++];
+      const p = this.tmpB.set(burst.across * length, burst.up * length, burst.along * length).applyQuaternion(group.quaternion).add(group.position);
+      this.effects.secondary(p.clone(), length * burst.scale, drift);
+    }
+    if (d.timer >= d.plan.duration) this.finishDeath(v);
   }
 
   private finishDeath(v: ShipVisual): void {
