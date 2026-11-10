@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ShipState } from '@/simulation/types';
 import { KM } from './geometry';
-import { DETAIL_MESH_NAMES, type LodLevel } from './lod';
+import { isLodDetail, type LodLevel } from './lod';
+import { getShipClass } from '@/data/ships';
 import { getShipTemplate } from './ships';
 
 interface Part { mesh: THREE.InstancedMesh; detail: boolean; }
@@ -30,6 +31,7 @@ export class InstancedFleet {
 
   private createBatch(classId: string, capacity: number): Batch {
     const template = getShipTemplate(classId);
+    const role = getShipClass(classId).role;
     template.group.updateMatrixWorld(true);
     const parts: Part[] = [];
 
@@ -51,7 +53,7 @@ export class InstancedFleet {
       const geometry = source.geometry.clone();
       geometry.applyMatrix4(source.matrixWorld);
       const material = source.material;
-      const detail = DETAIL_MESH_NAMES.has(source.name);
+      const detail = isLodDetail(source.name, role);
       const hasMorphs = Object.keys(geometry.morphAttributes).length !== 0;
       const signature = Object.entries(geometry.attributes)
         .sort(([a], [b]) => a.localeCompare(b))

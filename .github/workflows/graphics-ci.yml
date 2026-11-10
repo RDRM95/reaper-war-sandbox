@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [perf/thousand-ship-battles]
+    branches: [perf/thousand-ship-battles, fix/reaper-structural-lod-20261110]
 permissions:
   contents: read
 jobs:

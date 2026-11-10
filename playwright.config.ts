@@ -12,7 +12,8 @@ export default defineConfig({
     headless: true,
     baseURL: 'http://127.0.0.1:5173',
     viewport: { width: 1536, height: 900 },
-    launchOptions: { args: ['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--no-sandbox'] },
+    launchOptions: { executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined,
+      args: ['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--no-sandbox'] },
     trace: 'retain-on-failure',
     screenshot: 'on'
   }

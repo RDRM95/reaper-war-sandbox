@@ -1,0 +1,81 @@
+✖ reaper_capital keeps its real armour and weapon aperture in reduced GPU batches (71.791012ms)
+✔ reaper_capital reduces nested hero details without changing scale or mounts (3.725465ms)
+✖ harbinger keeps its real armour and weapon aperture in reduced GPU batches (20.605292ms)
+✔ harbinger reduces nested hero details without changing scale or mounts (1.604884ms)
+✖ reaper_destroyer keeps its real armour and weapon aperture in reduced GPU batches (11.15346ms)
+✔ reaper_destroyer reduces nested hero details without changing scale or mounts (1.212895ms)
+✔ non-Reaper policy and deliberately hidden nested details remain intact (0.419431ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 4
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 135.261485
+
+✖ failing tests:
+
+test at ../../tmp/sandbox-lod-baseline-7mscjuna/baseline.mjs:57:3
+✖ reaper_capital keeps its real armour and weapon aperture in reduced GPU batches (71.791012ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///tmp/sandbox-lod-baseline-7mscjuna/baseline.mjs:67:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../tmp/sandbox-lod-baseline-7mscjuna/baseline.mjs:57:3
+✖ harbinger keeps its real armour and weapon aperture in reduced GPU batches (20.605292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///tmp/sandbox-lod-baseline-7mscjuna/baseline.mjs:67:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../tmp/sandbox-lod-baseline-7mscjuna/baseline.mjs:57:3
+✖ reaper_destroyer keeps its real armour and weapon aperture in reduced GPU batches (11.15346ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///tmp/sandbox-lod-baseline-7mscjuna/baseline.mjs:67:14)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+(node:9479) [THREE_CJS_DEPRECATED] DeprecationWarning: `require("three")` is deprecated and will be removed.
+Replace `const THREE = require("three")` with `import * as THREE from "three"`.
+(Use `node --trace-deprecation ...` to show where the warning was created)

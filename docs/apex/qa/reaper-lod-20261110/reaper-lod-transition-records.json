@@ -1,0 +1,546 @@
+{
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "errors": [],
+  "records": [
+    {
+      "classId": "reaper_capital",
+      "level": "full",
+      "observed": "full",
+      "visible": true,
+      "lengthUnits": 20,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "mixedInstances": 10,
+      "drawCalls": 135,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-reaper_capital-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-eye",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "reaper_capital",
+      "level": "reduced",
+      "observed": "reduced",
+      "visible": true,
+      "lengthUnits": 20,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      },
+      "mixedInstances": 9,
+      "drawCalls": 59,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-reaper_capital-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-eye",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "reaper_capital",
+      "level": "full",
+      "observed": "full",
+      "visible": true,
+      "lengthUnits": 20,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "mixedInstances": 10,
+      "drawCalls": 135,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-reaper_capital-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_capital-eye",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "harbinger",
+      "level": "full",
+      "observed": "full",
+      "visible": true,
+      "lengthUnits": 24,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "mixedInstances": 10,
+      "drawCalls": 135,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-harbinger-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "harbinger",
+      "level": "reduced",
+      "observed": "reduced",
+      "visible": true,
+      "lengthUnits": 24,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      },
+      "mixedInstances": 6,
+      "drawCalls": 57,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-harbinger-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "harbinger",
+      "level": "full",
+      "observed": "full",
+      "visible": true,
+      "lengthUnits": 24,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "mixedInstances": 10,
+      "drawCalls": 135,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-harbinger-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-harbinger-",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "reaper_destroyer",
+      "level": "full",
+      "observed": "full",
+      "visible": true,
+      "lengthUnits": 1.6,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "mixedInstances": 2,
+      "drawCalls": 52,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-reaper_destroyer-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-eye",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "reaper_destroyer",
+      "level": "reduced",
+      "observed": "reduced",
+      "visible": true,
+      "lengthUnits": 1.6,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      },
+      "mixedInstances": 2,
+      "drawCalls": 162,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-reaper_destroyer-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-eye",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "classId": "reaper_destroyer",
+      "level": "full",
+      "observed": "full",
+      "visible": true,
+      "lengthUnits": 1.6,
+      "groups": {
+        "plates": [
+          true
+        ],
+        "eye": [
+          true,
+          true
+        ],
+        "reaper-arm-seam": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "mixedInstances": 2,
+      "drawCalls": 52,
+      "glError": 0,
+      "simulationUnchanged": true,
+      "batch": [
+        {
+          "name": "instanced-reaper_destroyer-hull",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-plates",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-reaper-arm-plate",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-reaper-joint",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-eye",
+          "count": 1
+        },
+        {
+          "name": "instanced-reaper_destroyer-eye",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

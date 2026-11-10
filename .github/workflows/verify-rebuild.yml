@@ -6,6 +6,7 @@ on:
       - codex/targeting-cameras-v1
       - codex/pure-battle-v1
       - perf/thousand-ship-battles
+      - fix/reaper-structural-lod-20261110
   pull_request:
     branches:
       - main
