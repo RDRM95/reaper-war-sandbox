@@ -42,7 +42,7 @@ const { isLodDetail } = require(compile('rendering/lod.ts'));
 const classes = ['reaper_capital', 'harbinger', 'reaper_destroyer'];
 // Independently measured complete structural geometry after the authored
 // carapace rebuild, including both optics and excluding hidden stand-ins.
-const reducedVertices = { reaper_capital: 25151, harbinger: 24671, reaper_destroyer: 18143 };
+const reducedVertices = { reaper_capital: 29327, harbinger: 28631, reaper_destroyer: 21047 };
 const named = (root, name) => {
   const matches = [];
   root.traverse(object => { if (object.name === name) matches.push(object); });

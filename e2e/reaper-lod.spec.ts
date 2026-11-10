@@ -34,7 +34,7 @@ test('real Reaper hero and instanced LOD transitions retain armour without chang
   });
 
   const records: any[] = [];
-  const reducedVertices: Record<string, number> = { reaper_capital: 25151, harbinger: 24671, reaper_destroyer: 18143 };
+  const reducedVertices: Record<string, number> = { reaper_capital: 29327, harbinger: 28631, reaper_destroyer: 21047 };
   try {
     for (const classId of ['reaper_capital', 'harbinger', 'reaper_destroyer']) {
       for (const level of ['full', 'reduced', 'full']) {

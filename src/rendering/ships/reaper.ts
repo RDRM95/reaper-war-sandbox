@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { taperedBox, taperedTube, zCylinder } from '../geometry';
 import { paletteFor } from '../materials';
 import type { BuiltShip } from './types';
@@ -84,10 +84,19 @@ const smooth = (a: number, b: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/** Flat-shade a geometry and give every vertex the same albedo factor (±6 % around 1). */
-function tinted(g: THREE.BufferGeometry, k: number | ((p: THREE.Vector3) => number), flat = true): THREE.BufferGeometry {
-  const geom = flat && g.index ? g.toNonIndexed() : g;
-  if (flat) geom.computeVertexNormals();
+/** Crease angle for armour shells: faces that meet at less than this shade as one curved plate; lips stay hard. */
+const ARMOUR_CREASE = THREE.MathUtils.degToRad(38);
+/** Limb sleeves are eight-sided: a wider crease rounds them under light while ring lips and end caps stay hard. */
+const SLEEVE_CREASE = THREE.MathUtils.degToRad(52);
+
+/**
+ * Shade a geometry and give every vertex the same albedo factor (±6 % around 1). `flat` true is faceted (mechanical
+ * parts), false keeps the geometry's own smooth normals, and 'curved' smooths within ARMOUR_CREASE so a plate reads
+ * as a curved shell with crisp edges.
+ */
+function tinted(g: THREE.BufferGeometry, k: number | ((p: THREE.Vector3) => number), flat: boolean | 'curved' | 'round' = true): THREE.BufferGeometry {
+  const geom = flat === 'curved' ? toCreasedNormals(g, ARMOUR_CREASE) : flat === 'round' ? toCreasedNormals(g, SLEEVE_CREASE) : flat && g.index ? g.toNonIndexed() : g;
+  if (flat === true) geom.computeVertexNormals();
   const pos = geom.attributes.position as THREE.BufferAttribute;
   const n = pos.count;
   const col = new Float32Array(n * 3);
@@ -329,7 +338,7 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
     while (z < bandZ1) {
       const z1 = Math.min(bandZ1, z + pitch);
       if (z1 - z > pitch * 0.3) {
-        carapace.push(tinted(shell(S, z, z1 + pitch * 0.08, centre - half, centre + half, 1, 3, standoff, R * 0.035), 0.94 + 0.12 * rnd(k, 10 + i)));
+        carapace.push(tinted(shell(S, z, z1 + pitch * 0.08, centre - half, centre + half, 1, 5, standoff, R * 0.035), 0.94 + 0.12 * rnd(k, 10 + i), 'curved'));
       }
       z = z1; i++;
     }
@@ -383,9 +392,9 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
     const gap = 0.06;
     const pieces: [number, number][] = [[-h.arc, -b2 - gap], [-b2 + gap, -gap], [gap, b1 - gap], [b1 + gap, h.arc]];
     pieces.forEach(([t0, t1], piece) => {
-      const nt = Math.max(1, Math.round((t1 - t0) / 0.52));
+      const nt = Math.max(2, Math.round((t1 - t0) / 0.26));
       const outer = h.outer + 0.03 * (rnd(30 + idx, piece) - 0.5);
-      carapace.push(tinted(shell(S, h.z0 * L, h.z1 * L, t0, t1, 1, nt, outer, hoodThick), h.k + 0.03 * (rnd(35 + idx, piece) - 0.5)));
+      carapace.push(tinted(shell(S, h.z0 * L, h.z1 * L, t0, t1, 1, nt, outer, hoodThick), h.k + 0.03 * (rnd(35 + idx, piece) - 0.5), 'curved'));
     });
     // A thin pale seam along each exposed forward lip.
     const lipZ = h.z1 * L - hoodThick * 0.4;
@@ -479,7 +488,7 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
 
     const pivot = new THREE.Group();
     pivot.name = 'reaper-shoulder';
-    pivot.userData = { reaperRig: 'shoulder', index: i, side: Math.sign(outward.x) || 1, destroyer };
+    pivot.userData = { reaperRig: 'shoulder', index: i, side: Math.sign(outward.x) || 1, destroyer, hinge: joint.toArray() };
     pivot.position.copy(root);
     group.add(pivot);
 
@@ -490,10 +499,10 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
       upperEnd,
     ]);
     const upper = new Sweep(upperCurve, 0.85);
-    const upperParts: THREE.BufferGeometry[] = [tinted(upper.sleeve(0, 1, 7, radial, upperR), 0.95)];
+    const upperParts: THREE.BufferGeometry[] = [tinted(upper.sleeve(0, 1, 7, radial, upperR), 0.95, 'round')];
     for (let k = 0; k < 4; k++) {
       const tc = 0.13 + k * 0.215 + (rnd(50 + i, k) - 0.5) * 0.03;
-      upperParts.push(tinted(upper.ring(tc - 0.08, tc + 0.08, radial, upperR, t => 1.22 - 0.1 * (t - tc + 0.08) / 0.16), 1.03 + 0.03 * (k % 2)));
+      upperParts.push(tinted(upper.ring(tc - 0.08, tc + 0.08, radial, upperR, t => 1.22 - 0.1 * (t - tc + 0.08) / 0.16), 1.03 + 0.03 * (k % 2), 'round'));
     }
     const upperGeom = mergeTinted(upperParts);
     const upperMesh = new THREE.Mesh(upperGeom, m.shell);
@@ -519,7 +528,7 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
 
     const elbow = new THREE.Group();
     elbow.name = 'reaper-elbow';
-    elbow.userData = { reaperRig: 'elbow', index: i, side: Math.sign(outward.x) || 1, destroyer };
+    elbow.userData = { reaperRig: 'elbow', index: i, side: Math.sign(outward.x) || 1, destroyer, hinge: joint.toArray() };
     elbow.position.copy(upperEnd);
     pivot.add(elbow);
     const elbowWorld = root.clone().add(upperEnd);
@@ -531,10 +540,10 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
       lowerEnd,
     ]);
     const lower = new Sweep(lowerCurve, 0.85);
-    const lowerParts: THREE.BufferGeometry[] = [tinted(lower.sleeve(0, 1, 6, radial, lowerR), 0.95)];
+    const lowerParts: THREE.BufferGeometry[] = [tinted(lower.sleeve(0, 1, 6, radial, lowerR), 0.95, 'round')];
     for (let k = 0; k < 3; k++) {
       const tc = 0.18 + k * 0.26 + (rnd(60 + i, k) - 0.5) * 0.03;
-      lowerParts.push(tinted(lower.ring(tc - 0.075, tc + 0.075, radial, lowerR, t => 1.24 - 0.1 * (t - tc + 0.075) / 0.15), 1.04 + 0.02 * (k % 2)));
+      lowerParts.push(tinted(lower.ring(tc - 0.075, tc + 0.075, radial, lowerR, t => 1.24 - 0.1 * (t - tc + 0.075) / 0.15), 1.04 + 0.02 * (k % 2), 'round'));
     }
     const lowerGeom = mergeTinted(lowerParts);
     const lowerMesh = new THREE.Mesh(lowerGeom, m.shell);

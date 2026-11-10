@@ -32,6 +32,16 @@ export interface CinematicFrame {
   group?: { centre: THREE.Vector3; radius: number; heading: THREE.Vector3 };
 }
 
+/**
+ * Chase and orbit distances in hull lengths, by hull size (render units). Small hulls keep the roomy framing they
+ * always had; a capital-scale hull (a 2 km Reaper is 20 units) is held closer so that it fills the frame instead of
+ * sitting in the middle of it: at the old 2.4 lengths a Reaper side-on spanned a quarter of the frame's width.
+ */
+const capitalScale = (size: number): number => THREE.MathUtils.smoothstep(size, 6, 20);
+export const followLengths = (size: number): number => 2.4 - 1.0 * capitalScale(size);
+export const cinematicOrbitLengths = (size: number): number => 3.2 - 1.45 * capitalScale(size);
+export const cinematicOrbitHeight = (size: number): number => 1.0 - 0.62 * capitalScale(size);
+
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
   mode: CameraMode = 'tactical';
@@ -158,7 +168,7 @@ export class CameraRig {
         // Free orbit around the followed ship: yaw and pitch rotate the chase offset relative to its heading,
         // so dragging looks at it from any side, above or below; the wheel scales the chase distance.
         const h = Math.atan2(s.heading.x, s.heading.z);
-        const dist = (s.size * 2.4 + 3) * THREE.MathUtils.clamp(this.distance / 320, 0.35, 5);
+        const dist = (s.size * followLengths(s.size) + 3) * THREE.MathUtils.clamp(this.distance / 320, 0.35, 5);
         const a = h + Math.PI + this.yaw;
         const off = new THREE.Vector3(Math.sin(a) * Math.cos(this.pitch), Math.sin(this.pitch) + 0.25, Math.cos(a) * Math.cos(this.pitch)).normalize().multiplyScalar(dist);
         this.desiredPos.copy(s.position).add(off);
@@ -168,9 +178,14 @@ export class CameraRig {
       case 'reaper': {
         const s = opts.subject;
         if (!s) return this.fallback(dt, opts.fleetCentre);
-        // Looking out from above and behind the Reaper's hood along its heading.
-        this.desiredPos.copy(s.position).addScaledVector(s.heading, -s.size * 0.15).add(new THREE.Vector3(0, s.size * 0.5, 0));
-        this.desiredLook.copy(s.position).addScaledVector(s.heading, s.size * 6).add(new THREE.Vector3(0, -s.size * 0.3, 0));
+        // Over the carapace: low above the aft blade and a little off the centre line, looking forward over the hood
+        // so the limbs reach into the frame and the fight lies beyond them. The old pose sat half a hull length
+        // above the hull looking at the horizon, with none of the Reaper in the picture.
+        const right = new THREE.Vector3().crossVectors(s.heading, new THREE.Vector3(0, 1, 0));
+        if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+        right.normalize();
+        this.desiredPos.copy(s.position).addScaledVector(s.heading, -s.size * 0.42).addScaledVector(right, s.size * 0.07).add(new THREE.Vector3(0, s.size * 0.17, 0));
+        this.desiredLook.copy(s.position).addScaledVector(s.heading, s.size * 0.9).add(new THREE.Vector3(0, -s.size * 0.1, 0));
         break;
       }
       case 'projectile': {
@@ -212,8 +227,8 @@ export class CameraRig {
           this.desiredLook.copy(mid);
         } else {
           const ang = this.yaw + Math.sin(c.age * 0.08) * 0.25;
-          const r = from.size * 3.2 + 8;
-          this.desiredPos.copy(from.position).add(new THREE.Vector3(Math.sin(ang) * r, from.size * 1.0 + 3, Math.cos(ang) * r));
+          const r = from.size * cinematicOrbitLengths(from.size) + 8;
+          this.desiredPos.copy(from.position).add(new THREE.Vector3(Math.sin(ang) * r, from.size * cinematicOrbitHeight(from.size) + 3, Math.cos(ang) * r));
           this.desiredLook.copy(from.position);
         }
         break;

@@ -39,6 +39,9 @@ test('live main-gun optics stay on one ship through zoom and graphics changes',a
 });
 
 test('destroyed gunner station holds its last camera and persistent signal loss',async({page},info)=>{
+ // A whole duel runs at 8× until the station dies. Under CI's software rendering a frame takes about a second, so the
+ // run used most of the default 60 s and timed out in the closing screenshot; every assertion is unchanged.
+ test.slow();
  await page.goto('/');
  await page.locator('#graphics').selectOption('low');
  await page.locator('#scenario').selectOption('duel');
