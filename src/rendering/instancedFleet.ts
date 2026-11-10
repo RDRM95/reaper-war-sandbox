@@ -32,6 +32,7 @@ export class InstancedFleet {
   private createBatch(classId: string, capacity: number): Batch {
     const template = getShipTemplate(classId);
     const role = getShipClass(classId).role;
+    const hasDedicatedCarapace = !!template.group.getObjectByName('carapace');
     template.group.updateMatrixWorld(true);
     const parts: Part[] = [];
 
@@ -53,7 +54,7 @@ export class InstancedFleet {
       const geometry = source.geometry.clone();
       geometry.applyMatrix4(source.matrixWorld);
       const material = source.material;
-      const detail = isLodDetail(source.name, role);
+      const detail = isLodDetail(source.name, role, hasDedicatedCarapace);
       const hasMorphs = Object.keys(geometry.morphAttributes).length !== 0;
       const signature = Object.entries(geometry.attributes)
         .sort(([a], [b]) => a.localeCompare(b))

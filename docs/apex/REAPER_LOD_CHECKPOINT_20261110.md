@@ -53,3 +53,19 @@ PR #32 also edits `instancedFleet.ts`, but its hidden-ancestor visibility guard 
 ## Exact next task
 
 After committing this feature, obtain green PR checks and verify the merged deployment. Continue the independently owned carapace/limb/palette slice with six-view and context evidence; reconcile the existing hidden-limb/Ascendant-size port separately. Do not repeat completed optics, orbital-lighting or Oculus-damage fixes.
+
+## Follow-up: compatibility with the separately authored carapace layout
+
+The original LOD port was committed as `25bb41e65a0333e70a7f3b913523ff72b21fce02`. After that commit, the independently owned geometry PR #29 appeared with a dedicated structural mesh named `carapace`; its `plates` are decorative overlays. This follow-up imports none of that geometry and does not merge the PR.
+
+The shared classifier now retains legacy Reaper `plates` only when the model has no dedicated `carapace`. Hero capture and batch creation determine that layout once, outside per-frame traversal. Eyes stay structural in both layouts. Two additional regressions cover nested carapace/overlay visibility and the actual GPU batch adapter with an isolated synthetic carapace, restoring the original model template afterward.
+
+Validation after this compatibility change: all six configured unit files pass (**21 assertions**, including nine LOD assertions); production typecheck/build pass; focused real Chromium regression **1 passed in 15.2 seconds** (13.9-second case). The earlier full **30/30** browser result belongs to the original port; it was not unnecessarily repeated for this bounded compatibility addition. Shared `lod.ts` and `shipLod.ts` still match the Codex counterpart byte for byte. The original negative-control artifact records the seven-case harness before these two compatibility cases were added.
+
+All five curated current-model PNG files have identical SHA-256 hashes before and after the compatibility follow-up, and the nine-transition telemetry JSON is identical. The new layout detection therefore leaves the shipped legacy-model captures and physical state unchanged in these cases.
+
+## Remote and compatibility follow-up
+
+The initial pushed feature commit `25bb41e65a0333e70a7f3b913523ff72b21fce02` passed graphics CI [42835934439](https://github.com/RDRM95/reaper-war-sandbox/actions/runs/42835934439). Its full verification CI [42835934611](https://github.com/RDRM95/reaper-war-sandbox/actions/runs/42835934611) passed units/build but failed the browser step. The old reporter exposed only an exit code; the workflow now emits GitHub assertion annotations and an HTML report using the same tests, without retries or relaxed assertions. That failure is unresolved until its exact assertion is diagnosed and the current head passes.
+
+PR #29's new original carapace branch appeared during reconciliation. The shared policy now distinguishes legacy structural `plates` from decorative `plates` when a dedicated `carapace` exists. Two new regressions cover this future layout through the hero hierarchy and actual batch adapter. All 21 local unit assertions, build/typecheck and the focused browser check pass. Existing five PNG captures and transition telemetry remain byte-identical. No geometry from the owner branch was merged or changed.

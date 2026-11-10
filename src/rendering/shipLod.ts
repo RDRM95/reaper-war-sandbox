@@ -10,9 +10,10 @@ export interface LodDetail { object: THREE.Object3D; visible: boolean }
  */
 export function captureLodDetails(root: THREE.Object3D, role: ShipRole): LodDetail[] {
   const details: LodDetail[] = [];
+  const hasDedicatedCarapace = !!root.getObjectByName('carapace');
   root.traverse(object => {
     if (object === root || object.name === 'reaper-static-arms' || object.name === 'reaper-static-seams') return;
-    if ((object as THREE.Sprite).isSprite || isLodDetail(object.name, role)) details.push({ object, visible: object.visible });
+    if ((object as THREE.Sprite).isSprite || isLodDetail(object.name, role, hasDedicatedCarapace)) details.push({ object, visible: object.visible });
   });
   return details;
 }

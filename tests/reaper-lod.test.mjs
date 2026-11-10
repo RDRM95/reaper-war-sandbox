@@ -34,7 +34,7 @@ function compile(path) {
   return output;
 }
 const require = createRequire(import.meta.url);
-const { instantiateShip } = require(compile('rendering/ships/index.ts'));
+const { instantiateShip, getShipTemplate } = require(compile('rendering/ships/index.ts'));
 const { getShipClass } = require(compile('data/ships.ts'));
 const { InstancedFleet } = require(compile('rendering/instancedFleet.ts'));
 const { captureLodDetails, applyShipLod } = require(compile('rendering/shipLod.ts'));
@@ -108,6 +108,46 @@ test('non-Reaper policy and deliberately hidden nested details remain intact', (
   const details = captureLodDetails(root, 'reaper_capital');
   applyShipLod(root, details, 'reduced'); assert.equal(window.visible, false);
   applyShipLod(root, details, 'full'); assert.equal(window.visible, true); assert.equal(hidden.visible, false);
+});
+
+test('a dedicated nested carapace stays structural while its decorative overlays reduce and restore', () => {
+  const root = new THREE.Group(), model = new THREE.Group(), panels = new THREE.Group();
+  root.add(model); model.add(panels);
+  const carapace = new THREE.Object3D(); carapace.name = 'carapace'; model.add(carapace);
+  const eye = new THREE.Object3D(); eye.name = 'eye'; model.add(eye);
+  const overlay = new THREE.Object3D(); overlay.name = 'plates'; panels.add(overlay);
+  const hidden = new THREE.Object3D(); hidden.name = 'plates'; hidden.visible = false; panels.add(hidden);
+  const details = captureLodDetails(root, 'reaper_capital');
+  applyShipLod(root, details, 'reduced');
+  assert.equal(carapace.visible, true); assert.equal(eye.visible, true);
+  assert.equal(overlay.visible, false); assert.equal(hidden.visible, false);
+  applyShipLod(root, details, 'point'); assert.equal(root.visible, false);
+  applyShipLod(root, details, 'full'); assert.equal(root.visible, true);
+  assert.equal(carapace.visible, true); assert.equal(eye.visible, true);
+  assert.equal(overlay.visible, true); assert.equal(hidden.visible, false);
+});
+
+test('GPU batches distinguish a dedicated nested carapace from legacy plate overlays', () => {
+  const template = getShipTemplate('reaper_capital'), nested = new THREE.Group();
+  const geometry = new THREE.BoxGeometry(.04, .02, .06), material = new THREE.MeshBasicMaterial({ color: 0x121212 });
+  const carapace = new THREE.Mesh(geometry, material); carapace.name = 'carapace'; nested.add(carapace);
+  // Represent the new layout in an isolated test scope; no geometry branch is
+  // imported or changed. The original cached template is restored afterward.
+  template.group.add(nested);
+  const fleet = new InstancedFleet(), ship = shipState('reaper_capital');
+  try {
+    fleet.begin([ship]); fleet.add(ship, 1, 'reduced'); fleet.end();
+    const parts = fleet.group.children;
+    const shell = parts.find(part => part.name === 'instanced-reaper_capital-carapace');
+    const overlay = parts.find(part => part.name === 'instanced-reaper_capital-plates');
+    const eye = parts.find(part => part.name === 'instanced-reaper_capital-eye');
+    assert.ok(shell && overlay && eye, 'each distinct structural/detail material has a batch');
+    assert.equal(shell.count, 1); assert.equal(eye.count, 1); assert.equal(overlay.count, 0);
+    fleet.begin([ship]); fleet.add(ship, 1, 'full'); fleet.end();
+    assert.equal(shell.count, 1); assert.equal(eye.count, 1); assert.equal(overlay.count, 1);
+  } finally {
+    fleet.dispose(); template.group.remove(nested); geometry.dispose(); material.dispose();
+  }
 });
 
 test.after(() => rmSync(directory, { recursive: true, force: true }));

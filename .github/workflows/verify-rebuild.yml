@@ -36,7 +36,7 @@ jobs:
           cat /tmp/vite-preview.log
           exit 1
       - name: Browser smoke test
-        run: npx playwright test
+        run: npx playwright test --reporter=list,github,html
       - name: Upload browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,6 +45,7 @@ jobs:
           path: |
             test-artifacts
             test-results
+            playwright-report
           if-no-files-found: ignore
       - name: Archive preview build
         uses: actions/upload-artifact@v4

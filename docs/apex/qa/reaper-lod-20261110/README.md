@@ -14,6 +14,8 @@ The port shares `isLodDetail`, `captureLodDetails` and `applyShipLod` with Codex
 
 `tests/reaper-lod.test.mjs` loads the real models, catalogue and renderer with the existing TypeScript/Node test toolchain. Seven assertions cover structural batch retention, recursive hero reduction, full/reduced/point/restored transitions, unchanged geometry bounds and attachment nodes, visual independence from ship state, unchanged non-Reaper policy and authored hidden decorations.
 
+Two follow-up compatibility assertions bring that file to nine cases: a nested dedicated `carapace` keeps its structure while decorative `plates` reduce, and the actual GPU adapter handles that layout in an isolated synthetic test. No geometry from the separate upstream PR is imported. The five current-model captures and transition telemetry are identical before and after this compatibility follow-up.
+
 `e2e/reaper-lod.spec.ts` creates a real `BattleView` in Chromium. Each of the three hulls goes through full/reduced/full production updates. A selected capital hero shares the scene with GPU-instanced ships. It checks actual batch membership, nested visibility, WebGL errors and an exact before/after serialization of ship state, events, projectiles, missiles, tick and RNG state.
 
 The initial focused browser run passed in 13 seconds. Complete-suite and final magnified-capture results are recorded in the [development checkpoint](../../REAPER_LOD_CHECKPOINT_20261110.md) after execution.

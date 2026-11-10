@@ -17,9 +17,11 @@ export const DETAIL_MESH_NAMES = new Set(['windows', 'accent', 'engine', 'lights
  * dropping that material globally would erase part of the Reaper silhouette.
  * Use the same classification for hero hierarchies and merged GPU batches.
  */
-export function isLodDetail(name: string, role?: ShipRole): boolean {
+export function isLodDetail(name: string, role?: ShipRole, hasDedicatedCarapace = false): boolean {
   const reaper = role === 'reaper_capital' || role === 'reaper_destroyer';
-  if (reaper && (name === 'plates' || name === 'eye')) return false;
+  // Older hulls put structural armour in `plates`. Newer hulls provide a
+  // separate `carapace` and reserve `plates` for small decorative overlays.
+  if (reaper && (name === 'eye' || name === 'plates' && !hasDedicatedCarapace)) return false;
   return DETAIL_MESH_NAMES.has(name) || name === 'reaper-arm-seam' || name === 'reaper-static-seams';
 }
 
