@@ -21,7 +21,7 @@ function styleBuilt(built: BuiltShip, style: Style): BuiltShip {
       const clone=m.clone();
       if(clone instanceof THREE.MeshStandardMaterial){
         const luminous=clone.emissiveIntensity>0.8;
-        clone.color.setHex(luminous?style.engine:(mesh.name==='plates'||mesh.name==='accent'?style.trim:style.hull));
+        clone.color.setHex(luminous?style.engine:(mesh.name==='plates'||mesh.name==='accent'||mesh.name==='carapace'?style.trim:style.hull));
         if(luminous){clone.emissive.setHex(style.engine);clone.emissiveIntensity=Math.min(2.5,clone.emissiveIntensity);}
         else {clone.metalness=Math.max(.62,clone.metalness);clone.roughness=.4;}
       }

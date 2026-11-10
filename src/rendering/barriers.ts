@@ -10,7 +10,7 @@ export function buildBarrierGeometry(built: BuiltShip): THREE.BufferGeometry {
   const inverse = built.group.matrixWorld.clone().invert();
   built.group.traverse(object => {
     const mesh = object as THREE.Mesh;
-    if (!mesh.isMesh || !['hull', 'hullDark', 'plates', 'arms', 'accent'].includes(mesh.name)) return;
+    if (!mesh.isMesh || !['hull', 'hullDark', 'plates', 'arms', 'accent', 'carapace'].includes(mesh.name)) return;
     parts.push(mesh.geometry.clone().applyMatrix4(inverse.clone().multiply(mesh.matrixWorld)));
   });
   const geometry = merge(parts);
