@@ -18,7 +18,7 @@ for (const [name, path] of Object.entries({ rng: '../src/core/rng.ts', deathSequ
   }).outputText.replace(/require\("three"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three')) + ')'));
 }
 const { Rng } = projectRequire(join(directory, 'rng.cjs'));
-const { LIGHTS_FAIL, deathDuration, deathLight, deathList, deathPlan } = projectRequire(join(directory, 'deathSequence.cjs'));
+const { LIGHTS_FAIL, deathDuration, deathLight, deathList, deathPlan, deathSounds, isStagedDeath } = projectRequire(join(directory, 'deathSequence.cjs'));
 const { breakupVelocity } = projectRequire(join(directory, 'breakup.cjs'));
 
 test('a Reaper dies slowly; other classes keep their timing', () => {
@@ -75,5 +75,18 @@ test('hull pieces separate outward from the centre of the break', () => {
     if (offset.length() < 0.5) continue;
     const velocity = breakupVelocity(offset, 12, rng);
     assert.ok(velocity.dot(offset) > 0 && velocity.length() > 12 * 0.02 && velocity.length() < 12 * 0.25);
+  }
+});
+
+test('a staged death is heard dying at the kill and exploding at the breakup', () => {
+  assert.equal(deathSounds('reaper_capital').atKill, 'reaper_death');
+  assert.equal(deathSounds('reaper_destroyer').atKill, 'reaper_death_small');
+  for (const role of ['reaper_capital', 'reaper_destroyer']) {
+    assert.equal(isStagedDeath(role), true);
+    assert.equal(deathSounds(role).atBreakup, 'explosion_large');
+  }
+  for (const role of ['dreadnought', 'carrier', 'cruiser', 'frigate', 'fighter']) {
+    assert.equal(isStagedDeath(role), false);
+    assert.equal(deathSounds(role).atBreakup, undefined);
   }
 });

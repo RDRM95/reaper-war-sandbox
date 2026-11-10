@@ -24,7 +24,7 @@ import { primaryGunneryMount, isMainGunShot, gunneryFrame } from './gunnery';
 import { animateReaperRig, captureReaperRig, isArticulatedReaper, type ReaperRig } from './reaperMotion';
 import { EmitterLightPool, easeEmitterCharge, emitterTarget } from './emitterLights';
 import { collectBreakupPieces } from './breakup';
-import { deathLight, deathList, deathPlan, type DeathPlan } from './deathSequence';
+import { deathLight, deathList, deathPlan, isStagedDeath, type DeathPlan } from './deathSequence';
 import { DAMAGE_ONSET, REAPER_ARMOUR_MESHES, REAPER_SEAM_MESHES, reaperDamageGlow, type ReaperDamageGlow } from './damageGlow';
 
 /**
@@ -129,6 +129,8 @@ export class BattleView {
   private readonly farColourCache = new Map<string, readonly [number, number, number]>();
   /** Draw calls of the last rendered frame. */
   drawCalls = 0;
+  /** Called when a staged death reaches its breakup (render units), so the explosion is heard when it is seen. */
+  onBreakup?: (role: string, position: THREE.Vector3) => void;
   lodCounts = { full: 0, reduced: 0, point: 0 };
 
   constructor(canvas: HTMLCanvasElement, sim: BattleSimulation, settings: GraphicsSettings) {
@@ -613,6 +615,7 @@ export class BattleView {
     }
     const vel = new THREE.Vector3(ship.vel.x, ship.vel.y, ship.vel.z).multiplyScalar(KM * 0.5);
     this.effects.explosion(pos, v.built.lengthUnits, ship.faction === 'reaper', pieces, vel);
+    if (v.dying?.plan.staged) this.onBreakup?.(ship.role, pos);
     for (const gl of v.glows) gl.visible = false;
     this.scene.remove(v.built.group);
     v.removed = true;
@@ -701,6 +704,8 @@ export class BattleView {
         }
         case 'ship_destroyed': {
           const v = this.visuals.get(e.shipId);
+          // No hero mesh, so no staged death is shown: the breakup is now.
+          if (!v && isStagedDeath(e.role)) this.onBreakup?.(e.role, new THREE.Vector3(e.pos.x * KM, e.pos.y * KM, e.pos.z * KM));
           if (v && this.rig.mode === 'cinematic' && this.cine.age >= 5 && (e.role === 'dreadnought' || e.role === 'reaper_capital' || e.role === 'carrier')) {
             // Cinematic director jumps to capital ship deaths.
             this.cine = { fromId: e.shipId, toId: undefined, age: 0, hold: 7, wreck: true };
