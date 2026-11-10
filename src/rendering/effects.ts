@@ -3,6 +3,7 @@ import { Rng } from '@/core/rng';
 import { KM } from './geometry';
 import { HullBarriers } from './barriers';
 import { breakupVelocity } from './breakup';
+import { FragmentBatch, SparkBatch } from './effectBatches';
 
 /**
  * Pooled visual effects: tracer projectiles, beams, impact flashes, barrier
@@ -26,13 +27,27 @@ function radialTexture(inner: string, mid: string, outer: string, size = 128): T
 }
 
 interface Spark {
-  sprite: THREE.Sprite;
+  /** Which batch draws it: one per texture, plus one that ignores depth. */
+  batch: number;
+  pos: THREE.Vector3;
   vel: THREE.Vector3;
   life: number;
   maxLife: number;
   startScale: number;
   endScale: number;
-  color: THREE.Color;
+  /** Linear colour. */
+  r: number; g: number; b: number;
+}
+
+/** A generic debris fragment, drawn through an instanced batch of its shape. */
+interface Fragment {
+  shape: number;
+  pos: THREE.Vector3;
+  rotation: THREE.Euler;
+  scale: number;
+  vel: THREE.Vector3;
+  spin: THREE.Vector3;
+  life: number;
 }
 
 interface Debris {
@@ -53,9 +68,14 @@ export class EffectsSystem {
   private readonly redTex = radialTexture('rgba(255,240,230,1)', 'rgba(255,80,40,0.8)', 'rgba(120,10,0,0)');
 
   private sparks: Spark[] = [];
+  /** Pieces of the destroyed ship's own model. Generic fragments are in `fragments`. */
   private debris: Debris[] = [];
+  private fragments: Fragment[] = [];
   readonly barriers = new HullBarriers();
-  private spritePool: THREE.Sprite[] = [];
+  /** One batch per spark texture, then one for the HADES core, which shows through hulls. The cap is 1,200 sparks. */
+  private readonly sparkTextures = [this.flashTex, this.fireTex, this.smokeTex, this.blueTex, this.redTex];
+  private readonly sparkBatches = [...this.sparkTextures.map(texture => new SparkBatch(texture, true, 2048)), new SparkBatch(this.blueTex, false, 2048)];
+  private readonly sparkColour = new THREE.Color();
   private nuclearRings: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>; life: number; size: number }[] = [];
   private ringPool: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[] = [];
   private readonly nuclearRingGeometry = new THREE.TorusGeometry(1, 0.025, 5, 64);
@@ -92,6 +112,8 @@ export class EffectsSystem {
   private readonly pieceBox = new THREE.Box3();
   private readonly pieceCentre = new THREE.Vector3();
   private readonly debrisMat = new THREE.MeshStandardMaterial({ color: 0x55585f, metalness: 0.7, roughness: 0.5, emissive: 0x401000, emissiveIntensity: 0.6 });
+  private readonly fragmentBatches = this.debrisGeo.map(geometry => new FragmentBatch(geometry, this.debrisMat, this.group));
+  private readonly fragmentDummy = new THREE.Object3D();
 
   /** Point light reused for the biggest explosions. */
   readonly flashLight = new THREE.PointLight(0xffa060, 0, 400 * KM, 1.5);
@@ -123,6 +145,7 @@ export class EffectsSystem {
     this.group.add(this.missileMesh);
 
     this.group.add(this.flashLight, this.barriers.group);
+    for (const batch of this.sparkBatches) this.group.add(batch.mesh);
   }
 
   /** Quality budgets affect visual sampling only, never projectile simulation. */
@@ -136,33 +159,21 @@ export class EffectsSystem {
 
   // ------------------------------------------------------------ primitives
 
-  private getSprite(tex: THREE.Texture, color: number): THREE.Sprite {
-    let s = this.spritePool.pop();
-    if (!s) {
-      s = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-      this.group.add(s);
-    }
-    const m = s.material as THREE.SpriteMaterial;
-    m.map = tex;
-    m.depthTest = true;
-    m.color.setHex(color);
-    m.opacity = 1;
-    m.needsUpdate = true;
-    s.visible = true;
-    return s;
-  }
-
-  private releaseSprite(s: THREE.Sprite): void {
-    s.visible = false;
-    this.spritePool.push(s);
+  /**
+   * Add a spark to its batch. It is drawn from this frame on: `shownScale` is its size until the first update.
+   * `batch` is the index of its texture in `sparkTextures`, or the last batch for one that ignores depth.
+   */
+  private addSpark(batch: number, pos: THREE.Vector3, vel: THREE.Vector3, life: number, shownScale: number, startScale: number, endScale: number, color: number): void {
+    const c = this.sparkColour.setHex(color);
+    this.sparks.push({ batch, pos: pos.clone(), vel, life, maxLife: life, startScale, endScale, r: c.r, g: c.g, b: c.b });
+    const target = this.sparkBatches[batch];
+    target.push(pos.x, pos.y, pos.z, shownScale, c.r, c.g, c.b, 1);
+    target.commit();
   }
 
   private spark(pos: THREE.Vector3, vel: THREE.Vector3, life: number, startScale: number, endScale: number, tex: THREE.Texture, color: number): void {
     if (this.sparks.length >= 1200) return;
-    const sprite = this.getSprite(tex, color);
-    sprite.position.copy(pos);
-    sprite.scale.setScalar(startScale);
-    this.sparks.push({ sprite, vel, life, maxLife: life, startScale, endScale, color: new THREE.Color(color) });
+    this.addSpark(this.sparkTextures.indexOf(tex as THREE.CanvasTexture), pos, vel, life, startScale, startScale, endScale, color);
   }
 
   // ------------------------------------------------------------ event hooks
@@ -205,10 +216,7 @@ export class EffectsSystem {
     if (this.sparks.length >= 1200) return;
     const yieldScale = Math.min(1.5, Math.sqrt(Math.max(0, payloadDamage) / 1000));
     const size = Math.max(0.3, Math.min(6, length * 0.22) * yieldScale);
-    const core = this.getSprite(this.blueTex, 0xffffff);
-    core.position.copy(position); core.scale.setScalar(size);
-    (core.material as THREE.SpriteMaterial).depthTest = false;
-    this.sparks.push({ sprite: core, vel: velocity.clone(), life: 0.14, maxLife: 0.14, startScale: size * 0.5, endScale: size * 2.5, color: new THREE.Color(0xffffff) });
+    this.addSpark(this.sparkBatches.length - 1, position, velocity.clone(), 0.14, size, size * 0.5, size * 2.5, 0xffffff);
     if (payloadDamage >= 200 && this.nuclearRings.length < 12) {
       const mesh = this.ringPool.pop() ?? new THREE.Mesh(this.nuclearRingGeometry, new THREE.MeshBasicMaterial({ color: 0xcfeaff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
       mesh.visible = true; mesh.position.copy(position); mesh.scale.setScalar(size * 0.4);
@@ -245,21 +253,20 @@ export class EffectsSystem {
     }
     // Debris: fling the ship's own mesh pieces plus generic fragments.
     const fragments = Math.min(40, Math.floor(size * 3));
-    for (let i = 0; i < fragments && this.debris.length < 800; i++) {
-      const g = this.debrisGeo[i % this.debrisGeo.length];
-      const m = new THREE.Mesh(g, this.debrisMat);
+    // The 800 cap counts fragments and ship pieces together, as it did when both were meshes in one list.
+    for (let i = 0; i < fragments && this.debris.length + this.fragments.length < 800; i++) {
       const s = size * (0.04 + this.rng.next() * 0.1);
-      m.scale.setScalar(s);
-      m.position.copy(pos).add(new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 0.3));
-      this.group.add(m);
-      this.debris.push({
-        mesh: m,
+      this.fragments.push({
+        shape: i % this.debrisGeo.length,
+        scale: s,
+        pos: pos.clone().add(new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 0.3)),
+        rotation: new THREE.Euler(),
         vel: new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 0.35).add(velocity),
         spin: new THREE.Vector3(this.rng.gaussian(0, 2), this.rng.gaussian(0, 2), this.rng.gaussian(0, 2)),
         life: 12 + this.rng.next() * 10,
-        maxLife: 22,
       });
     }
+    if (fragments > 0) this.drawFragments();
     for (const piece of pieces) {
       this.group.attach(piece);
       // Pieces separate outward from the centre of the break.
@@ -428,20 +435,33 @@ export class EffectsSystem {
     this.nuclearRings = rings;
     // Sparks.
     const keep: Spark[] = [];
+    for (const batch of this.sparkBatches) batch.begin();
     for (const s of this.sparks) {
       s.life -= dt;
-      if (s.life <= 0) {
-        this.releaseSprite(s.sprite);
-        continue;
-      }
+      if (s.life <= 0) continue;
       const t = 1 - s.life / s.maxLife;
-      s.sprite.position.addScaledVector(s.vel, dt);
-      s.sprite.scale.setScalar(s.startScale + (s.endScale - s.startScale) * t);
-      (s.sprite.material as THREE.SpriteMaterial).opacity = t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.9;
+      s.pos.addScaledVector(s.vel, dt);
+      this.sparkBatches[s.batch].push(s.pos.x, s.pos.y, s.pos.z, s.startScale + (s.endScale - s.startScale) * t, s.r, s.g, s.b,
+        t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.9);
       keep.push(s);
     }
+    for (const batch of this.sparkBatches) batch.commit();
     this.sparks = keep;
-    // Debris.
+    // Generic fragments.
+    const keepF: Fragment[] = [];
+    for (const f of this.fragments) {
+      f.life -= dt;
+      if (f.life <= 0) continue;
+      f.pos.addScaledVector(f.vel, dt);
+      f.rotation.x += f.spin.x * dt;
+      f.rotation.y += f.spin.y * dt;
+      f.rotation.z += f.spin.z * dt;
+      if (f.life < 2) f.scale *= Math.max(0.6, 1 - dt * 0.3);
+      keepF.push(f);
+    }
+    this.fragments = keepF;
+    this.drawFragments();
+    // The destroyed ship's own pieces.
     const keepD: Debris[] = [];
     for (const d of this.debris) {
       d.life -= dt;
@@ -475,6 +495,20 @@ export class EffectsSystem {
     }
   }
 
+  /** Write every live fragment into the batch of its shape. */
+  private drawFragments(): void {
+    for (const batch of this.fragmentBatches) batch.begin();
+    const dummy = this.fragmentDummy;
+    for (const f of this.fragments) {
+      dummy.position.copy(f.pos);
+      dummy.rotation.copy(f.rotation);
+      dummy.scale.setScalar(f.scale);
+      dummy.updateMatrix();
+      this.fragmentBatches[f.shape].push(dummy.matrix);
+    }
+    for (const batch of this.fragmentBatches) batch.commit();
+  }
+
   private removeDebris(object: THREE.Object3D): void {
     this.group.remove(object);
     object.traverse(child => {
@@ -498,6 +532,7 @@ export class EffectsSystem {
     for (const geometry of geometries) geometry.dispose();
     for (const material of materials) material.dispose();
     for (const texture of [this.flashTex, this.fireTex, this.smokeTex, this.blueTex, this.redTex]) texture.dispose();
+    for (const batch of this.fragmentBatches) batch.dispose();
     for (const geometry of this.debrisGeo) geometry.dispose();
     this.debrisMat.dispose();
     this.nuclearRingGeometry.dispose();
@@ -505,10 +540,12 @@ export class EffectsSystem {
   }
 
   clear(): void {
-    for (const s of this.sparks) this.releaseSprite(s.sprite);
     this.sparks = [];
+    for (const batch of this.sparkBatches) { batch.begin(); batch.commit(); }
     for (const d of this.debris) this.removeDebris(d.mesh);
     this.debris = [];
+    this.fragments = [];
+    this.drawFragments();
     this.barriers.clear();
     for (const ring of this.nuclearRings) { this.group.remove(ring.mesh); ring.mesh.visible = false; this.ringPool.push(ring.mesh); }
     this.nuclearRings = [];
