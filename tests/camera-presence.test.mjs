@@ -16,7 +16,7 @@ const source = readFileSync(new URL('../src/rendering/cameras.ts', import.meta.u
 writeFileSync(join(directory, 'cameras.cjs'), ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
 }).outputText.replace(/require\("three"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three')) + ')'));
-const { CameraRig, followLengths, cinematicOrbitLengths } = projectRequire(join(directory, 'cameras.cjs'));
+const { CameraRig, followLengths, cinematicOrbitLengths, overShoulderWeight } = projectRequire(join(directory, 'cameras.cjs'));
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const subject = (size, heading = V(0, 0, 1)) => ({ position: V(0, 0, 0), velocity: V(0, 0, 0), heading, size });
@@ -50,4 +50,46 @@ test('a solo cinematic orbit of a Reaper is closer and lower than before', () =>
   settle(rig, { cinematic: { from: subject(20), age: 0 } });
   assert.ok(widthShare(rig, 20) > 0.24);
   assert.ok(rig.camera.position.y < 14);
+});
+
+// Two-ship cinematic shots (port of the Codex build's two-shot tests). Before: the side-on two-shot backed off with
+// the separation, so a 20-unit Reaper spanned 14.4 % of the frame's width with its target 120 units away and 4.9 %
+// at 400.
+const at = (size, z, heading = V(0, 0, 1)) => ({ position: V(0, 0, z), velocity: V(0, 0, 0), heading, size });
+const visibleShare = (rig, size, z0) => { let lo = Infinity, hi = -Infinity; for (const p of [V(0, 0, z0 - size / 2), V(0, 0, z0 + size / 2), V(size * 0.18, 0, z0 + size / 4), V(-size * 0.18, 0, z0 + size / 4)]) { const q = p.clone().project(rig.camera); lo = Math.min(lo, q.x); hi = Math.max(hi, q.x); } return (Math.min(1, hi) - Math.max(-1, lo)) / 2; };
+
+test('a Reaper and a distant target are framed over the Reaper\'s shoulder, with the target in the picture', () => {
+  for (const separation of [80, 120, 200, 400]) {
+    const rig = new CameraRig(16 / 9);
+    rig.setMode('cinematic');
+    const reaper = at(20, 0), target = at(4.5, separation, V(0, 0, -1));
+    settle(rig, { cinematic: { from: reaper, to: target, age: 0 } });
+    assert.ok(visibleShare(rig, 20, 0) > 0.4, 'share at ' + separation + ': ' + visibleShare(rig, 20, 0));
+    assert.ok(inFrame(rig, target.position), 'target in frame at ' + separation);
+    assert.ok(rig.camera.position.z < -10 && rig.camera.getWorldDirection(V(0, 0, 0)).z > 0.85, 'behind the Reaper, looking at its target');
+  }
+});
+
+test('the larger ship is the foreground whichever end of the pair it is', () => {
+  const rig = new CameraRig(16 / 9);
+  rig.setMode('cinematic');
+  const cruiser = at(4.5, 0), reaper = at(20, 200, V(0, 0, -1));
+  settle(rig, { cinematic: { from: cruiser, to: reaper, age: 0 } });
+  assert.ok(visibleShare(rig, 20, 200) > 0.4);
+  assert.ok(inFrame(rig, cruiser.position));
+  assert.ok(rig.camera.position.z > 210);
+});
+
+test('small hulls and close pairs keep the side-on two-shot', () => {
+  assert.equal(overShoulderWeight(1.7, 30), 0);
+  assert.equal(overShoulderWeight(5.2, 400), 0);
+  assert.equal(overShoulderWeight(20, 30), 0);
+  assert.equal(overShoulderWeight(20, 70), 1);
+  for (let d = 20; d < 100; d += 2) assert.ok(overShoulderWeight(20, d + 2) >= overShoulderWeight(20, d));
+  const rig = new CameraRig(16 / 9);
+  rig.setMode('cinematic');
+  settle(rig, { cinematic: { from: at(1.7, 0), to: at(1.7, 30, V(0, 0, -1)), age: 0 } });
+  assert.ok(Math.abs(rig.camera.position.z - (15 - 30 * 0.12)) < 1e-3);
+  assert.ok(Math.abs(Math.abs(rig.camera.position.x) - 30 * 0.72) < 1e-3);
+  assert.ok(Math.abs(rig.camera.position.y - 30 * 0.72 * 0.3) < 1e-3);
 });
