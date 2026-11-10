@@ -7,6 +7,7 @@ on:
       - codex/pure-battle-v1
       - perf/thousand-ship-battles
       - fix/reaper-structural-lod-20261110
+      - feat/measured-ship-scale-20261110
   pull_request:
     branches:
       - main

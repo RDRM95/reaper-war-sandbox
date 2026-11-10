@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [perf/thousand-ship-battles, fix/reaper-structural-lod-20261110]
+    branches: [perf/thousand-ship-battles, fix/reaper-structural-lod-20261110, feat/measured-ship-scale-20261110]
 permissions:
   contents: read
 jobs:

@@ -158,4 +158,19 @@ test('GPU batches distinguish a dedicated nested carapace from legacy plate over
   }
 });
 
+test('true-scale measurements preserve Reaper scale and correct the complete Trident hull', () => {
+  const { measureShip, visibleMeshBounds } = require(compile('references/shipDimensions.ts'));
+  assert.ok(Math.abs(measureShip('reaper_capital').lengthMetres - 2000) < .001);
+  assert.ok(Math.abs(measureShip('reaper_destroyer').lengthMetres - 160) < .001);
+  const fighter = getShipTemplate('alliance_fighter');
+  assert.ok(Math.abs(measureShip('alliance_fighter').lengthMetres - 18) < .001);
+  assert.equal(fighter.lengthUnits, .18);
+  const bounds = visibleMeshBounds(fighter.group);
+  assert.ok(Math.abs(bounds.min.z + .09) < .00001);
+  assert.ok(Math.abs(bounds.max.z - .09) < .00001);
+  assert.equal(fighter.engineNodes.length, 2);
+  assert.ok(Math.abs(fighter.engineNodes[0].x + fighter.engineNodes[1].x) < .00001);
+  assert.ok(Math.abs(.3 * fighter.glowScales[0] - .11 * fighter.lengthUnits) < .00001);
+});
+
 test.after(() => rmSync(directory, { recursive: true, force: true }));

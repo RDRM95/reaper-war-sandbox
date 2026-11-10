@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { getShipTemplate } from '@/rendering/ships';
 import { auditShipReferences, ShipReferenceRegistry, type ShipReferenceMatch } from './ShipReferenceRegistry';
 import visualReferences from './visual_references.json';
+import { createShipScaleComparison } from './ShipScaleComparison';
+import { measureShip, visibleMeshBounds } from './shipDimensions';
 
 const views=[
   {name:'TOP',pos:[0,1,0],up:[0,0,1]},
@@ -83,6 +85,15 @@ function showInspector():void{
     select.append(option);
   }
   top.append(select);
+  let showScale = false;
+  const scaleButton = button('TRUE-SCALE COMPARISON', () => {
+    showScale = !showScale;
+    scaleButton.textContent = showScale ? 'BACK TO SIX VIEWS' : 'TRUE-SCALE COMPARISON';
+    select.disabled = showScale;
+    heroButton.disabled = showScale;
+    render();
+  });
+  top.append(scaleButton);
   let includeHero=false;
   const heroButton=button('SHOW 3/4 VIEWS',()=>{
     includeHero=!includeHero;
@@ -118,6 +129,8 @@ function showInspector():void{
   function release():void{for(const url of urls)URL.revokeObjectURL(url);urls.length=0;for(const cb of disposers)cb();disposers.length=0;}
   function render():void{
     release();grid.replaceChildren();context.replaceChildren();
+    grid.style.display = showScale ? 'block' : '';
+    if (showScale) { grid.append(createShipScaleComparison()); return; }
     const match=records.find(r=>r.reference.id===select.value) as ShipReferenceMatch;
     const ref=match.reference;
     const info=make('div');
@@ -148,11 +161,18 @@ function showInspector():void{
       grid.append(missing);return;
     }
     const template=getShipTemplate(match.classId!);
+    const dimensions = measureShip(match.classId!);
+    const measured = make('div'); measured.style.width = '100%';
+    const metres = (value: number) => value.toLocaleString('en-GB', { maximumFractionDigits: 1 });
+    measured.textContent = `VISIBLE MESH · length ${metres(dimensions.lengthMetres)} m × width ${metres(dimensions.widthMetres)} m × height ${metres(dimensions.heightMetres)} m · catalogue ${metres(dimensions.catalogueMetres)} m (${dimensions.provenance.replaceAll('_', ' ')}) · individual panels fit each ship; use True-scale comparison for relative size.`;
+    context.append(measured);
     const original=template.group;
-    const bounds=new THREE.Box3().setFromObject(original);
+    const bounds=visibleMeshBounds(original);
     const center=bounds.getCenter(new THREE.Vector3());
     const size=bounds.getSize(new THREE.Vector3());
-    const extent=Math.max(size.x,size.y,size.z,1);
+    // A 100 m minimum made small fighters occupy only a tiny fraction of
+    // every supposedly fitted reference panel. Keep only a numerical guard.
+    const extent=Math.max(size.x,size.y,size.z,.01);
     // A single temporary WebGL renderer produces all six static orthographic
     // shots. No six-context GPU allocation and no idle render loop.
     const scratch=document.createElement('canvas');

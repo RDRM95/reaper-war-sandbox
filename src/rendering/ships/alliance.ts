@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { at, merge, plateStrip, rot, taperedBox, wedge, zCylinder } from '../geometry';
 import { paletteFor } from '../materials';
 import type { BuiltShip } from './types';
+import { getShipClass } from '@/data/ships';
+import { KM } from '../geometry';
 
 /**
  * Systems Alliance hull family. Design language: functional military
@@ -321,7 +323,7 @@ export function buildAllianceFrigate(normandy = false): BuiltShip {
 
 /** F-61 Trident fighter (rendered ×2 for visibility; see KNOWN_ISSUES). */
 export function buildAllianceFighter(): BuiltShip {
-  const scale = 2;
+  const scale = 1;
   const L = 0.18 * scale;
   const parts = newParts();
   parts.hull.push(taperedBox(0.05 * scale, 0.035 * scale, L, 0.3, 0.9));
@@ -332,7 +334,24 @@ export function buildAllianceFighter(): BuiltShip {
   parts.engine.push(at(zCylinder(0.012 * scale, 0.01 * scale, 0.01 * scale, 6), 0.03 * scale, 0, -0.1 * scale));
   parts.engine.push(at(zCylinder(0.012 * scale, 0.01 * scale, 0.01 * scale, 6), -0.03 * scale, 0, -0.1 * scale));
   parts.windows.push(at(new THREE.BoxGeometry(0.02 * scale, 0.012 * scale, 0.03 * scale), 0, 0.02 * scale, 0.02 * scale));
-  return assemble(parts, 'alliance', [new THREE.Vector3(0.03 * scale, 0, -0.1 * scale), new THREE.Vector3(-0.03 * scale, 0, -0.1 * scale)], L);
+  const built = assemble(parts, 'alliance', [new THREE.Vector3(0.03 * scale, 0, -0.1 * scale), new THREE.Vector3(-0.03 * scale, 0, -0.1 * scale)], L);
+  // The old visibility multiplier made an 18 m fighter 39 m including its
+  // drives. Fit the complete original silhouette to the catalogue datum;
+  // preserve its proportions and transform the drive attachments with it.
+  const bounds = new THREE.Box3().setFromObject(built.group);
+  const centreZ = (bounds.min.z + bounds.max.z) / 2;
+  const length = getShipClass('alliance_fighter').lengthM.value * KM / 1000;
+  const fit = length / (bounds.max.z - bounds.min.z);
+  built.group.traverse(object => {
+    const mesh = object as THREE.Mesh;
+    if (mesh.isMesh) mesh.geometry.translate(0, 0, -centreZ).scale(fit, fit, fit);
+  });
+  for (const node of built.engineNodes) { node.z -= centreZ; node.multiplyScalar(fit); }
+  built.lengthUnits = length;
+  // Cancel the hero renderer's capital-sized 0.3-unit sprite floor for this
+  // 18 m hull; its two drive glows follow the ordinary 11%-of-length rule.
+  built.glowScales = built.engineNodes.map(() => length * .11 / Math.max(.3, length * .11));
+  return built;
 }
 
 /** Apex-only experimental hull. Original geometry, distinct from Omaha's
