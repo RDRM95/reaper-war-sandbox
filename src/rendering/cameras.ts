@@ -41,6 +41,15 @@ const capitalScale = (size: number): number => THREE.MathUtils.smoothstep(size, 
 export const followLengths = (size: number): number => 2.4 - 1.0 * capitalScale(size);
 export const cinematicOrbitLengths = (size: number): number => 3.2 - 1.45 * capitalScale(size);
 export const cinematicOrbitHeight = (size: number): number => 1.0 - 0.62 * capitalScale(size);
+/**
+ * How far a two-ship cinematic shot leans to an over-the-shoulder view of its larger ship, 0 to 1. The side-on
+ * two-shot backs off with the distance between the ships, so a 2 km Reaper firing at a target 20 km away spanned a
+ * tenth of the frame's width. For a capital-scale hull whose partner is more than about three hull lengths off, the camera
+ * moves in behind that hull's shoulder and looks down the line of fire instead: the hull fills the foreground and
+ * the target stays in the picture. Small hulls and close pairs keep the side-on two-shot.
+ */
+export const overShoulderWeight = (size: number, separation: number): number =>
+  capitalScale(size) * THREE.MathUtils.smoothstep(separation / Math.max(size, 1e-6), 1.5, 3.5);
 
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
@@ -225,6 +234,17 @@ export class CameraRig {
           const back = Math.max(from.size * 3, to.size * 3, dist * (0.72 + Math.abs(line.y) * 0.60), 20);
           this.desiredPos.copy(mid).addScaledVector(side, back * (1 + drift)).add(new THREE.Vector3(0, back * 0.30, 0)).addScaledVector(line, -dist * 0.12);
           this.desiredLook.copy(mid);
+          // A capital-scale hull with a distant partner: move in over its shoulder and look down the line of fire.
+          const anchor = to.size > from.size ? to : from;
+          const shoulder = overShoulderWeight(anchor.size, dist);
+          if (shoulder > 0) {
+            const toward = anchor === from ? line : line.clone().negate();
+            const s = anchor.size;
+            const pos = anchor.position.clone().addScaledVector(toward, -0.8 * s).addScaledVector(side, 0.55 * s * (1 + drift)).add(new THREE.Vector3(0, 0.27 * s, 0));
+            const look = anchor.position.clone().addScaledVector(toward, 1.1 * s);
+            this.desiredPos.lerp(pos, shoulder);
+            this.desiredLook.lerp(look, shoulder);
+          }
         } else {
           const ang = this.yaw + Math.sin(c.age * 0.08) * 0.25;
           const r = from.size * cinematicOrbitLengths(from.size) + 8;
