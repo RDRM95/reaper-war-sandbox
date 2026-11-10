@@ -479,7 +479,7 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
 
     const pivot = new THREE.Group();
     pivot.name = 'reaper-shoulder';
-    pivot.userData = { reaperRig: 'shoulder', index: i, side: Math.sign(outward.x) || 1, destroyer };
+    pivot.userData = { reaperRig: 'shoulder', index: i, side: Math.sign(outward.x) || 1, destroyer, hinge: joint.toArray() };
     pivot.position.copy(root);
     group.add(pivot);
 
@@ -519,7 +519,7 @@ export function buildReaper(opts: ReaperOpts): BuiltShip {
 
     const elbow = new THREE.Group();
     elbow.name = 'reaper-elbow';
-    elbow.userData = { reaperRig: 'elbow', index: i, side: Math.sign(outward.x) || 1, destroyer };
+    elbow.userData = { reaperRig: 'elbow', index: i, side: Math.sign(outward.x) || 1, destroyer, hinge: joint.toArray() };
     elbow.position.copy(upperEnd);
     pivot.add(elbow);
     const elbowWorld = root.clone().add(upperEnd);
