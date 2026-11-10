@@ -22,6 +22,7 @@ import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
 import { weaponWorldOffset } from '@/simulation/fireControl';
 import { primaryGunneryMount, isMainGunShot, gunneryFrame } from './gunnery';
 import { animateReaperRig, captureReaperRig, isArticulatedReaper, type ReaperRig } from './reaperMotion';
+import { EmitterLightPool, easeEmitterCharge, emitterTarget } from './emitterLights';
 
 /**
  * Binds a BattleSimulation to a Three.js scene. The simulation owns all
@@ -41,6 +42,8 @@ export interface ShipVisual {
   lod: LodLevel;
   /** Per-vessel skeletal pivots, only allocated for nearby/selected Reapers. */
   reaperRig?: ReaperRig;
+  /** Eased glow of the weapon emitter, 0 to 1 (render state). */
+  emitterCharge?: number;
 }
 
 export interface GraphicsSettings {
@@ -99,6 +102,8 @@ export class BattleView {
   private readonly glowTex: THREE.Texture;
   private sunLight: THREE.DirectionalLight;
   private fillLight: THREE.DirectionalLight;
+  /** Local weapon light for the nearest charging or firing Reaper emitters. */
+  readonly emitterLights = new EmitterLightPool();
   private readonly tmpA = new THREE.Vector3();
   private readonly tmpB = new THREE.Vector3();
   private readonly tmpQ = new THREE.Quaternion();
@@ -162,7 +167,7 @@ export class BattleView {
     // Camera-relative fill so hulls stay readable when viewed against the sun.
     this.fillLight = new THREE.DirectionalLight(0xb8c8e8, settings.quality === 'ultra' ? 0.24 : 0.9);
     this.scene.add(this.fillLight, this.fillLight.target);
-    this.scene.add(this.effects.group, this.instances.group);
+    this.scene.add(this.effects.group, this.instances.group, this.emitterLights.group);
     const farGeom = new THREE.BufferGeometry();
     farGeom.setAttribute('position', new THREE.BufferAttribute(this.farPositions, 3));
     farGeom.setAttribute('color', new THREE.BufferAttribute(this.farColours, 3));
@@ -284,6 +289,16 @@ export class BattleView {
 
   // ------------------------------------------------------------- per frame
 
+  /** Whether a ship's target is alive and within 1.1 × the reach of its main battery (read-only on the simulation). */
+  private reaperEngaged(ship: ShipState): boolean {
+    const target = ship.targetId ? this.sim.getShip(ship.targetId) : undefined;
+    if (!target?.alive || target.escaped) return false;
+    let reach = 0;
+    for (const w of ship.weapons) if (!w.def.antiSmall && w.def.range > reach) reach = w.def.range;
+    const tx = target.pos.x - ship.pos.x, ty = target.pos.y - ship.pos.y, tz = target.pos.z - ship.pos.z;
+    return tx * tx + ty * ty + tz * tz <= reach * reach * 1.21;
+  }
+
   /** Apply a level of detail to a visual: toggles detail meshes, glow sprites and the far-point fallback. */
   private applyLod(v: ShipVisual, level: LodLevel): void {
     if (v.lod === level) return;
@@ -319,6 +334,7 @@ export class BattleView {
     let far = 0;
     this.lodCounts = { full: 0, reduced: 0, point: 0 };
     this.instances.begin(sim.ships);
+    this.emitterLights.begin();
     this.ensureFarPointCapacity(sim.ships.length);
     this.rig.camera.updateMatrixWorld();
     this.frustumMatrix.multiplyMatrices(this.rig.camera.projectionMatrix, this.rig.camera.matrixWorldInverse);
@@ -380,15 +396,21 @@ export class BattleView {
         if (v.reaperRig) {
           // Combat stance once the target is within reach of the main battery (render-side reading of the
           // simulation; nothing is written back).
-          const target = ship.targetId ? sim.getShip(ship.targetId) : undefined;
-          let engaged = false;
-          if (target?.alive && !target.escaped) {
-            let reach = 0;
-            for (const w of ship.weapons) if (!w.def.antiSmall && w.def.range > reach) reach = w.def.range;
-            const tx = target.pos.x - ship.pos.x, ty = target.pos.y - ship.pos.y, tz = target.pos.z - ship.pos.z;
-            engaged = tx * tx + ty * ty + tz * tz <= reach * reach * 1.21;
-          }
+          const engaged = this.reaperEngaged(ship);
           animateReaperRig(v.reaperRig, ship, sim.time, dt, engaged);
+          if (v.built.muzzle) {
+            // Weapon light: full while the main beam fires, partial when a shot at a target is imminent.
+            let firing = false, imminent = false;
+            for (const w of ship.weapons) {
+              if (w.def.antiSmall || (w.def.kind !== 'reaper_beam' && w.def.kind !== 'thanix')) continue;
+              if (w.beamRemaining > 0) firing = true;
+              else if (ship.targetId && w.cooldown < 1.5) imminent = true;
+            }
+            const charge = easeEmitterCharge(v.emitterCharge ?? 0, emitterTarget(firing, imminent && engaged), dt);
+            v.emitterCharge = charge;
+            if (charge > 0.02) this.emitterLights.offer({ id: ship.id, charge, distanceSq: distanceSquared, size: lengthUnits, color: v.built.glowColor,
+              position: this.tmpA.copy(v.built.muzzle).applyQuaternion(v.built.group.quaternion).add(v.built.group.position).clone() });
+          }
         }
         this.applyLod(v, level);
         v.built.group.visible = true;
@@ -414,6 +436,7 @@ export class BattleView {
       }
     }
     this.instances.end();
+    this.emitterLights.end();
     const farGeom = this.farPoints.geometry;
     farGeom.setDrawRange(0, far);
     (farGeom.attributes.position as THREE.BufferAttribute).needsUpdate = true;
