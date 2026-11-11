@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 // report: fighters "draw too much visual attention compared to main weapons, looks messy like rat a tat gunfire or
 // sparks". Every small-calibre round was drawn 45 m wide against 110 m for a dreadnought's slug, with about seventy
 // of them in the air for each main round.
-test('in the Battle of Earth the main guns take most of the tracer picture instead of a fifth',async({page})=>{
+test('in the Battle of Earth the main guns take most of the tracer picture instead of a sixth',async({page})=>{
  test.slow();
  await page.goto('/');
  const result=await page.evaluate(async()=>{
@@ -24,8 +24,9 @@ test('in the Battle of Earth the main guns take most of the tracer picture inste
     if(calibre>=MAIN_CALIBRE){mainBefore+=was;mainNow+=now;mainRounds++;}else lightRounds++;}}
   return {mainRounds,lightRounds,shareBefore:mainBefore/allBefore,shareNow:mainNow/allNow,total:allNow/allBefore,mainUnchanged:Math.abs(mainNow-mainBefore),fighterGun:WEAPONS.fighter_gun.damage};
  });
- // Measured (9 main rounds and 306 lighter ones over the looks): main guns were 22 % of the area tracers cover and
- // are 70 %; all tracers together cover 31 % of what they did.
+ // Measured (10 main rounds and 450 lighter ones over the looks): main guns were 17 % of the area tracers cover and
+ // are 65 %; all tracers together cover 27 % of what they did. (Before hulls closed to gun range, with fewer light
+ // guns firing, the same battle measured 22 % and 70 %.)
  expect(result.mainRounds).toBeGreaterThan(0);
  expect(result.shareBefore).toBeLessThan(0.3);
  expect(result.shareNow).toBeGreaterThan(0.55);
