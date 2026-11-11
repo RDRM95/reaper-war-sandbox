@@ -321,6 +321,18 @@ export class BattleSimulation implements AiContext {
     return this.spatialIndex?.enemiesNear(side, origin, radius) ?? this.enemiesOf(side);
   }
 
+  /** Shared sensor report for isolated rear echelons; uses the contact grid. */
+  nearestEnemy(side: Side, origin: Vec3): ShipState | undefined {
+    if (this.spatialIndex) return this.spatialIndex.nearestEnemy(side, origin);
+    let nearest: ShipState | undefined, nearestDistance = Infinity;
+    for (const ship of this.enemiesOf(side)) {
+      if (ship.role === 'fighter') continue;
+      const d = distance(origin, ship.pos);
+      if (d < nearestDistance) { nearest = ship; nearestDistance = d; }
+    }
+    return nearest;
+  }
+
   /** Living, present ships on the opposing side (cached per tick). */
   enemiesOf(side: Side): ShipState[] {
     this.refreshSideCache();
