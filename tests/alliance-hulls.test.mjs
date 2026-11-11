@@ -12,19 +12,22 @@ import ts from 'typescript';
 const directory = mkdtempSync(join(tmpdir(), 'alliance-hulls-'));
 const projectRequire = createRequire(import.meta.url);
 const THREE = projectRequire('three');
-const files = { normandySR2Geometry: '../src/rendering/ships/normandySR2Geometry.ts', geometry: '../src/rendering/geometry.ts', materials: '../src/rendering/materials.ts', alliance: '../src/rendering/ships/alliance.ts' };
+const files = { normandySR2Geometry: '../src/rendering/ships/normandySR2Geometry.ts', geometry: '../src/rendering/geometry.ts', materials: '../src/rendering/materials.ts', fighterKit: '../src/rendering/ships/fighterKit.ts', alliance: '../src/rendering/ships/alliance.ts' };
 for (const [name, path] of Object.entries(files)) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
     .replace(/from '\.\.\/geometry'/g, "from './geometry.cjs'")
     .replace(/from '\.\.\/materials'/g, "from './materials.cjs'")
-    .replace(/from '\.\/normandySR2Geometry'/g, "from './normandySR2Geometry.cjs'");
+    .replace(/from '\.\/normandySR2Geometry'/g, "from './normandySR2Geometry.cjs'")
+    .replace(/from '\.\/fighterKit'/g, "from './fighterKit.cjs'")
+    .replace(/from '\.\/alliance'/g, "from './alliance.cjs'");
   writeFileSync(join(directory, name + '.cjs'), ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
   }).outputText
     .replace(/require\("three"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three')) + ')')
     .replace(/require\("three\/examples\/jsm\/utils\/BufferGeometryUtils\.js"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three/examples/jsm/utils/BufferGeometryUtils.js')) + ')'));
 }
-const { buildAllianceCruiser, buildAllianceDreadnought, buildAllianceFrigate, buildAllianceOmaha, buildNormandySR2 } = projectRequire(join(directory, 'alliance.cjs'));
+const { buildAllianceCarrier, buildAllianceCruiser, buildAllianceDreadnought, buildAllianceFighter, buildAllianceFrigate, buildAllianceOmaha, buildNormandySR2 } = projectRequire(join(directory, 'alliance.cjs'));
+const { cornerSolid, mirrorX, spindle, wingPanel } = projectRequire(join(directory, 'fighterKit.cjs'));
 const { PALETTES } = projectRequire(join(directory, 'materials.cjs'));
 
 const EXPECTED = {
@@ -111,6 +114,84 @@ test('the frigate is a swept-wing dart: same length, muzzle and four engine node
     return highest / ship.lengthUnits;
   };
   assert.ok(top(0.5) < 0.01 && top(-0.3) > 0.05);
+});
+
+test('the carrier is a twin-prong flight deck with an island, in the armour of the line hulls', () => {
+  const ship = buildAllianceCarrier(), dreadnought = buildAllianceDreadnought();
+  assert.equal(ship.lengthUnits, 9);
+  // Prong tips to exhaust is the stated length; the old model was 9.82 units long for a stated 9.
+  const box = new THREE.Box3().setFromObject(ship.group);
+  assert.ok(Math.abs(box.max.z - 4.5) < 1e-5);
+  assert.ok(box.min.z > -4.5 && box.min.z < -4.45);
+  assert.deepEqual(ship.engineNodes.map((p) => round(p.toArray())), [[0.603, 0.18, -4.5], [-0.603, 0.18, -4.5], [0, -0.27, -4.5]]);
+  assert.deepEqual(meshes(ship).map((m) => m.name).sort(), ['accent', 'engine', 'hull', 'hullDark', 'windows']);
+  // Measured 1,976 (the box model was 432; the dreadnought is 1,660). A fleet carries one to four carriers.
+  assert.ok(triangles(ship) <= 2100);
+  const s = size(ship);
+  assert.ok(s.z / s.x > 3 && s.z / s.y > 5);
+  // Full beam past amidships, and the prongs still carry most of it where the dreadnought is down to its blade.
+  assert.ok(Math.abs(halfBeam(ship, -0.2) - 0.15) < 0.0005);
+  assert.ok(halfBeam(ship, 0.35) > 0.12);
+  assert.ok(halfBeam(ship, 0.35) > 4 * halfBeam(dreadnought, 0.35));
+  // The launch channel: forward of the recovery deck no pale armour comes within 5 % of the length of the centre line.
+  const hull = ship.group.getObjectByName('hull').geometry.getAttribute('position');
+  let innermost = Infinity;
+  for (let i = 0; i < hull.count; i++) if (hull.getZ(i) > 0.23 * 9) innermost = Math.min(innermost, Math.abs(hull.getX(i)));
+  assert.ok(innermost / 9 > 0.05);
+  // The highest point is the island's mast: aft of amidships and on the starboard deck edge.
+  let top = -Infinity, topX = 0, topZ = 0;
+  for (const mesh of meshes(ship)) {
+    const position = mesh.geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i++) if (position.getY(i) > top) { top = position.getY(i); topX = position.getX(i); topZ = position.getZ(i); }
+  }
+  assert.ok(topX / 9 > 0.1 && topZ / 9 < -0.15);
+  // Hangars are openings with a strip of light in them, not lit slabs 30 m tall: no lit element is taller than 4.5 m.
+  const lit = ship.group.getObjectByName('windows').geometry.getAttribute('position');
+  let tallest = 0;
+  for (let t = 0; t < lit.count; t += 36) {
+    let low = Infinity, high = -Infinity;
+    for (let i = t; i < t + 36; i++) { low = Math.min(low, lit.getY(i)); high = Math.max(high, lit.getY(i)); }
+    tallest = Math.max(tallest, high - low);
+  }
+  assert.ok(tallest < 0.045);
+});
+
+// Signed volume of a triangle soup: positive when its faces wind outward.
+function volume(geometry) {
+  const g = geometry.index ? geometry.toNonIndexed() : geometry, p = g.getAttribute('position');
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  let v = 0;
+  for (let i = 0; i < p.count; i += 3) v += a.fromBufferAttribute(p, i).dot(b.fromBufferAttribute(p, i + 1).cross(c.fromBufferAttribute(p, i + 2))) / 6;
+  return v;
+}
+
+test('the fighter kit builds closed solids whose faces wind outward, mirrored or not', () => {
+  assert.ok(Math.abs(volume(cornerSolid([[0, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 1], [1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]])) - 1) < 1e-6);
+  const panel = wingPanel(1, 1, 0.5, 0.3, 0.1);
+  assert.ok(volume(panel) > 0);
+  assert.ok(Math.abs(volume(mirrorX(panel)) - volume(panel)) < 1e-6);
+  const body = spindle([{ z: -1, r: 0 }, { z: -0.5, r: 0.5 }, { z: 0.5, r: 0.5 }, { z: 1, r: 0 }], 8, 1);
+  assert.ok(volume(body) > 0.5);
+  // Stations run tail to nose: the nose station is at +z.
+  assert.ok(Math.abs(new THREE.Box3().setFromBufferAttribute(body.getAttribute('position')).max.z - 1) < 1e-3);
+});
+
+test('the Alliance fighter is a winged craft of its stated length with no lit canopy', () => {
+  // The other five factions' fighters are checked in the browser suite (e2e/visual-weight.spec.ts).
+  const ship = buildAllianceFighter(), box = size(ship);
+  let count = 0;
+  for (const mesh of meshes(ship)) {
+    count += (mesh.geometry.index ? mesh.geometry.index.count : mesh.geometry.getAttribute('position').count) / 3;
+    assert.ok(volume(mesh.geometry) > 0, mesh.name);
+  }
+  // Measured 380 (the box model was 108).
+  assert.ok(count > 180 && count <= 420);
+  assert.ok(box.z > ship.lengthUnits * 0.98 && box.z < ship.lengthUnits * 1.04);
+  assert.ok(box.x / box.z > 0.45 && box.x / box.z < 0.85);
+  assert.ok(box.y / box.z < 0.42);
+  assert.equal(ship.engineNodes.length, 2);
+  for (const node of ship.engineNodes) assert.ok(node.z < -ship.lengthUnits * 0.48);
+  assert.equal(ship.group.getObjectByName('windows'), undefined);
 });
 
 test('Alliance armour is matt paint over darker machinery', () => {

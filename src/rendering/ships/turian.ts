@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { at, rot, taperedBox, wedge, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
+import { buildFighter, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -122,16 +123,14 @@ export function buildTurianFrigate(): BuiltShip {
   return assemble(parts, 'turian', [new THREE.Vector3(0.09, -0.02, -L * 0.5), new THREE.Vector3(-0.09, -0.02, -L * 0.5)], L, new THREE.Vector3(0, 0, L * 0.5), GLOW);
 }
 
+/** Turian interceptor: a blade. Drooping, sharply swept wings and a tall fin above and below one drive. */
+export const TURIAN_FIGHTER: FighterSpec = {
+  faction: 'turian', length: 0.34, glowColor: GLOW,
+  body: { width: 0.12, height: 0.1, sides: 6 },
+  wing: { span: 0.36, root: 0.3, tip: 0.05, sweep: 0.3, z: 0, rise: -0.1 },
+  engines: { count: 1, x: 0, radius: 0.055, length: 0.2 },
+  fins: { count: 1, height: 0.16, root: 0.2, tip: 0.05, sweep: 0.14, x: 0, z: -0.18, ventral: true },
+};
 export function buildTurianFighter(): BuiltShip {
-  const k = 2;
-  const L = 0.17 * k;
-  const parts = newParts();
-  parts.hull.push(taperedBox(0.04 * k, 0.03 * k, L, 0.25, 0.9));
-  const wing = taperedBox(0.16 * k, 0.008 * k, 0.09 * k, 0.3, 1);
-  wing.rotateY(0);
-  parts.hull.push(at(wing, 0, 0, -0.03 * k));
-  parts.hullDark.push(at(rot(taperedBox(0.01 * k, 0.05 * k, 0.06 * k, 0.4, 1), 0, 0, 0), 0, 0.03 * k, -0.06 * k));
-  parts.engine.push(at(zCylinder(0.012 * k, 0.01 * k, 0.01 * k, 6), 0, 0, -0.09 * k));
-  parts.windows.push(at(new THREE.BoxGeometry(0.018 * k, 0.01 * k, 0.03 * k), 0, 0.015 * k, 0.02 * k));
-  return assemble(parts, 'turian', [new THREE.Vector3(0, 0, -0.09 * k)], L, undefined, GLOW);
+  return buildFighter(TURIAN_FIGHTER);
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { at, taperedBox, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
+import { buildFighter, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -104,13 +105,14 @@ export function buildGethFrigate(): BuiltShip {
   return assemble(parts, 'geth', [new THREE.Vector3(0.07, 0, -L * 0.5), new THREE.Vector3(-0.07, 0, -L * 0.5)], L, new THREE.Vector3(0, 0, L * 0.5), GLOW);
 }
 
+/** Geth fighter: no pilot, so no canopy. A sensor lens in a bulbous body between two forward-swept mandibles. */
+export const GETH_FIGHTER: FighterSpec = {
+  faction: 'geth', length: 0.32, glowColor: GLOW,
+  body: { width: 0.16, height: 0.14, sides: 8, eye: true },
+  wing: { span: 0.3, root: 0.16, tip: 0.04, sweep: -0.3, z: -0.12, rise: -0.06 },
+  tipPods: { radius: 0.02, length: 0.14 },
+  engines: { count: 1, x: 0, radius: 0.06, length: 0.16 },
+};
 export function buildGethFighter(): BuiltShip {
-  const k = 2;
-  const L = 0.16 * k;
-  const parts = newParts();
-  parts.hull.push(taperedBox(0.04 * k, 0.03 * k, L, 0.6, 1));
-  parts.windows.push(at(zCylinder(0.01 * k, 0.012 * k, 0.01 * k, 8), 0, 0, L * 0.5));
-  for (const s of [-1, 1]) parts.hullDark.push(at(taperedBox(0.07 * k, 0.006 * k, 0.06 * k, 0.4, 1), s * 0.05 * k, 0, -0.02 * k));
-  parts.engine.push(at(zCylinder(0.012 * k, 0.01 * k, 0.01 * k, 6), 0, 0, -L * 0.5));
-  return assemble(parts, 'geth', [new THREE.Vector3(0, 0, -L * 0.5)], L, undefined, GLOW);
+  return buildFighter(GETH_FIGHTER);
 }
