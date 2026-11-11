@@ -185,6 +185,35 @@ function approachLane(fleet: FleetState): number {
   return lane;
 }
 
+/**
+ * Altitude lanes. Allied fleets that fight side by side do not all come in on one level: the first fleet of a side
+ * keeps the altitude it deployed at, and each further fleet, including one that arrives later, takes the next lane
+ * above or below it. Fleets on separate levels do not mask each other's fire, and an enemy line facing one of them
+ * has the others above or below its guns. A side with a single fleet is unaffected.
+ */
+export const ALTITUDE_LANES = [0, 1, -1, 0.5, -0.5, 1.5, -1.5] as const;
+/** A lane's height is this share of the fleet's engagement range per unit of lane. */
+export const ALTITUDE_LANE_STEP = 0.45;
+const altitudeLanes = new WeakMap<FleetState, { lane: number; base: number }>();
+
+/** The lane a fleet holds for the battle, from its place among its side's fleets in order of deployment. */
+export function altitudeLane(ctx: AiContext, fleet: FleetState): { lane: number; base: number } {
+  let cached = altitudeLanes.get(fleet);
+  if (!cached) {
+    let index = 0;
+    for (const other of ctx.fleets.values()) {
+      if (other === fleet) break;
+      if (other.spec.side === fleet.spec.side) index++;
+    }
+    // The second side mirrors the first, so opposing fleets of the same rank do not climb together.
+    const sign = fleet.spec.side === 'A' ? 1 : -1;
+    const step = ALTITUDE_LANES[index % ALTITUDE_LANES.length];
+    cached = { lane: step === 0 ? 0 : sign * step, base: fleet.anchor.y };
+    altitudeLanes.set(fleet, cached);
+  }
+  return cached;
+}
+
 /** Stable fleet fire control and formation translation. Tactical observations
  * are shared; individual movement never rebuilds a global enemy centroid. */
 export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): void {
@@ -258,6 +287,10 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
         const bend = ctx.rules.special.reaperHardcore ? Math.min(1, remaining / Math.max(1, 2 * range)) : 0;
         desired = add(add(fleet.anchor, scale(forward, remaining)),
           scale(right, lane * range * 0.12 * bend));
+        // Climb or descend to this fleet's altitude lane on the way in. The first fleet of a side has lane 0 and
+        // goes on as before, straight at its enemy.
+        const altitude = altitudeLane(ctx, fleet);
+        if (altitude.lane !== 0) desired.y = altitude.base + altitude.lane * range * ALTITUDE_LANE_STEP;
       }
     }
   } else if (o.order === 'defend_position') {
