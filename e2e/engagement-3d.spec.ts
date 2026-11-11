@@ -78,3 +78,55 @@ test('allied fleets in the Final Battle of Earth stack on separate levels',async
  expect(result.overlaps).toBe(0);
  expect(result.singleLanes).toEqual([0,0]);
 });
+
+// Fleet intents (port of the Codex build's tests/fleet-intent.test.ts): a fleet ordered to flank goes round to the
+// enemy's side at its own range; one ordered to break through drives past the enemy. Weapons do no damage here, so
+// this is a control experiment on movement.
+test('a fleet ordered to flank goes round the enemy, and one ordered to break through goes past it',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation}=await import('/src/simulation/battle.ts');
+  const {buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const {centroid,manoeuvreReached}=await import('/src/simulation/ai.ts');
+  const {sampleGeometry}=await import('/src/simulation/engagementGeometry.ts');
+  const exercise=(order)=>{
+   const sim=new BattleSimulation(buildCustomBattle({seed:42,rulesId:'prime_apex',environment:'deep_space',startingDistanceKm:70,maxDuration:900,
+    sideA:{faction:'alliance',name:'Line',formation:'line_abreast',counts:{alliance_dreadnought:4,alliance_cruiser:8,alliance_frigate:8}},
+    sideB:{faction:'reaper',name:'Reapers',formation:'line_abreast',counts:{reaper_capital:3,reaper_destroyer:8}}}));
+   for(const ship of sim.ships)for(const weapon of ship.weapons)weapon.def={...weapon.def,damage:0};
+   sim.issueOrders('custom-b',{order:'hold_formation'});
+   const fleet=sim.fleets.get('custom-a');
+   const start=centroid(sim.ships.filter(s=>s.side==='B'));
+   const axis={x:fleet.anchor.x-start.x,z:fleet.anchor.z-start.z},length=Math.hypot(axis.x,axis.z);
+   sim.issueOrders('custom-a',{order});
+   let reachedAt=-1,overlaps=0;
+   for(let i=0;i<8000&&!sim.finished;i++){sim.step();if(reachedAt<0&&manoeuvreReached(fleet))reachedAt=sim.time;if(sim.tick%200===0)for(const row of sampleGeometry(sim))overlaps+=row.overlaps;}
+   const enemy=centroid(sim.ships.filter(s=>s.side==='B'));
+   const v={x:fleet.anchor.x-enemy.x,z:fleet.anchor.z-enemy.z},d=Math.hypot(v.x,v.z);
+   const hulls=sim.ships.filter(s=>s.side==='A'&&s.role!=='fighter');
+   const along=(p)=>((p.x-enemy.x)*axis.x+(p.z-enemy.z)*axis.z)/length;
+   return {reachedAt,angle:Math.acos(Math.max(-1,Math.min(1,(v.x*axis.x+v.z*axis.z)/(d*length))))*180/Math.PI,distance:d/fleet.engagementRange,along:along(fleet.anchor),
+    past:hulls.filter(s=>along(s.pos)<0).length,fired:hulls.filter(s=>s.stats.shotsFired>0).length,hulls:hulls.length,overlaps,mode:fleet.engagementMode};
+  };
+  return {attack:exercise('attack'),flank:exercise('flank'),breakthrough:exercise('breakthrough')};
+ });
+ expect(result.attack.reachedAt).toBe(-1);
+ expect(result.attack.angle).toBeLessThan(5);
+ // Flank: on station in under 200 s, about 65 degrees round the enemy at its own range, every hull firing.
+ expect(result.flank.reachedAt).toBeGreaterThan(40);
+ expect(result.flank.reachedAt).toBeLessThan(200);
+ expect(result.flank.angle).toBeGreaterThan(55);
+ expect(result.flank.angle).toBeLessThan(70);
+ expect(result.flank.distance).toBeGreaterThan(0.7);
+ expect(result.flank.distance).toBeLessThan(1.1);
+ expect(result.flank.fired).toBe(result.flank.hulls);
+ expect(result.flank.overlaps).toBe(0);
+ // Break through: past the enemy's centre in under 300 s with most of its hulls.
+ expect(result.breakthrough.reachedAt).toBeGreaterThan(100);
+ expect(result.breakthrough.reachedAt).toBeLessThan(300);
+ expect(result.breakthrough.along).toBeLessThan(-4);
+ expect(result.breakthrough.past).toBeGreaterThanOrEqual(12);
+ expect(result.breakthrough.fired).toBe(result.breakthrough.hulls);
+ expect(result.breakthrough.overlaps).toBe(0);
+});
