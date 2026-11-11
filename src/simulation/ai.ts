@@ -253,6 +253,24 @@ function manoeuvreGoal(fleet: FleetState, enemy: Vec3 | undefined, desiredRange:
   return goal;
 }
 
+/** The nearest and farthest a Reaper capital chooses to fight, as shares of its engagement range. */
+export const REAPER_PRESS = [0.52, 0.86] as const;
+const presses = new WeakMap<ShipState, number>();
+/** Where in that span one capital fights: fixed for the hull for the whole battle, from its identity alone. */
+export function pressOf(ship: ShipState): number {
+  let press = presses.get(ship);
+  if (press === undefined) {
+    let hash = 2166136261;
+    for (const c of ship.id) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+    press = ((hash >>> 0) % 1000) / 999;
+    presses.set(ship, press);
+  }
+  return press;
+}
+
+/** A hull whose station is out of range closes to this share of its engagement range from its target. */
+export const CLOSING_RANGE = 0.94;
+
 /**
  * Screening. The fleet's capitals hold their formation and its escorts stand between them and the enemy, wherever the
  * enemy is: the screen is a dish centred on the line from the capitals to the enemy's centre, part of the way out,
@@ -705,9 +723,21 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   const stationDistance = Math.sqrt(lengthSq(toTarget));
   const trimLimit = range * 0.15;
   if (stationDistance > range * 0.97) {
-    position = add(position, scale(normalize(toTarget), Math.min(trimLimit, stationDistance - range * 0.94)));
+    // A station that leaves the target outside this hull's guns is no station. The class line moves as a block, so
+    // in a wide or deep fleet a hull's own place could put it well beyond its range; the old bound of 15 % of range
+    // on this correction left such hulls parked just out of reach, not firing. It now closes until it can shoot.
+    position = add(position, scale(normalize(toTarget), stationDistance - range * CLOSING_RANGE));
   } else if (!noRetreat && stationDistance < band.min) {
     position = add(position, scale(normalize(toTarget), -Math.min(trimLimit, band.min - stationDistance)));
+  }
+  // A Reaper capital presses its own attack. The class line moves as a block, which left every capital at one
+  // distance from the enemy, shoulder to shoulder; each now holds its own share of its range, some driving in
+  // close and some standing off, always inside its guns and never nearer than its minimum.
+  if (ship.role === 'reaper_capital') {
+    const toward = sub(target.pos, position);
+    const current = Math.sqrt(lengthSq(toward));
+    const wanted = Math.min(range * 0.9, Math.max(band.min, range * (REAPER_PRESS[0] + (REAPER_PRESS[1] - REAPER_PRESS[0]) * pressOf(ship))));
+    if (current > 1e-6) position = add(position, scale(toward, (current - wanted) / current));
   }
   // Take the station round the target on this hull's attack bearing: over, under or round the flank, at the
   // range just worked out. The swing opens as the hull closes, so a fleet deploys in formation and fights in depth.

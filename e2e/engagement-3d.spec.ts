@@ -238,7 +238,9 @@ test('a fleet ordered to regroup closes its gaps, forms up and resumes the attac
   // Forming up: the Battle of Earth, ordered at 80 s.
   const sim=new BattleSimulation(buildScenario('battle_of_earth','prime_apex',1));const fleet=first(sim);
   while(sim.time<80)sim.step();
-  const shots=()=>hulls(sim,fleet).reduce((n:number,s:any)=>n+s.stats.shotsFired,0),shotsBefore=shots();
+  // Shots by every hull of the fleet, lost or not: a hull that dies while the fleet forms up still fired.
+  const everyHull=sim.ships.filter((s:any)=>s.fleetId===fleet.spec.id&&s.role!=='fighter');
+  const shots=()=>everyHull.reduce((n:number,s:any)=>n+s.stats.shotsFired,0),shotsBefore=shots();
   sim.issueOrders(fleet.spec.id,{order:'regroup'});
   const startProgress=regroupProgress(fleet,sim.ships);let progress=startProgress,contacts=0;
   while(!sim.finished&&sim.time<150&&fleet.orders.order==='regroup'){
@@ -249,14 +251,14 @@ test('a fleet ordered to regroup closes its gaps, forms up and resumes the attac
   }
   return {deployed,survivors,deployedFootprint,footprintBefore,footprintAfter,gapBefore,gapAfter,off,startProgress,progress,formedAfter:sim.time-80,order:fleet.orders.order,shots:shots()-shotsBefore,contacts};
  });
- // Measured: 21 of 49 hulls left on 482 km² of stations (935 km² at deployment): the formation has not closed up.
- // After: 98 km², worst gap between neighbouring stations 5.1 km to 2.3 km.
- expect(result.survivors).toBeLessThan(result.deployed*0.6);
- expect(result.footprintBefore/result.survivors).toBeGreaterThan(result.deployedFootprint/result.deployed*0.9);
- expect(result.footprintAfter).toBeLessThan(result.footprintBefore*0.5);
- expect(result.gapAfter).toBeLessThan(result.gapBefore);
+ // Measured: 23 of 49 hulls left; the widest gap between neighbouring stations falls from 5.7 to 3.8 km. Which hulls
+ // a battle kills changes with every change to how fleets fight, so the gaps are asserted and the area the stations
+ // span is not: with enough survivors a fresh formation covers no less ground than the ragged one.
+ expect(result.survivors).toBeLessThan(result.deployed*0.8);
+ expect(result.survivors).toBeGreaterThan(5);
+ expect(result.gapAfter).toBeLessThan(result.gapBefore*0.8);
  expect(result.off).toBeLessThan(1e-6);
- // Measured: no hull on its new station at the order; 80 % formed and attacking again 29.5 s later, 114 shots meanwhile.
+ // Measured: no hull on its new station at the order; 80 % formed and attacking again 41.6 s later, 372 shots meanwhile.
  expect(result.startProgress).toBeLessThan(0.2);
  expect(result.formedAfter).toBeGreaterThan(10);
  expect(result.formedAfter).toBeLessThan(50);
@@ -334,4 +336,44 @@ test('a carrier holding formation stays on station with its wing in the air',asy
   expect(run.launched).toBeGreaterThan(20);
   expect(run.inside).toBe(0);
  }
+});
+
+// Hulls close to gun range, and Reaper capitals advance as individuals (ports of the Codex build's
+// tests/gun-range.test.ts and tests/reaper-advance.test.ts). Before: in a battle four times the default size 76 % of
+// Alliance frigates and 74 % of cruisers fired in a given 20 s, the rest parked at about 1.2 times their gun range;
+// Reaper capitals moved in unison (velocity alignment 0.73) within 1.1 km of one level.
+test('escorts in a large fleet are in range and firing, and Reaper capitals do not move as a rank',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation}=await import('/src/simulation/battle.ts');
+  const {buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const battle=(scale:number,seed:number)=>new BattleSimulation(buildCustomBattle({seed,rulesId:'canon_me3',environment:'deep_space',theatreLayout:'three_dimensional',startingDistanceKm:76,maxDuration:420,
+   sideA:{faction:'alliance',name:'Alliance Task Force',formation:'line_abreast',counts:{alliance_dreadnought:8*scale,alliance_carrier:scale,alliance_cruiser:16*scale,alliance_frigate:30*scale,alliance_frigate_thanix:scale}},
+   sideB:{faction:'reaper',name:'Reaper harvest group',formation:'strike_wedge',counts:{reaper_capital:4*scale,reaper_destroyer:8*scale}}} as any));
+  // Firing share by class in the four-times battle, 60 to 140 s; a hull counts from its second look on.
+  const big=battle(4,1),shots=new Map<string,number>(),looks:Record<string,number>={},firing:Record<string,number>={};let next=60;
+  while(!big.finished&&big.time<140){big.step();if(big.time<next)continue;next+=20;
+   for(const ship of big.ships){if(!ship.alive||ship.escaped||ship.role==='fighter')continue;const key=ship.side+' '+ship.role;
+    if(shots.has(ship.id)){looks[key]=(looks[key]??0)+1;if(ship.stats.shotsFired>shots.get(ship.id)!)firing[key]=(firing[key]??0)+1;}
+    shots.set(ship.id,ship.stats.shotsFired);}}
+  const share:Record<string,number>={};for(const key of Object.keys(looks))share[key]=(firing[key]??0)/looks[key];
+  // Reaper capitals in the default battle, three seeds, 40 to 140 s.
+  let alignment=0,pairs=0,height=0,samples=0;
+  for(const seed of [1,2,3]){const sim=battle(1,seed);let at=40;
+   while(!sim.finished&&sim.time<140){sim.step();if(sim.time<at)continue;at+=10;
+    const ships=sim.ships.filter((s:any)=>s.alive&&s.role==='reaper_capital');if(ships.length<3)continue;
+    const moving=ships.filter((s:any)=>Math.hypot(s.vel.x,s.vel.y,s.vel.z)>0.02);
+    for(let i=0;i<moving.length;i++)for(let j=0;j<i;j++){const a=moving[i].vel,b=moving[j].vel;alignment+=(a.x*b.x+a.y*b.y+a.z*b.z)/(Math.hypot(a.x,a.y,a.z)*Math.hypot(b.x,b.y,b.z));pairs++;}
+    const mean=ships.reduce((n:number,s:any)=>n+s.pos.y,0)/ships.length;height+=Math.sqrt(ships.reduce((n:number,s:any)=>n+(s.pos.y-mean)**2,0)/ships.length);samples++;}}
+  return {share,alignment:alignment/pairs,height:height/samples};
+ });
+ // Measured: frigates 100 %, cruisers 99 %, dreadnoughts 100 %, Reaper destroyers 92 %.
+ expect(result.share['A frigate']).toBeGreaterThan(0.8);
+ expect(result.share['A cruiser']).toBeGreaterThan(0.75);
+ expect(result.share['A dreadnought']).toBeGreaterThan(0.8);
+ expect(result.share['B reaper_destroyer']).toBeGreaterThan(0.85);
+ // Measured: velocity alignment 0.47, height spread 2.3 km.
+ expect(result.alignment).toBeLessThan(0.62);
+ expect(result.height).toBeGreaterThan(1.6);
 });
