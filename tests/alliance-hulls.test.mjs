@@ -12,18 +12,19 @@ import ts from 'typescript';
 const directory = mkdtempSync(join(tmpdir(), 'alliance-hulls-'));
 const projectRequire = createRequire(import.meta.url);
 const THREE = projectRequire('three');
-const files = { geometry: '../src/rendering/geometry.ts', materials: '../src/rendering/materials.ts', alliance: '../src/rendering/ships/alliance.ts' };
+const files = { normandySR2Geometry: '../src/rendering/ships/normandySR2Geometry.ts', geometry: '../src/rendering/geometry.ts', materials: '../src/rendering/materials.ts', alliance: '../src/rendering/ships/alliance.ts' };
 for (const [name, path] of Object.entries(files)) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
     .replace(/from '\.\.\/geometry'/g, "from './geometry.cjs'")
-    .replace(/from '\.\.\/materials'/g, "from './materials.cjs'");
+    .replace(/from '\.\.\/materials'/g, "from './materials.cjs'")
+    .replace(/from '\.\/normandySR2Geometry'/g, "from './normandySR2Geometry.cjs'");
   writeFileSync(join(directory, name + '.cjs'), ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
   }).outputText
     .replace(/require\("three"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three')) + ')')
     .replace(/require\("three\/examples\/jsm\/utils\/BufferGeometryUtils\.js"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three/examples/jsm/utils/BufferGeometryUtils.js')) + ')'));
 }
-const { buildAllianceCruiser, buildAllianceDreadnought, buildAllianceFrigate, buildAllianceOmaha } = projectRequire(join(directory, 'alliance.cjs'));
+const { buildAllianceCruiser, buildAllianceDreadnought, buildAllianceFrigate, buildAllianceOmaha, buildNormandySR2 } = projectRequire(join(directory, 'alliance.cjs'));
 const { PALETTES } = projectRequire(join(directory, 'materials.cjs'));
 
 const EXPECTED = {
@@ -124,4 +125,27 @@ test('the heavy gunship hull of the Omaha family is untouched', () => {
   assert.equal(triangles(omaha), 1952);
   assert.equal(omaha.engineNodes.length, 6);
   assert.ok(Math.abs(size(omaha).z - 17.802) < 1e-3);
+});
+
+
+test('SR-2 keeps a narrow plan, structural fins and five batches', () => {
+  const ship = buildNormandySR2(), bounds = size(ship);
+  assert.equal(ship.lengthUnits, 2.16);
+  assert.deepEqual(ship.muzzle.toArray(), [0, -0.012, 1.068]);
+  assert.ok(Math.abs(bounds.z - 2.16) < 0.01);
+  assert.ok(bounds.x / bounds.z > 0.44 && bounds.x / bounds.z < 0.50);
+  assert.ok(bounds.y > 0.40);
+  assert.equal(meshes(ship).length, 5);
+  assert.ok(triangles(ship) < 1800);
+  assert.ok(meshes(ship).every(m => Array.from(m.geometry.attributes.position.array).every(Number.isFinite)));
+});
+
+test('all four SR-2 exhaust nodes lie on their actual emissive aft faces', () => {
+  const ship = buildNormandySR2(); ship.group.updateMatrixWorld(true);
+  assert.equal(ship.engineNodes.length, 4);
+  for (const node of ship.engineNodes) {
+    const ray = new THREE.Raycaster(node.clone().add(new THREE.Vector3(0, 0, -0.1)), new THREE.Vector3(0, 0, 1));
+    const hit = ray.intersectObject(ship.group.getObjectByName('engine'))[0];
+    assert.ok(hit && hit.point.distanceTo(node) < 1e-5);
+  }
 });
