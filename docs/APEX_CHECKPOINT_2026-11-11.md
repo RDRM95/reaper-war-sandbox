@@ -8,4 +8,3 @@ Original Normandy SR-2 silhouette work is on local branch `fix/normandy-sr2-prof
 - Initial Codex checks: 411 unit tests, typecheck/build, 320- and 1,000-ship browser checks. After the #49 rebase, all 69 unit files / 422 tests pass. Sandbox: 51 Node tests, typecheck/build, four selected browser cases (registry read passed on rerun after an edit-triggered reload). Final model tests pass in both.
 - Issue #16 remains unapproved. Official product photos corroborate the major shape but are not game orthographics; underside details and exact dimensions remain provisional. No other faction's approval status changed.
 - Shared combat, camera and LOD policy remain outside this candidate. Check live branches and PRs again before publishing or continuing; sandbox's 3D engagement port appeared while this work was in progress.
-
