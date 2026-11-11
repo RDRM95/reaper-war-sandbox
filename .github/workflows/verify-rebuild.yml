@@ -27,15 +27,13 @@ jobs:
       - name: Production TypeScript and Vite build
         run: npm run build
       - name: Install Chromium
-        # The install fetches system packages with apt. A runner that cannot resolve the package mirror for a
-        # moment failed the whole job before any test ran, so the step is tried up to three times.
+        # The install also fetches system packages (fonts, mostly) with apt. When the runner cannot reach the
+        # package mirror that failed the whole job before any test ran, for as long as the mirror was down. The
+        # runner image already carries the libraries Chromium needs, so in that case install the browser alone.
         run: |
-          for attempt in 1 2 3; do
-            if npx playwright install chromium --with-deps; then exit 0; fi
-            echo "Browser install failed (attempt $attempt of 3)"
-            sleep 30
-          done
-          exit 1
+          if npx playwright install chromium --with-deps; then exit 0; fi
+          echo "::warning::System packages could not be fetched; installing the browser without them"
+          npx playwright install chromium
       - name: Launch preview server
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/vite-preview.log 2>&1 &
