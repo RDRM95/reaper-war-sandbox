@@ -43,7 +43,7 @@ Evidence is in the matching Codex PR under `docs/apex/qa/normandy-sr2-20261111/`
 
 ## Verification
 
-- Codex: TypeScript/build; 68 unit files / 411 tests pass. Focused model/instancing/LOD checks pass after detail refinement. Existing ordinary Alliance hull tests remain intact.
+- Codex: TypeScript/build; 69 unit files / 422 tests pass after rebasing onto the merged 3D engagement work at `d7f1313`. Focused model/instancing/LOD checks pass after detail refinement. Existing ordinary Alliance hull tests remain intact.
 - Sandbox: TypeScript/build; 51 Node tests pass. The existing test transpiler now includes the new geometry dependency; nine Alliance/SR-2 tests pass after the final fin-height adjustment.
 - Codex browser: existing 320-ship GPU regression and a new 1,000-ship SR-2 battle pass. The latter checks hero/instance coexistence, muzzle, four nodes, five SR-2 batch parts, unchanged simulation time/RNG and zero WebGL errors.
 - Sandbox browser: graphics state/camera invariance, fleet controls and six-view interaction were exercised. An initial registry read was interrupted by a development-server reload while editing; its isolated rerun passed. All four selected sandbox browser cases therefore passed (three initially, one on rerun).
