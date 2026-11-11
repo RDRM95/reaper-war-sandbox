@@ -23,7 +23,7 @@ for (const [name, path] of Object.entries(files)) {
     .replace(/require\("three"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three')) + ')')
     .replace(/require\("three\/examples\/jsm\/utils\/BufferGeometryUtils\.js"\)/g, 'require(' + JSON.stringify(projectRequire.resolve('three/examples/jsm/utils/BufferGeometryUtils.js')) + ')'));
 }
-const { buildAllianceCruiser, buildAllianceDreadnought, buildAllianceOmaha } = projectRequire(join(directory, 'alliance.cjs'));
+const { buildAllianceCruiser, buildAllianceDreadnought, buildAllianceFrigate, buildAllianceOmaha } = projectRequire(join(directory, 'alliance.cjs'));
 const { PALETTES } = projectRequire(join(directory, 'materials.cjs'));
 
 const EXPECTED = {
@@ -90,6 +90,26 @@ test('the cruiser is its own forked silhouette, not a scaled dreadnought', () =>
   assert.ok(Math.abs(halfBeam(cruiser, 0.3) - 0.135) < 1e-3);
   assert.ok(halfBeam(cruiser, 0.3) > 4 * halfBeam(dreadnought, 0.3));
   assert.ok(halfBeam(cruiser, 0.42) < 0.03);
+});
+
+test('the frigate is a swept-wing dart: same length, muzzle and four engine nodes, low chisel bow', () => {
+  const ship = buildAllianceFrigate();
+  assert.equal(ship.lengthUnits, 1.7);
+  assert.deepEqual(round(ship.muzzle.toArray()), [0, -0.02, 0.85]);
+  assert.deepEqual(ship.engineNodes.map((p) => round(p.toArray())), [[0.78, -0.06, -0.8], [-0.78, -0.06, -0.8], [0.09, 0, -0.85], [-0.09, 0, -0.85]]);
+  assert.deepEqual(meshes(ship).map((m) => m.name).sort(), ['accent', 'engine', 'hull', 'hullDark', 'windows']);
+  assert.ok(triangles(ship) <= 900, 'triangles ' + triangles(ship));
+  const box = new THREE.Box3().setFromObject(ship.group);
+  assert.ok(Math.abs(box.max.z - 0.85) < 1e-5 && box.min.z > -0.87, 'z ' + box.min.z + ' ' + box.max.z);
+  assert.ok(halfBeam(ship, -0.3) > 0.45 && halfBeam(ship, 0) < 0.26 && halfBeam(ship, 0.2) < 0.08);
+  assert.ok(halfBeam(ship, 0.4) < halfBeam(ship, 0.2) * 0.6);
+  const position = ship.group.getObjectByName('hull').geometry.getAttribute('position');
+  const top = (station) => {
+    let highest = -Infinity;
+    for (let i = 0; i < position.count; i++) if (Math.abs(position.getZ(i) / ship.lengthUnits - station) < 0.02) highest = Math.max(highest, position.getY(i));
+    return highest / ship.lengthUnits;
+  };
+  assert.ok(top(0.5) < 0.01 && top(-0.3) > 0.05);
 });
 
 test('Alliance armour is matt paint over darker machinery', () => {
