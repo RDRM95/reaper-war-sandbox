@@ -67,6 +67,9 @@ function fleetSlotSeed(seed: number, fleetId: string): number {
   return h | 0;
 }
 
+/** Above this many hulls of one class a regrouping fleet keeps its stations in order instead of matching nearest. */
+const REGROUP_MATCH_LIMIT = 400;
+
 /** A deploying hull keeps this many hull-radius sums from any hull of another fleet. */
 const DEPLOYMENT_CLEARANCE = 1.1;
 
@@ -395,6 +398,7 @@ export class BattleSimulation implements AiContext {
         this.retreatOrigins.delete(ship.id);
     }
     if (patch.formation && patch.formation !== prevFormation) this.reassignSlots(fleet);
+    if (patch.order === 'regroup') this.regroup(fleet);
     if (patch.order === 'attack_target' && patch.targetId) {
       fleet.focusTargetId = patch.targetId;
       for (const s of this.ships) if (s.fleetId === fleetId && s.alive && s.role !== 'fighter') {
@@ -524,6 +528,52 @@ export class BattleSimulation implements AiContext {
     }
     const first = this.shipById.get(shipIds[0]);
     if (first) this.emit({ t: this.time, type: 'order_issued', fleetId: first.fleetId, order: `ships ${shipIds.length} attack ${targetId}` });
+  }
+
+  /**
+   * Regroup: a fleet that has taken losses still flies the formation it deployed in, with a hole wherever a hull
+   * died. The survivors are given a fresh formation of their own number, centred where they now are and facing the
+   * enemy, so the line closes up over the shortest distance. The fleet's AI resumes the attack once it has formed.
+   */
+  private regroup(fleet: FleetState): void {
+    const mine = this.ships.filter(s => s.fleetId === fleet.spec.id && s.alive && !s.escaped && s.role !== 'fighter');
+    if (!mine.length) return;
+    this.reassignSlots(fleet);
+    let x = 0, y = 0, z = 0;
+    for (const s of mine) { x += s.pos.x; y += s.pos.y; z += s.pos.z; }
+    fleet.anchor = v3(x / mine.length, y / mine.length, z / mine.length);
+    const enemy = fleet.enemyCentre;
+    if (enemy) {
+      const dx = enemy.x - fleet.anchor.x, dz = enemy.z - fleet.anchor.z;
+      if (dx * dx + dz * dz > 1e-6) fleet.heading = normalize(v3(dx, 0, dz));
+    }
+    // The new slots are centred on the survivors' mean station, as the anchor is on their mean position.
+    let sx = 0, sy = 0, sz = 0;
+    for (const s of mine) { sx += s.slot.x; sy += s.slot.y; sz += s.slot.z; }
+    sx /= mine.length; sy /= mine.length; sz /= mine.length;
+    for (const s of this.ships) if (s.fleetId === fleet.spec.id && s.alive && !s.escaped) s.slot = v3(s.slot.x - sx, s.slot.y - sy, s.slot.z - sz);
+    // Each hull takes the nearest free station of its own class, nearest pairs first, so the line closes up without
+    // hulls crossing the whole formation to a station another hull is already beside.
+    const byRole = new Map<string, ShipState[]>();
+    for (const s of mine) byRole.set(s.role, [...(byRole.get(s.role) ?? []), s]);
+    for (const group of byRole.values()) {
+      if (group.length < 2 || group.length > REGROUP_MATCH_LIMIT) continue;
+      const stations = group.map(s => s.slot);
+      const world = stations.map(slot => this.slotWorld(fleet, slot));
+      const pairs: { hull: number; station: number; gap: number }[] = [];
+      for (let h = 0; h < group.length; h++) for (let k = 0; k < world.length; k++) {
+        const dx = group[h].pos.x - world[k].x, dy = group[h].pos.y - world[k].y, dz = group[h].pos.z - world[k].z;
+        pairs.push({ hull: h, station: k, gap: dx * dx + dy * dy + dz * dz });
+      }
+      pairs.sort((a, b) => a.gap - b.gap || a.hull - b.hull || a.station - b.station);
+      const hullDone = new Uint8Array(group.length), stationDone = new Uint8Array(group.length);
+      for (const pair of pairs) {
+        if (hullDone[pair.hull] || stationDone[pair.station]) continue;
+        hullDone[pair.hull] = 1; stationDone[pair.station] = 1;
+        group[pair.hull].slot = stations[pair.station];
+      }
+    }
+    fleet.engagementMode = 'hold';
   }
 
   private reassignSlots(fleet: FleetState): void {

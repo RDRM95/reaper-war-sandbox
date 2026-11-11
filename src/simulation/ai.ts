@@ -134,7 +134,7 @@ export function scoreTarget(ctx: AiContext, shooter: ShipState, fleet: FleetStat
   if (shooter.role === 'fighter' && target.role === 'fighter') score *= 3.2;
   if (!intercepting && fleet.orders.focusFire && fleet.focusTargetId === target.id && relativeRange <= 1.2) score *= 1 + d.focusFire * 2;
   score *= priorityMultiplier(fleet.orders.priority, target);
-  if (fleet.orders.protectCapitals && (shooter.role === 'frigate' || shooter.role === 'cruiser')) {
+  if ((fleet.orders.protectCapitals || fleet.orders.order === 'screen') && (shooter.role === 'frigate' || shooter.role === 'cruiser')) {
     const tgt = target.targetId ? ctx.getShip(target.targetId) : undefined;
     if (tgt && (tgt.role === 'dreadnought' || tgt.role === 'carrier') && tgt.side === shooter.side) score *= 1.8;
   }
@@ -253,6 +253,74 @@ function manoeuvreGoal(fleet: FleetState, enemy: Vec3 | undefined, desiredRange:
   return goal;
 }
 
+/**
+ * Screening. The fleet's capitals hold their formation and its escorts stand between them and the enemy, wherever the
+ * enemy is: the screen is a dish centred on the line from the capitals to the enemy's centre, part of the way out,
+ * and it swings round as that line does. A formation's own escort stations face the way the fleet deployed, so an
+ * enemy coming round a flank found most of the escorts off to one side of it.
+ */
+export const SCREEN_STANDOFF = 0.4;
+/** How far apart in depth the formation's ranks stand in the screen, as a share of their spacing in the formation. */
+export const SCREEN_DEPTH = 0.5;
+const isScreenHull = (ship: ShipState): boolean => ship.role === 'cruiser' || ship.role === 'frigate' || ship.role === 'reaper_destroyer';
+interface ScreenFrame { time: number; centre: Vec3; out: Vec3; right: Vec3; up: Vec3; distance: number; meanRank: number }
+const screenFrames = new WeakMap<FleetState, ScreenFrame>();
+
+/** Where the screen stands this tick: from the capitals' centre toward the enemy's. Shared by the fleet's escorts. */
+function screenFrame(ctx: AiContext, fleet: FleetState): ScreenFrame | undefined {
+  const cached = screenFrames.get(fleet);
+  if (cached && cached.time === ctx.time) return cached;
+  const threat = fleet.enemyCentre;
+  if (!threat) return undefined;
+  let x = 0, y = 0, z = 0, count = 0, rank = 0, escorts = 0;
+  for (const s of ctx.ships) {
+    if (s.fleetId !== fleet.spec.id || !isCombatant(s) || s.role === 'fighter') continue;
+    if (isScreenHull(s)) { rank += s.slot.z; escorts++; continue; }
+    x += s.pos.x; y += s.pos.y; z += s.pos.z; count++;
+  }
+  // A fleet with no capitals left screens its own station.
+  const centre = count ? v3(x / count, y / count, z / count) : fleet.anchor;
+  const toThreat = sub(threat, centre);
+  const range = Math.sqrt(lengthSq(toThreat));
+  if (range < 1e-6) return undefined;
+  const out = scale(toThreat, 1 / range);
+  const flat = v3(out.z, 0, -out.x);
+  const right = lengthSq(flat) > 1e-9 ? normalize(flat) : v3(1, 0, 0);
+  const up = v3(right.y * out.z - right.z * out.y, right.z * out.x - right.x * out.z, right.x * out.y - right.y * out.x);
+  const frame = { time: ctx.time, centre, out, right, up, distance: Math.min(range * SCREEN_STANDOFF, (fleet.engagementRange ?? range) * 0.6), meanRank: escorts ? rank / escorts : 0 };
+  screenFrames.set(fleet, frame);
+  return frame;
+}
+
+/** An escort's place in the screen: its formation offset across and up the dish, so neighbours stay neighbours. */
+export function screenStation(ctx: AiContext, fleet: FleetState, ship: ShipState): Vec3 | undefined {
+  const frame = screenFrame(ctx, fleet);
+  if (!frame) return undefined;
+  // Across and up the dish an escort keeps its formation offset in full, so stations that were clear of each other
+  // stay clear; ranks of the formation become layers of the screen, closed up to half their spacing.
+  const out = frame.distance + (ship.slot.z - frame.meanRank) * SCREEN_DEPTH;
+  return add(add(add(frame.centre, scale(frame.out, out)), scale(frame.right, ship.slot.x)), scale(frame.up, ship.slot.y));
+}
+
+/**
+ * Regrouping. The simulation gives a fleet ordered to regroup a fresh, compact formation where it stands; its hulls
+ * fly to their new stations, guns on their targets. Once most of them are there, or after a minute at most, the
+ * fleet goes back to the attack on its own, so a commander closes the line up with one order and not two.
+ */
+export const REGROUP_FORMED_SHARE = 0.8;
+export const REGROUP_TIME_LIMIT = 60;
+const regroupStarted = new WeakMap<FleetState, number>();
+
+/** Whether a hull is on its formation station, near enough for the fleet to count as formed. */
+const onStation = (fleet: FleetState, ship: ShipState): boolean =>
+  distance(ship.pos, slotToWorld(fleet.anchor, fleet.heading, ship.slot)) <= Math.max(0.6, ship.lengthKm * 1.5);
+
+/** The share of a regrouping fleet's hulls that are on station (for the HUD and tests). */
+export function regroupProgress(fleet: FleetState, ships: readonly ShipState[]): number {
+  const mine = ships.filter(s => s.fleetId === fleet.spec.id && isCombatant(s) && s.role !== 'fighter' && !s.withdrawing);
+  return mine.length ? mine.filter(s => onStation(fleet, s)).length / mine.length : 1;
+}
+
 /** Stable fleet fire control and formation translation. Tactical observations
  * are shared; individual movement never rebuilds a global enemy centroid. */
 export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): void {
@@ -296,6 +364,15 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
   const desiredRange = range * preferredFactor;
   const slowest = Math.min(...core.map(s => s.maxSpeed * (0.25 + 0.75 * s.subsystems.engines)));
   let desired: Vec3 | undefined;
+  if (fleet.orders.order === 'regroup') {
+    const started = regroupStarted.get(fleet) ?? ctx.time;
+    regroupStarted.set(fleet, started);
+    if (regroupProgress(fleet, mine) >= REGROUP_FORMED_SHARE || ctx.time - started >= REGROUP_TIME_LIMIT) {
+      fleet.orders = { ...fleet.orders, order: 'attack' };
+      fleet.engagementMode = 'approach';
+      regroupStarted.delete(fleet);
+    }
+  } else if (regroupStarted.has(fleet)) regroupStarted.delete(fleet);
   const o = fleet.orders;
   const noRetreat = fleet.spec.faction === 'reaper';
   const withdrawing = !noRetreat && (o.order === 'withdraw' || o.order === 'retreat');
@@ -366,7 +443,8 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
 
   // Once the line is on station, freeze its basis. Individual hulls still
   // track targets; rotating a world-space line every tick causes orbital pursuit.
-  const canTurn = withdrawing || fleet.engagementMode === 'approach' || o.order === 'escort';
+  // A screening fleet's capitals keep the line they hold: the screen turns to face the enemy, the formation does not.
+  const canTurn = withdrawing || (fleet.engagementMode === 'approach' && o.order !== 'screen') || o.order === 'escort';
   const faceDir = withdrawing && desired ? sub(desired, fleet.anchor) : enemyPosition ? sub(enemyPosition, fleet.anchor) : undefined;
   if (canTurn && faceDir && faceDir.x * faceDir.x + faceDir.z * faceDir.z > 1e-6) {
     const target = normalize(v3(faceDir.x, 0, faceDir.z));
@@ -546,6 +624,10 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   if (ship.escortId) {
     const escort = ctx.getShip(ship.escortId);
     if (escort?.alive && !escort.escaped) return { position: slotToWorld(escort.pos, escort.heading, scale(ship.slot, 0.35)), speedFraction: 1, face: target?.pos };
+  }
+  if (fleet.orders.order === 'screen' && isScreenHull(ship)) {
+    const station = screenStation(ctx, fleet, ship);
+    if (station) return { position: station, speedFraction: 1, face: target ? combatFacing(ship, target, station) : fleet.enemyCentre };
   }
   const engaging = attackOrder(fleet) || (noRetreat && ['withdraw', 'retreat'].includes(fleet.orders.order));
   if (!target || (!engaging && ship.role !== 'fighter')) return { position: slotPos, speedFraction: 1, face: target ? combatFacing(ship, target, slotPos) : undefined };
