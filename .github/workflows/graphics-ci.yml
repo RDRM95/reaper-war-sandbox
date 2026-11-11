@@ -22,7 +22,15 @@ jobs:
       - name: Typecheck and Vite production build
         run: npm run build
       - name: Install Chromium with system dependencies
-        run: npx playwright install --with-deps chromium
+        # The install fetches system packages with apt. A runner that cannot resolve the package mirror for a
+        # moment failed the whole job before any test ran, so the step is tried up to three times.
+        run: |
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then exit 0; fi
+            echo "Browser install failed (attempt $attempt of 3)"
+            sleep 30
+          done
+          exit 1
       - name: Screenshot composition regression and controls
         run: npm run test:e2e -- e2e/graphics-reference.spec.ts e2e/expansion.spec.ts e2e/ship-references.spec.ts e2e/au-expansion.spec.ts
       - name: Upload before and after screenshots
