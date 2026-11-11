@@ -45,3 +45,36 @@ test('a seeded fleet battle spreads above and below its deployment plane',async(
  expect(result.cruisers).toBeGreaterThanOrEqual(0.85);
  expect(result.same).toBe(true);
 });
+
+// Allied fleets close on separate altitude lanes (port of the Codex build's tests/altitude-lanes.test.ts). Before the
+// change the five Alliance fleets of this scenario stayed within about a kilometre of each other in altitude.
+test('allied fleets in the Final Battle of Earth stack on separate levels',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation}=await import('/src/simulation/battle.ts');
+  const {buildScenario,buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const {altitudeLane,ALTITUDE_LANES}=await import('/src/simulation/ai.ts');
+  const {sampleGeometry}=await import('/src/simulation/engagementGeometry.ts');
+  const sim=new BattleSimulation(buildScenario('final_battle_of_earth','prime_apex',1));
+  const lanes=[...sim.fleets.values()].filter(f=>f.spec.side==='A').map(f=>altitudeLane(sim,f).lane);
+  let overlaps=0,next=30;
+  while(!sim.finished&&sim.time<100){sim.step();if(sim.time>=next){next+=10;for(const row of sampleGeometry(sim))overlaps+=row.overlaps;}}
+  const alliance=[...sim.fleets.values()].filter(f=>f.spec.side==='A');
+  const altitudes=alliance.map(f=>f.anchor.y).sort((a,b)=>a-b);
+  const onOwnSide=alliance.every(f=>{const l=altitudeLane(sim,f);return l.lane===0||Math.sign(f.anchor.y-l.base)===Math.sign(l.lane);});
+  // A side with one fleet does not climb.
+  const duel=new BattleSimulation(buildCustomBattle({seed:42,rulesId:'prime_apex',environment:'deep_space',startingDistanceKm:60,maxDuration:100,
+   sideA:{faction:'alliance',name:'Line',formation:'line_abreast',counts:{alliance_dreadnought:2,alliance_cruiser:6}},
+   sideB:{faction:'reaper',name:'Reapers',formation:'strike_wedge',counts:{reaper_capital:2,reaper_destroyer:6}}}));
+  const singleLanes=[...duel.fleets.values()].map(f=>altitudeLane(duel,f).lane);
+  return {lanes,expected:ALTITUDE_LANES.slice(0,lanes.length),spread:altitudes[altitudes.length-1]-altitudes[0],
+   closest:Math.min(...altitudes.slice(1).map((y,i)=>y-altitudes[i])),onOwnSide,overlaps,singleLanes};
+ });
+ expect(result.lanes).toEqual(result.expected);
+ expect(result.spread).toBeGreaterThan(10);
+ expect(result.closest).toBeGreaterThan(1.5);
+ expect(result.onOwnSide).toBe(true);
+ expect(result.overlaps).toBe(0);
+ expect(result.singleLanes).toEqual([0,0]);
+});
