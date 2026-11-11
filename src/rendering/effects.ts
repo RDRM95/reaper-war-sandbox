@@ -1,3 +1,4 @@
+import { pointDefenceBrightness, tracerSize } from './visualWeight';
 import * as THREE from 'three';
 import { Rng } from '@/core/rng';
 import { KM } from './geometry';
@@ -324,8 +325,10 @@ export class EffectsSystem {
       // Projectile origin, timing, trajectory and impact remain sim-owned.
       const superHeavy=calibre>=10000?
         Math.min(2.7,1.6+Math.log10(calibre/10000)*0.55):1;
-      const len = Math.max(1.5, speed * 0.06) * (big ? 1.3 : 0.7) * Math.sqrt(superHeavy);
-      const w = (big ? 1.1 : 0.45)*superHeavy;
+      // Secondary guns are fine streaks, so the main batteries read first (see visualWeight.ts).
+      const size = tracerSize(calibre);
+      const len = Math.max(big ? 1.5 : 0.8, speed * 0.06) * size.length * Math.sqrt(superHeavy);
+      const w = size.width*superHeavy;
       this.tracerDummy.scale.set(w, w, len);
       this.tracerDummy.updateMatrix();
       this.tracerMesh.setMatrixAt(n++, this.tracerDummy.matrix);
@@ -414,7 +417,8 @@ export class EffectsSystem {
       this.pdPositions[i+4]=l.to.y*positionScale;
       this.pdPositions[i+5]=l.to.z*positionScale;
       const reaper=l.reaper??(l.kind==='reaper_pd');
-      const r=reaper?1:.5, g=reaper?.25:.95, b=reaper?.15:1;
+      const glow=pointDefenceBrightness(reaper);
+      const r=(reaper?1:.5)*glow, g=(reaper?.25:.95)*glow, b=(reaper?.15:1)*glow;
       this.pdColors[i]=r;this.pdColors[i+1]=g;this.pdColors[i+2]=b;
       this.pdColors[i+3]=r;this.pdColors[i+4]=g;this.pdColors[i+5]=b;
     }

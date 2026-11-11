@@ -18,6 +18,7 @@ import { KM } from './geometry';
 import { instantiateShip, getShipTemplate, type BuiltShip } from './ships';
 import { InstancedFleet } from './instancedFleet';
 import { DETAIL_MESH_NAMES, lodLevelSquared, type LodLevel } from './lod';
+import { farPointBrightness } from './visualWeight';
 import { weaponBeamOrigin, weaponFlashPose } from './weaponFlash';
 import { weaponWorldOffset } from '@/simulation/fireControl';
 import { primaryGunneryMount, isMainGunShot, gunneryFrame } from './gunnery';
@@ -384,9 +385,11 @@ export class BattleView {
             colour = [this.tmpColour.r, this.tmpColour.g, this.tmpColour.b];
             this.farColourCache.set(ship.faction, colour);
           }
-          this.farColours[far * 3] = colour[0];
-          this.farColours[far * 3 + 1] = colour[1];
-          this.farColours[far * 3 + 2] = colour[2];
+          // A distant fighter is a faint mote, not a glow as bright as a frigate's.
+          const glow = farPointBrightness(ship.role);
+          this.farColours[far * 3] = colour[0] * glow;
+          this.farColours[far * 3 + 1] = colour[1] * glow;
+          this.farColours[far * 3 + 2] = colour[2] * glow;
           far++;
         }
         continue;
