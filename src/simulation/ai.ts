@@ -5,6 +5,7 @@ import { FACTIONS, type FactionDoctrine } from '@/data/factions';
 import type { RuleSet } from '@/timelines/rules';
 import { slotToWorld } from './formations';
 import { BATTLESPACE_SCALE as S } from './constants';
+import { assignAttackBearings, swingAmount, swingStation, type AttackBearing, type BearingMember } from './manoeuvre';
 import type { FleetState, ShipState, TargetPriority } from './types';
 
 /** Fleet orders own translation; ship controllers trim their firing station and
@@ -318,6 +319,7 @@ interface RoleStations {
   formation: FleetState['orders']['formation'];
   shipCount: number;
   referenceByShip: Map<string, Vec3>;
+  bearingByShip: Map<string, AttackBearing>;
 }
 
 const roleStations = new WeakMap<FleetState, RoleStations>();
@@ -325,7 +327,7 @@ const roleStations = new WeakMap<FleetState, RoleStations>();
 /** Formation references are deployment geometry, not the live centroid. Dead
  * members keep their station in this calculation so casualties do not pull the
  * survivors sideways. Rebuild only for assignment changes or new deployments. */
-function roleReference(ctx: AiContext, ship: ShipState, fleet: FleetState): Vec3 {
+function roleStationsOf(ctx: AiContext, fleet: FleetState): RoleStations {
   let cached = roleStations.get(fleet);
   if (!cached || cached.formation !== fleet.orders.formation || cached.shipCount !== ctx.ships.length) {
     const members = ctx.ships.filter(member => member.fleetId === fleet.spec.id);
@@ -338,14 +340,31 @@ function roleReference(ctx: AiContext, ship: ShipState, fleet: FleetState): Vec3
       sums.set(key, value);
     }
     const referenceByShip = new Map<string, Vec3>();
+    const byRole = new Map<ShipState['role'], BearingMember[]>();
     for (const member of members) {
       const value = sums.get(member.role)!;
-      referenceByShip.set(member.id, scale(value.centre, 1 / value.count));
+      const reference = scale(value.centre, 1 / value.count);
+      referenceByShip.set(member.id, reference);
+      const list = byRole.get(member.role) ?? [];
+      list.push({ id: member.id, lateral: member.slot.x - reference.x });
+      byRole.set(member.role, list);
     }
-    cached = { formation: fleet.orders.formation, shipCount: ctx.ships.length, referenceByShip };
+    // Attack bearings come from the same deployment geometry, so they are as stable as the stations.
+    const bearingByShip = new Map<string, AttackBearing>();
+    for (const [role, list] of byRole) for (const [id, bearing] of assignAttackBearings(role, list)) bearingByShip.set(id, bearing);
+    cached = { formation: fleet.orders.formation, shipCount: ctx.ships.length, referenceByShip, bearingByShip };
     roleStations.set(fleet, cached);
   }
-  return cached.referenceByShip.get(ship.id) ?? ship.slot;
+  return cached;
+}
+
+function roleReference(ctx: AiContext, ship: ShipState, fleet: FleetState): Vec3 {
+  return roleStationsOf(ctx, fleet).referenceByShip.get(ship.id) ?? ship.slot;
+}
+
+/** The direction in which this hull swings round its target once it is engaging, if its class manoeuvres. */
+function attackBearing(ctx: AiContext, ship: ShipState, fleet: FleetState): AttackBearing | undefined {
+  return roleStationsOf(ctx, fleet).bearingByShip.get(ship.id);
 }
 
 interface BroadsideBearing {
@@ -526,6 +545,10 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   } else if (!noRetreat && stationDistance < band.min) {
     position = add(position, scale(normalize(toTarget), -Math.min(trimLimit, band.min - stationDistance)));
   }
+  // Take the station round the target on this hull's attack bearing: over, under or round the flank, at the
+  // range just worked out. The swing opens as the hull closes, so a fleet deploys in formation and fights in depth.
+  const bearing = attackBearing(ctx, ship, fleet);
+  if (bearing) position = swingStation(position, target.pos, bearing, swingAmount(dist, range));
   ship.firingOffset = sub(position, slotPos);
   if (noRetreat) {
     // A station behind the enemy must not turn into a reverse thrust command
