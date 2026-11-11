@@ -22,7 +22,13 @@ jobs:
       - name: Typecheck and Vite production build
         run: npm run build
       - name: Install Chromium with system dependencies
-        run: npx playwright install --with-deps chromium
+        # The install also fetches system packages (fonts, mostly) with apt. When the runner cannot reach the
+        # package mirror that failed the whole job before any test ran, for as long as the mirror was down. The
+        # runner image already carries the libraries Chromium needs, so in that case install the browser alone.
+        run: |
+          if npx playwright install --with-deps chromium; then exit 0; fi
+          echo "::warning::System packages could not be fetched; installing the browser without them"
+          npx playwright install chromium
       - name: Screenshot composition regression and controls
         run: npm run test:e2e -- e2e/graphics-reference.spec.ts e2e/expansion.spec.ts e2e/ship-references.spec.ts e2e/au-expansion.spec.ts
       - name: Upload before and after screenshots

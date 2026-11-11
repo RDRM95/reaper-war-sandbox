@@ -11,6 +11,7 @@ interface Neighbour {
   radius: number;
   acceleration: number;
   reaper: boolean;
+  fighter: boolean;
   toEnemy?: Vec3;
 }
 
@@ -38,6 +39,7 @@ export class SeparationField {
         id: ship.id, pos: { ...ship.pos }, vel: { ...ship.vel },
         radius: Math.max(0.02, ship.radiusKm), acceleration,
         reaper: ship.faction === 'reaper',
+        fighter: ship.role === 'fighter',
         toEnemy: target?.alive && !target.escaped && target.side !== ship.side
           ? normalize(sub(target.pos, ship.pos)) : undefined,
       };
@@ -107,6 +109,9 @@ export class SeparationField {
     for (const other of this.nearby(cx, cy, cz, radius)) {
     if (other.id === self.id) continue;
     this.pairChecks++;
+    // A hull does not give way to a fighter: the fighter is the one that can turn. A carrier's own wing, forming
+    // up and landing on it, otherwise pushed it kilometres off its station.
+    if (other.fighter && !self.fighter) continue;
     const delta = sub(self.pos, other.pos);
     const dist = length(delta);
     const clearance = (self.radius + other.radius) * 1.08;
