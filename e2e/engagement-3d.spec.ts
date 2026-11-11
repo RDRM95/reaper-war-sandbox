@@ -253,7 +253,7 @@ test('a fleet ordered to regroup closes its gaps, forms up and resumes the attac
  });
  // Measured: 23 of 49 hulls left; the widest gap between neighbouring stations falls from 5.7 to 3.8 km. Which hulls
  // a battle kills changes with every change to how fleets fight, so the gaps are asserted and the area the stations
- // span is not: with enough survivors a fresh formation covers no less ground than the ragged one.
+ // span is not: here it falls from 780 to 434 km2, and the more hulls survive the less a fresh formation shrinks it.
  expect(result.survivors).toBeLessThan(result.deployed*0.8);
  expect(result.survivors).toBeGreaterThan(5);
  expect(result.gapAfter).toBeLessThan(result.gapBefore*0.8);
