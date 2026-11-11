@@ -1,6 +1,6 @@
 # Local Normandy SR-2 candidate
 
-Original Normandy SR-2 silhouette work is on local branch `fix/normandy-sr2-profile-20261111` in both repositories. Codex was rebased without conflicts onto `d7f1313` after the 3D engagement PR #49 merged; sandbox starts at `86d0598`. No remote SR-2 PR or merge exists yet: external publication is awaiting explicit confirmation after automatic approval review rejected the coordination comment.
+Original Normandy SR-2 silhouette work is on local branch `fix/normandy-sr2-profile-20261111` in both repositories. Codex was rebased without conflicts onto `d7f1313` after the 3D engagement PR #49 merged; sandbox starts at `86d0598`. The owner explicitly approved publishing the source and original-render evidence, posting the coordination note and merging after CI passes. Publication is proceeding; the release result will be recorded on issue #16 after exact-head CI and deployment verification.
 
 - Rounded fuselage, narrow swept supports, separate stepped nacelles, paired aft fins, deck joints/stripes and a dark flank belt. Measured beam/length 0.7943 → 0.4733; 216 m inferred gameplay length and gun datum retained. Exhaust nodes move with the revised nozzles and are verified by raycasts.
 - Five material batches remain. Full/reduced triangles per hull 496/220 → 1,752/1,460. A staged 1,000-hull render uses 5/2 calls in both repositories. SwiftShader only; no hardware FPS claim.
