@@ -11,6 +11,7 @@ interface Neighbour {
   radius: number;
   acceleration: number;
   reaper: boolean;
+  side: string;
   fighter: boolean;
   toEnemy?: Vec3;
 }
@@ -39,6 +40,7 @@ export class SeparationField {
         id: ship.id, pos: { ...ship.pos }, vel: { ...ship.vel },
         radius: Math.max(0.02, ship.radiusKm), acceleration,
         reaper: ship.faction === 'reaper',
+        side: ship.side,
         fighter: ship.role === 'fighter',
         toEnemy: target?.alive && !target.escaped && target.side !== ship.side
           ? normalize(sub(target.pos, ship.pos)) : undefined,
@@ -86,13 +88,16 @@ export class SeparationField {
    * choosing opposite vertical lanes breaks that symmetry without random noise. */
   private passingDirection(a: Neighbour, b: Neighbour, delta: Vec3): Vec3 {
     let direction = delta;
-    if (a.reaper && a.toEnemy && dot(direction, a.toEnemy) < 0) {
-      direction = sub(direction, scale(a.toEnemy, dot(direction, a.toEnemy)));
+    // A Reaper never backs away from the enemy to clear another hull, it sidesteps. The one exception: while it is
+    // advancing, it may brake for a hull of its own side (it slows, it does not reverse).
+    const lateralOnly = a.reaper && !!a.toEnemy && !(a.side === b.side && dot(a.vel, a.toEnemy) > 0);
+    if (lateralOnly && dot(direction, a.toEnemy!) < 0) {
+      direction = sub(direction, scale(a.toEnemy!, dot(direction, a.toEnemy!)));
     }
     if (lengthSq(direction) < 1e-8) {
       const sign = a.id < b.id ? 1 : -1;
       direction = v3(0, sign, 0);
-      if (a.reaper && a.toEnemy) direction = sub(direction, scale(a.toEnemy, dot(direction, a.toEnemy)));
+      if (lateralOnly) direction = sub(direction, scale(a.toEnemy!, dot(direction, a.toEnemy!)));
       if (lengthSq(direction) < 1e-8) direction = v3(sign, 0, 0);
     }
     return normalize(direction);
@@ -106,6 +111,10 @@ export class SeparationField {
     const radius = Math.ceil(reach / this.cellSize);
     const cx = Math.floor(self.pos.x / this.cellSize), cy = Math.floor(self.pos.y / this.cellSize), cz = Math.floor(self.pos.z / this.cellSize);
     let force = v3();
+    // For a Reaper advancing on its target, what its own side asks of it is kept apart and may brake it; the rest
+    // is made lateral below.
+    let own = v3();
+    const split = self.reaper && !!self.toEnemy && dot(self.vel, self.toEnemy) > 0;
     for (const other of this.nearby(cx, cy, cz, radius)) {
     if (other.id === self.id) continue;
     this.pairChecks++;
@@ -137,7 +146,9 @@ export class SeparationField {
     const strength = Math.max(pressure, anticipation);
     if (strength <= 0) continue;
     const direction = this.passingDirection(self, other, pressure >= anticipation ? delta : closest);
-    force = add(force, scale(direction, self.acceleration * Math.min(20, strength)));
+    const push = scale(direction, self.acceleration * Math.min(20, strength));
+    if (split && other.side === self.side) own = add(own, push);
+    else force = add(force, push);
     }
     // Several neighbours may cancel one another into an away component. Keep
     // Reaper avoidance tactical and lateral even in a crowded capital line.
@@ -145,6 +156,6 @@ export class SeparationField {
       const away = dot(force, self.toEnemy);
       if (away < 0) force = sub(force, scale(self.toEnemy, away));
     }
-    return force;
+    return split ? add(force, own) : force;
   }
 }

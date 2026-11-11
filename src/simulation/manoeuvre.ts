@@ -28,7 +28,8 @@ export const ATTACK_SWING: Partial<Record<ShipRole, readonly [number, number]>> 
   dreadnought: [5 * DEG, 14 * DEG],
   cruiser: [22 * DEG, 55 * DEG],
   frigate: [45 * DEG, 105 * DEG],
-  reaper_capital: [3 * DEG, 12 * DEG],
+  // Capitals keep their guns bearing through a wide arc, so each can come at its target from its own quarter.
+  reaper_capital: [8 * DEG, 26 * DEG],
   reaper_destroyer: [20 * DEG, 60 * DEG],
 };
 
