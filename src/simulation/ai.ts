@@ -1,6 +1,6 @@
 import { hardcoreReaperTargetFactor } from './reaperHardcore';
 import type { Rng } from '@/core/rng';
-import { add, clampLength, distance, dot, lengthSq, normalize, scale, sub, v3, type Vec3 } from '@/core/vec3';
+import { add, clampLength, distance, dot, lengthSq, normalize, rotateY, scale, sub, v3, type Vec3 } from '@/core/vec3';
 import { FACTIONS, type FactionDoctrine } from '@/data/factions';
 import type { RuleSet } from '@/timelines/rules';
 import { slotToWorld } from './formations';
@@ -38,7 +38,7 @@ const isCombatant = (s: ShipState): boolean => s.alive && !s.escaped && s.role !
 const validEnemy = (ship: ShipState, target: ShipState | undefined): target is ShipState =>
   !!target && target.alive && !target.escaped && target.side !== ship.side;
 const attackOrder = (fleet: FleetState): boolean =>
-  ['attack', 'attack_target', 'advance', 'intercept'].includes(fleet.orders.order);
+  ['attack', 'attack_target', 'advance', 'intercept', 'flank', 'breakthrough'].includes(fleet.orders.order);
 
 export function centroid(ships: ShipState[]): Vec3 | undefined {
   if (ships.length === 0) return undefined;
@@ -214,6 +214,45 @@ export function altitudeLane(ctx: AiContext, fleet: FleetState): { lane: number;
   return cached;
 }
 
+/**
+ * Fleet intents that move the whole line somewhere other than straight at the enemy. `flank` takes the fleet round
+ * to one side of the enemy, at its own engagement range, so its guns bear from off the enemy's bow; `breakthrough`
+ * drives it past the enemy to the far side. Either is a destination for the fleet's anchor, measured from where the
+ * fleet stood when the order was given, so it is a manoeuvre with an end and not an orbit: once there the fleet
+ * fights from its new station like any attacking fleet. Hulls still choose targets, bearings and fire for themselves.
+ */
+export const FLANK_ANGLE = 65 * Math.PI / 180;
+/** How far past the enemy a breakthrough carries the fleet, as a share of its engagement range. */
+export const BREAKTHROUGH_DEPTH = 0.6;
+interface FleetManoeuvre { order: 'flank' | 'breakthrough'; axis: Vec3; side: 1 | -1; reached: boolean }
+const fleetManoeuvres = new WeakMap<FleetState, FleetManoeuvre>();
+
+/** Whether a fleet under a flank or breakthrough order has reached its new station (for the HUD and tests). */
+export const manoeuvreReached = (fleet: FleetState): boolean | undefined => fleetManoeuvres.get(fleet)?.reached;
+
+/** Where a fleet under a flank or breakthrough order is bound, or nothing once it is there or has no such order. */
+function manoeuvreGoal(fleet: FleetState, enemy: Vec3 | undefined, desiredRange: number): Vec3 | undefined {
+  const order = fleet.orders.order;
+  let state = fleetManoeuvres.get(fleet);
+  if (order !== 'flank' && order !== 'breakthrough') { if (state) fleetManoeuvres.delete(fleet); return undefined; }
+  if (!enemy) return undefined;
+  if (!state || state.order !== order) {
+    // The line from the enemy back to the fleet as the order is given: the bearing the manoeuvre is measured from.
+    const away = v3(fleet.anchor.x - enemy.x, 0, fleet.anchor.z - enemy.z);
+    const axis = lengthSq(away) > 1e-9 ? normalize(away) : normalize(v3(-fleet.heading.x, 0, -fleet.heading.z));
+    // Round the side the fleet's approach lane is on, so the same fleet turns the same way in a replay.
+    state = { order, axis, side: approachLane(fleet) < 0 ? -1 : 1, reached: false };
+    fleetManoeuvres.set(fleet, state);
+  }
+  if (state.reached) return undefined;
+  const goal = order === 'flank'
+    ? add(enemy, scale(rotateY(state.axis, state.side * FLANK_ANGLE), desiredRange))
+    : add(enemy, scale(state.axis, -desiredRange * BREAKTHROUGH_DEPTH));
+  goal.y = fleet.anchor.y;
+  if (distance(fleet.anchor, goal) <= Math.max(1.5 * S, desiredRange * 0.08)) { state.reached = true; return undefined; }
+  return goal;
+}
+
 /** Stable fleet fire control and formation translation. Tactical observations
  * are shared; individual movement never rebuilds a global enemy centroid. */
 export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): void {
@@ -262,7 +301,12 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
   const withdrawing = !noRetreat && (o.order === 'withdraw' || o.order === 'retreat');
   if (attackOrder(fleet) || (noRetreat && (o.order === 'withdraw' || o.order === 'retreat'))) {
     const enemy = o.order === 'intercept' && validEnemy(representative, commanded) ? commanded.pos : enemyPosition;
-    if (enemy) {
+    const goal = manoeuvreGoal(fleet, enemy, desiredRange);
+    if (goal) {
+      // Under way to a flank or through the enemy: the anchor makes for that station and the line turns with it.
+      fleet.engagementMode = 'approach';
+      desired = goal;
+    } else if (enemy) {
       const delta = sub(enemy, fleet.anchor);
       const dist = Math.sqrt(lengthSq(delta));
       const resumeRange = desiredRange + range * 0.07;
@@ -505,6 +549,11 @@ export function movementGoal(ctx: AiContext, ship: ShipState, fleet: FleetState)
   }
   const engaging = attackOrder(fleet) || (noRetreat && ['withdraw', 'retreat'].includes(fleet.orders.order));
   if (!target || (!engaging && ship.role !== 'fighter')) return { position: slotPos, speedFraction: 1, face: target ? combatFacing(ship, target, slotPos) : undefined };
+
+  // Breaking through: until the fleet is past the enemy every hull keeps its place in the line and goes with it,
+  // guns on its target. Holding a range band here would stop the line short of the enemy it is ordered through.
+  if (fleet.orders.order === 'breakthrough' && manoeuvreReached(fleet) === false && ship.role !== 'fighter')
+    return { position: slotPos, speedFraction: 1, face: combatFacing(ship, target, slotPos) };
 
   const band = engagementBand(ship);
   const range = shipEngagementRange(ship);

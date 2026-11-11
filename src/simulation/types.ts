@@ -30,6 +30,10 @@ export type OrderType =
   | 'withdraw'
   | 'escort'
   | 'intercept'
+  /** Attack from the enemy's flank: the fleet goes round to one side of it at its own range. */
+  | 'flank'
+  /** Attack through the enemy: the fleet drives past it to the far side. */
+  | 'breakthrough'
   | 'retreat';
 
 export type TargetPriority = 'default' | 'reaper_destroyers' | 'reaper_capitals' | 'capitals' | 'escorts' | 'fighters';
