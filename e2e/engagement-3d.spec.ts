@@ -31,8 +31,11 @@ test('a seeded fleet battle spreads above and below its deployment plane',async(
    same:JSON.stringify(sim.ships.map(s=>[s.pos.x,s.pos.y,s.pos.z]))===JSON.stringify(again.ships.map(s=>[s.pos.x,s.pos.y,s.pos.z])),
   };
  });
- // It deploys as a formation and fights in depth.
- expect(result.first).toBeLessThan(0.1);
+ // It deploys as a formation with depth of its own (altitude bands: 0.06 when deployments were flat, 0.135 now)
+ // and fights deeper still.
+ expect(result.first).toBeGreaterThan(0.1);
+ expect(result.first).toBeLessThan(0.2);
+ expect(result.thicknessA).toBeGreaterThan(result.first*1.5);
  expect(result.thicknessA).toBeGreaterThan(0.2);
  expect(result.thicknessB).toBeGreaterThan(0.2);
  expect(result.elevationA).toBeGreaterThan(18);
@@ -180,4 +183,32 @@ test('no two hulls touch at any tick, at deployment or in battle',async({page})=
  expect(result.finalBattle.pairTicks).toBe(0);
  expect(result.arrived).toBeGreaterThan(40);
  expect(result.arrivalOverlaps).toBe(0);
+});
+
+// Large fleets deploy in altitude bands (port of the scenario half of the Codex build's
+// tests/deployment-depth.test.ts). Before, the Fifth Fleet was 41.9 km wide and 2.6 km tall.
+test('scenario fleets deploy as a volume, with every hull clear and small fleets unchanged',async({page})=>{
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation}=await import('/src/simulation/battle.ts');
+  const {buildScenario}=await import('/src/scenarios/index.ts');
+  const extent=(points:any[],axis:string)=>Math.max(...points.map(p=>p[axis]))-Math.min(...points.map(p=>p[axis]));
+  const fleet=(scenario:string,id:string)=>{
+   const ships=new BattleSimulation(buildScenario(scenario,'prime_apex',1)).ships.filter((s:any)=>s.fleetId===id&&s.role!=='fighter');
+   const slots=ships.map((s:any)=>s.slot);let overlaps=0;
+   for(let i=0;i<ships.length;i++)for(let j=0;j<i;j++)if(Math.hypot(slots[i].x-slots[j].x,slots[i].y-slots[j].y,slots[i].z-slots[j].z)<=ships[i].radiusKm+ships[j].radiusKm)overlaps++;
+   return {id,hulls:ships.length,width:extent(slots,'x'),height:extent(slots,'y'),overlaps};
+  };
+  return {
+   large:[fleet('battle_of_earth','alliance-5th'),fleet('final_battle_of_earth','sword-alliance'),fleet('final_battle_of_earth','sword-turian'),fleet('final_battle_of_earth','reaper-blockade'),fleet('defence_of_palaven','hierarchy-palaven')],
+   small:fleet('battle_of_earth','reaper-sol'),
+  };
+ });
+ for(const fleet of result.large){
+  // Measured 13 % to 28 % of the width (2 % to 9 % when flat).
+  expect(fleet.height/fleet.width,fleet.id).toBeGreaterThan(0.125);
+  expect(fleet.overlaps,fleet.id).toBe(0);
+ }
+ // Under the battle-group threshold nothing changes: the ten-hull Reaper group keeps its three levels, 1.98 km.
+ expect(result.small.height).toBeCloseTo(1.98,1);
 });

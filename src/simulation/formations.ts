@@ -45,6 +45,10 @@ const SLOT_SCALE = Math.max(BATTLESPACE_SCALE, 0.55);
 // guard preserves established small ME layouts while bigger crossover/future
 // hulls receive the same physical clearance used by large formations.
 const NOMINAL_TIER_MAX_KM = [2.4, 0.56, 0.216, 0.018];
+/** Half-height of a large fleet's altitude bands as a share of its frontage. */
+export const ALTITUDE_BAND_SHARE = 0.07;
+/** The most a battle group stands above or below its fleet's level, in slot units after scaling. */
+export const ALTITUDE_BAND_LIMIT = 6;
 
 export function assignSlots(ships: SlotShip[], formation: FormationType, seed = 0): Map<string, Vec3> {
   const counts = [0, 0, 0, 0];
@@ -182,6 +186,9 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType, seed: n
   const lateralStride = width + clearance;
   const rearStride = Math.max(depth + clearance, lateralStride * 0.42);
   const wings = Math.max(1, Math.ceil(Math.sqrt(count * 1.6)));
+  // Half the height of the fleet's altitude bands: a share of its frontage, bounded so the top and bottom of a very
+  // large fleet stay within reach of the same enemy.
+  const bandHeight = Math.min(Math.min(wings, count) * lateralStride * ALTITUDE_BAND_SHARE, ALTITUDE_BAND_LIMIT / SLOT_SCALE);
   const slots = new Map<string, Vec3>();
 
   layouts.forEach((layout, index) => {
@@ -194,7 +201,14 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType, seed: n
     const phase = index * 2.399963229728653;
     let x = wing * lateralStride;
     let z = -wave * rearStride;
-    let y = Math.sin(wing * 0.7) * clearance * 0.18;
+    // Altitude bands. A fleet is a volume, not a sheet: the centre group of the leading wave keeps the fleet's level
+    // and the groups either side of it step alternately below and above, further out the further they stand from the
+    // centre. A following wave takes the opposite band, so it stands over or under the gap ahead of it and not
+    // directly astern of another group.
+    const rank = Math.ceil(column / 2);
+    const band = column === 0 && wave === 0 ? 0
+      : ((rank + wave) % 2 === 0 ? 1 : -1) * (0.45 + 0.55 * Math.min(1, Math.abs(wing) / Math.max(1, (wings - 1) / 2)));
+    let y = band * bandHeight;
     switch (formation) {
       case 'strike_wedge': z -= Math.abs(x) * 0.32; break;
       case 'defensive_screen': z -= wing * wing * lateralStride * 0.09; break;
@@ -259,6 +273,12 @@ function assignBattleGroups(ships: SlotShip[], formation: FormationType, seed: n
       ));
     });
   });
+  // The bands are measured from the fleet's own level: on average its hulls stand where its anchor is, so a fleet
+  // ordered to an altitude lane is centred on that lane.
+  let meanY = 0;
+  for (const slot of slots.values()) meanY += slot.y;
+  meanY /= Math.max(1, slots.size);
+  for (const slot of slots.values()) slot.y -= meanY;
   return slots;
 }
 
