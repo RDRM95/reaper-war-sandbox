@@ -67,6 +67,9 @@ function fleetSlotSeed(seed: number, fleetId: string): number {
   return h | 0;
 }
 
+/** A deploying hull keeps this many hull-radius sums from any hull of another fleet. */
+const DEPLOYMENT_CLEARANCE = 1.1;
+
 const DEFAULT_ORDERS: FleetOrders = {
   order: 'attack',
   formation: 'line_abreast',
@@ -178,8 +181,9 @@ export class BattleSimulation implements AiContext {
       fleet.orders.formation,
       fleetSlotSeed(this.config.seed, fleet.spec.id),
     );
+    for (const s of created) s.slot = slots.get(s.id) ?? v3();
+    this.clearOfOtherFleets(fleet, created);
     for (const s of created) {
-      s.slot = slots.get(s.id) ?? v3();
       const world = this.slotWorld(fleet, s.slot);
       s.pos = world;
       s.prevPos = clone(world);
@@ -198,6 +202,42 @@ export class BattleSimulation implements AiContext {
       });
     }
     if (this.time > 0) this.emit({ t: this.time, type: 'reinforcement_arrival', fleetId: spec.id, side: spec.side });
+  }
+
+  /**
+   * A fleet's own slots are clear of each other, but fleets are laid out one at a time: allied fleets stationed side
+   * by side, or a reinforcement arriving where a battle is going on, could place a hull inside one already there.
+   * Any hull of the new fleet that would stand within clearance of a hull from another fleet takes the nearest free
+   * station beside its slot instead. Runs once per deployment; largest hulls keep their slots first.
+   */
+  private clearOfOtherFleets(fleet: FleetState, created: ShipState[]): void {
+    const others = this.ships.filter(s => s.alive && !s.escaped);
+    if (!others.length) return;
+    const placed: { pos: Vec3; radius: number }[] = others.map(s => ({ pos: s.pos, radius: s.radiusKm }));
+    const blocked = (pos: Vec3, radius: number, to: number): boolean => {
+      for (let i = 0; i < to; i++) {
+        const other = placed[i], reach = (radius + other.radius) * DEPLOYMENT_CLEARANCE;
+        const dx = pos.x - other.pos.x, dy = pos.y - other.pos.y, dz = pos.z - other.pos.z;
+        if (dx * dx + dy * dy + dz * dz < reach * reach) return true;
+      }
+      return false;
+    };
+    const order = created.map((ship, index) => ({ ship, index })).sort((a, b) => b.ship.radiusKm - a.ship.radiusKm || a.index - b.index);
+    for (const { ship } of order) {
+      const origin = ship.slot;
+      let world = this.slotWorld(fleet, origin);
+      // A hull is only moved for a hull of another fleet; once moved it must also clear its own fleet's hulls.
+      if (blocked(world, ship.radiusKm, others.length)) {
+        const step = Math.max(0.08, ship.lengthKm * 1.1);
+        for (let attempt = 1; ; attempt++) {
+          const angle = attempt * 2.399963229728653, reach = Math.sqrt(attempt) * step;
+          ship.slot = v3(origin.x + Math.cos(angle) * reach, origin.y + Math.sin(attempt * 1.7) * step * 0.35, origin.z + Math.sin(angle) * reach);
+          world = this.slotWorld(fleet, ship.slot);
+          if (!blocked(world, ship.radiusKm, placed.length)) break;
+        }
+      }
+      placed.push({ pos: world, radius: ship.radiusKm });
+    }
   }
 
   private slotWorld(fleet: FleetState, slot: Vec3): Vec3 {

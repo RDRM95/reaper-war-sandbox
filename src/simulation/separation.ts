@@ -1,6 +1,9 @@
 import { add, dot, length, lengthSq, normalize, scale, sub, v3, type Vec3 } from '@/core/vec3';
 import type { ShipState } from './types';
 
+/** Hulls on converging courses aim to pass this many clearances apart. */
+export const SAFE_PASSING_MARGIN = 1.25;
+
 interface Neighbour {
   id: string;
   pos: Vec3;
@@ -116,8 +119,16 @@ export class SeparationField {
     const closest = add(delta, scale(relative, closestAt));
     const closestDistance = length(closest);
     const pressure = dist < influence ? (influence - dist) / Math.max(clearance * 0.08, dist - clearance) : 0;
-    const anticipation = closestAt > 0 && closestDistance < clearance
+    const warning = closestAt > 0 && closestDistance < clearance
       ? (1 - closestDistance / clearance) * (horizon - closestAt) / Math.max(0.5, horizon * 0.3) : 0;
+    // The thrust that opens the predicted miss to a safe margin in the time left, as a multiple of this hull's
+    // own thrust. Small while the pass is seconds away and rising as it nears, so a hull starts to give way while
+    // it still can instead of when the other is alongside.
+    const safe = clearance * SAFE_PASSING_MARGIN;
+    const timeLeft = Math.max(0.5, closestAt);
+    const evasion = closestAt > 0 && closestDistance < safe
+      ? 2 * (safe - closestDistance) / (timeLeft * timeLeft * self.acceleration) : 0;
+    const anticipation = Math.max(warning, evasion);
     const strength = Math.max(pressure, anticipation);
     if (strength <= 0) continue;
     const direction = this.passingDirection(self, other, pressure >= anticipation ? delta : closest);

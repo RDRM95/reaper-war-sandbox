@@ -130,3 +130,54 @@ test('a fleet ordered to flank goes round the enemy, and one ordered to break th
  expect(result.breakthrough.fired).toBe(result.breakthrough.hulls);
  expect(result.breakthrough.overlaps).toBe(0);
 });
+
+// Hulls keep clear of each other at every tick (port of the Codex build's tests/collision-avoidance.test.ts). A
+// contact is a tick on which two live hulls are closer than the sum of their radii, a radius being half a hull's
+// length. Looked at every 5 s there were none; counted at every tick, the four seeds below each had one before the
+// change, and the Final Battle of Earth deployed hulls of different allied fleets inside each other.
+test('no two hulls touch at any tick, at deployment or in battle',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation}=await import('/src/simulation/battle.ts');
+  const {buildScenario,buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const contacts=(sim:any,seconds:number)=>{
+   let pairTicks=0,deepest=0,atDeployment=0;
+   const check=(deploying:boolean)=>{
+    const ships=sim.ships.filter((s:any)=>s.alive&&!s.escaped&&s.role!=='fighter');
+    for(let i=0;i<ships.length;i++){const a=ships[i];for(let j=0;j<i;j++){const b=ships[j],reach=a.radiusKm+b.radiusKm,dx=a.pos.x-b.pos.x;
+     if(dx>reach||dx<-reach)continue;
+     const gap=Math.hypot(dx,a.pos.y-b.pos.y,a.pos.z-b.pos.z);if(gap>=reach)continue;
+     pairTicks++;deepest=Math.max(deepest,(reach-gap)/reach);if(deploying)atDeployment++;}}
+   };
+   check(true);
+   while(!sim.finished&&sim.time<seconds){sim.step();check(false);}
+   return {pairTicks,deepest,atDeployment,destroyed:sim.ships.filter((s:any)=>!s.alive).length};
+  };
+  const line=(seed:number)=>buildCustomBattle({seed,rulesId:'prime_apex',environment:'deep_space',startingDistanceKm:60,maxDuration:150,
+   sideA:{faction:'alliance',name:'Alliance line',formation:'line_abreast',counts:{alliance_dreadnought:6,alliance_cruiser:18,alliance_frigate:30}},
+   sideB:{faction:'reaper',name:'Reaper pressure',formation:'strike_wedge',counts:{reaper_capital:8,reaper_destroyer:30}}});
+  const seeds=((window as any).__contactSeeds??[5,11,14,36]) as number[];
+  const battles=seeds.map(seed=>({seed,...contacts(new BattleSimulation(line(seed)),150)}));
+  const deployments=[1,2,3].map(seed=>contacts(new BattleSimulation(buildScenario('final_battle_of_earth','prime_apex',seed)),0).atDeployment);
+  const finalBattle=contacts(new BattleSimulation(buildScenario('final_battle_of_earth','prime_apex',1)),100);
+  // A second wave arriving at 20 s exactly where the first deployed.
+  const config=line(3);const first=config.fleets.find((f:any)=>f.side==='A');
+  config.fleets.push({...first,id:'second-wave',name:'Second wave',arrivalTime:20});
+  const sim=new BattleSimulation(config);while(sim.time<20.05)sim.step();
+  const arrived=sim.ships.filter((s:any)=>s.fleetId==='second-wave'&&s.role!=='fighter');
+  let arrivalOverlaps=0;
+  for(const ship of arrived)for(const other of sim.ships){if(other===ship||!other.alive||other.role==='fighter')continue;
+   if(Math.hypot(ship.pos.x-other.pos.x,ship.pos.y-other.pos.y,ship.pos.z-other.pos.z)<ship.radiusKm+other.radiusKm)arrivalOverlaps++;}
+  return {battles,deployments,finalBattle,arrived:arrived.length,arrivalOverlaps};
+ });
+ for(const battle of result.battles){
+  expect(battle.pairTicks,`seed ${battle.seed}`).toBe(0);
+  // They did fight: this is not a battle where nothing closed.
+  expect(battle.destroyed).toBeGreaterThan(20);
+ }
+ expect(result.deployments).toEqual([0,0,0]);
+ expect(result.finalBattle.pairTicks).toBe(0);
+ expect(result.arrived).toBeGreaterThan(40);
+ expect(result.arrivalOverlaps).toBe(0);
+});
