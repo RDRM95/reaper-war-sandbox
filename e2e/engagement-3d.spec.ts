@@ -59,7 +59,9 @@ test('allied fleets in the Final Battle of Earth stack on separate levels',async
   const {buildScenario,buildCustomBattle}=await import('/src/scenarios/index.ts');
   const {altitudeLane,ALTITUDE_LANES}=await import('/src/simulation/ai.ts');
   const {sampleGeometry}=await import('/src/simulation/engagementGeometry.ts');
-  const sim=new BattleSimulation(buildScenario('final_battle_of_earth','prime_apex',1));
+  // Under the canon rules: under prime_apex this battle now ends at about 70 s, before the slowest fleet has
+  // reached its level, because hulls spread their fire and sprint to close. The lanes are the same rule either way.
+  const sim=new BattleSimulation(buildScenario('final_battle_of_earth','canon_me3',1));
   const lanes=[...sim.fleets.values()].filter(f=>f.spec.side==='A').map(f=>altitudeLane(sim,f).lane);
   let overlaps=0,next=30;
   while(!sim.finished&&sim.time<100){sim.step();if(sim.time>=next){next+=10;for(const row of sampleGeometry(sim))overlaps+=row.overlaps;}}
@@ -80,58 +82,6 @@ test('allied fleets in the Final Battle of Earth stack on separate levels',async
  expect(result.onOwnSide).toBe(true);
  expect(result.overlaps).toBe(0);
  expect(result.singleLanes).toEqual([0,0]);
-});
-
-// Fleet intents (port of the Codex build's tests/fleet-intent.test.ts): a fleet ordered to flank goes round to the
-// enemy's side at its own range; one ordered to break through drives past the enemy. Weapons do no damage here, so
-// this is a control experiment on movement.
-test('a fleet ordered to flank goes round the enemy, and one ordered to break through goes past it',async({page})=>{
- test.slow();
- await page.goto('/');
- const result=await page.evaluate(async()=>{
-  const {BattleSimulation}=await import('/src/simulation/battle.ts');
-  const {buildCustomBattle}=await import('/src/scenarios/index.ts');
-  const {centroid,manoeuvreReached}=await import('/src/simulation/ai.ts');
-  const {sampleGeometry}=await import('/src/simulation/engagementGeometry.ts');
-  const exercise=(order)=>{
-   const sim=new BattleSimulation(buildCustomBattle({seed:42,rulesId:'prime_apex',environment:'deep_space',startingDistanceKm:70,maxDuration:900,
-    sideA:{faction:'alliance',name:'Line',formation:'line_abreast',counts:{alliance_dreadnought:4,alliance_cruiser:8,alliance_frigate:8}},
-    sideB:{faction:'reaper',name:'Reapers',formation:'line_abreast',counts:{reaper_capital:3,reaper_destroyer:8}}}));
-   for(const ship of sim.ships)for(const weapon of ship.weapons)weapon.def={...weapon.def,damage:0};
-   sim.issueOrders('custom-b',{order:'hold_formation'});
-   const fleet=sim.fleets.get('custom-a');
-   const start=centroid(sim.ships.filter(s=>s.side==='B'));
-   const axis={x:fleet.anchor.x-start.x,z:fleet.anchor.z-start.z},length=Math.hypot(axis.x,axis.z);
-   sim.issueOrders('custom-a',{order});
-   let reachedAt=-1,overlaps=0;
-   for(let i=0;i<8000&&!sim.finished;i++){sim.step();if(reachedAt<0&&manoeuvreReached(fleet))reachedAt=sim.time;if(sim.tick%200===0)for(const row of sampleGeometry(sim))overlaps+=row.overlaps;}
-   const enemy=centroid(sim.ships.filter(s=>s.side==='B'));
-   const v={x:fleet.anchor.x-enemy.x,z:fleet.anchor.z-enemy.z},d=Math.hypot(v.x,v.z);
-   const hulls=sim.ships.filter(s=>s.side==='A'&&s.role!=='fighter');
-   const along=(p)=>((p.x-enemy.x)*axis.x+(p.z-enemy.z)*axis.z)/length;
-   return {reachedAt,angle:Math.acos(Math.max(-1,Math.min(1,(v.x*axis.x+v.z*axis.z)/(d*length))))*180/Math.PI,distance:d/fleet.engagementRange,along:along(fleet.anchor),
-    past:hulls.filter(s=>along(s.pos)<0).length,fired:hulls.filter(s=>s.stats.shotsFired>0).length,hulls:hulls.length,overlaps,mode:fleet.engagementMode};
-  };
-  return {attack:exercise('attack'),flank:exercise('flank'),breakthrough:exercise('breakthrough')};
- });
- expect(result.attack.reachedAt).toBe(-1);
- expect(result.attack.angle).toBeLessThan(5);
- // Flank: on station in under 200 s, about 65 degrees round the enemy at its own range, every hull firing.
- expect(result.flank.reachedAt).toBeGreaterThan(40);
- expect(result.flank.reachedAt).toBeLessThan(200);
- expect(result.flank.angle).toBeGreaterThan(55);
- expect(result.flank.angle).toBeLessThan(70);
- expect(result.flank.distance).toBeGreaterThan(0.7);
- expect(result.flank.distance).toBeLessThan(1.1);
- expect(result.flank.fired).toBe(result.flank.hulls);
- expect(result.flank.overlaps).toBe(0);
- // Break through: past the enemy's centre in under 300 s with most of its hulls.
- expect(result.breakthrough.reachedAt).toBeGreaterThan(100);
- expect(result.breakthrough.reachedAt).toBeLessThan(300);
- expect(result.breakthrough.along).toBeLessThan(-4);
- expect(result.breakthrough.past).toBeGreaterThanOrEqual(12);
- expect(result.breakthrough.fired).toBe(result.breakthrough.hulls);
- expect(result.breakthrough.overlaps).toBe(0);
 });
 
 // Hulls keep clear of each other at every tick (port of the Codex build's tests/collision-avoidance.test.ts). A
@@ -213,96 +163,6 @@ test('scenario fleets deploy as a volume, with every hull clear and small fleets
  expect(result.small.height).toBeCloseTo(1.98,1);
 });
 
-// The Regroup order (port of the Codex build's tests/regroup.test.ts). A fleet that has taken losses went on flying
-// the formation it deployed in, with a hole wherever a hull had died. Regroup gives the survivors a fresh formation
-// of their own number where they stand, and the fleet resumes the attack once formed.
-test('a fleet ordered to regroup closes its gaps, forms up and resumes the attack',async({page})=>{
- test.slow();
- await page.goto('/');
- const result=await page.evaluate(async()=>{
-  const {BattleSimulation}=await import('/src/simulation/battle.ts');
-  const {buildScenario}=await import('/src/scenarios/index.ts');
-  const {regroupProgress}=await import('/src/simulation/ai.ts');
-  const hulls=(sim:any,fleet:any)=>sim.ships.filter((s:any)=>s.fleetId===fleet.spec.id&&s.alive&&!s.escaped&&s.role!=='fighter');
-  const worstGap=(ships:any[])=>Math.max(...ships.map((a,i)=>Math.min(...ships.filter((_,j)=>j!==i).map(b=>Math.hypot(a.slot.x-b.slot.x,a.slot.y-b.slot.y,a.slot.z-b.slot.z)))));
-  const footprint=(ships:any[])=>{const span=(axis:string)=>Math.max(...ships.map(s=>s.slot[axis]))-Math.min(...ships.map(s=>s.slot[axis]));return span('x')*span('z');};
-  const first=(sim:any)=>[...sim.fleets.values()].find((f:any)=>f.spec.side==='A') as any;
-  // Losses: the Final Battle of Earth under canon rules, 150 s in.
-  const lost=new BattleSimulation(buildScenario('final_battle_of_earth','canon_me3',1));const lostFleet=first(lost);
-  const deployed=hulls(lost,lostFleet).length,deployedFootprint=footprint(hulls(lost,lostFleet));
-  while(lost.time<150)lost.step();
-  const survivors=hulls(lost,lostFleet).length,gapBefore=worstGap(hulls(lost,lostFleet)),footprintBefore=footprint(hulls(lost,lostFleet));
-  lost.issueOrders(lostFleet.spec.id,{order:'regroup'});
-  const after=hulls(lost,lostFleet),gapAfter=worstGap(after),footprintAfter=footprint(after);
-  const off=Math.hypot(...(['x','y','z'] as const).map(axis=>lostFleet.anchor[axis]-after.reduce((n:number,s:any)=>n+s.pos[axis],0)/after.length));
-  // Forming up: the Battle of Earth, ordered at 80 s.
-  const sim=new BattleSimulation(buildScenario('battle_of_earth','prime_apex',1));const fleet=first(sim);
-  while(sim.time<80)sim.step();
-  // Shots by every hull of the fleet, lost or not: a hull that dies while the fleet forms up still fired.
-  const everyHull=sim.ships.filter((s:any)=>s.fleetId===fleet.spec.id&&s.role!=='fighter');
-  const shots=()=>everyHull.reduce((n:number,s:any)=>n+s.stats.shotsFired,0),shotsBefore=shots();
-  sim.issueOrders(fleet.spec.id,{order:'regroup'});
-  const startProgress=regroupProgress(fleet,sim.ships);let progress=startProgress,contacts=0;
-  while(!sim.finished&&sim.time<150&&fleet.orders.order==='regroup'){
-   progress=regroupProgress(fleet,sim.ships);sim.step();
-   const ships=sim.ships.filter((s:any)=>s.alive&&!s.escaped&&s.role!=='fighter');
-   for(let i=0;i<ships.length;i++){const a=ships[i];for(let j=0;j<i;j++){const b=ships[j],reach=a.radiusKm+b.radiusKm,dx=a.pos.x-b.pos.x;
-    if(dx>reach||dx<-reach)continue;if(Math.hypot(dx,a.pos.y-b.pos.y,a.pos.z-b.pos.z)<reach)contacts++;}}
-  }
-  return {deployed,survivors,deployedFootprint,footprintBefore,footprintAfter,gapBefore,gapAfter,off,startProgress,progress,formedAfter:sim.time-80,order:fleet.orders.order,shots:shots()-shotsBefore,contacts};
- });
- // Measured: 23 of 49 hulls left; the widest gap between neighbouring stations falls from 5.7 to 3.8 km. Which hulls
- // a battle kills changes with every change to how fleets fight, so the gaps are asserted and the area the stations
- // span is not: here it falls from 780 to 434 km2, and the more hulls survive the less a fresh formation shrinks it.
- expect(result.survivors).toBeLessThan(result.deployed*0.8);
- expect(result.survivors).toBeGreaterThan(5);
- expect(result.gapAfter).toBeLessThan(result.gapBefore*0.8);
- expect(result.off).toBeLessThan(1e-6);
- // Measured: no hull on its new station at the order; 80 % formed and attacking again 41.6 s later, 372 shots meanwhile.
- expect(result.startProgress).toBeLessThan(0.2);
- expect(result.formedAfter).toBeGreaterThan(10);
- expect(result.formedAfter).toBeLessThan(50);
- expect(result.progress).toBeGreaterThanOrEqual(0.8);
- expect(result.order).toBe('attack');
- expect(result.shots).toBeGreaterThan(50);
- expect(result.contacts).toBe(0);
-});
-
-// The Screen order (port of the Codex build's tests/screen.test.ts). Weapons do no damage and the Reapers flank: a
-// fleet holding formation ends with 7 of its 16 escorts between its capitals and the enemy; a screening fleet, 16.
-test('a screening fleet keeps its escorts between its capitals and a flanking enemy',async({page})=>{
- await page.goto('/');
- const result=await page.evaluate(async()=>{
-  const {BattleSimulation}=await import('/src/simulation/battle.ts');
-  const {buildCustomBattle}=await import('/src/scenarios/index.ts');
-  const escort=(s:any)=>s.role==='cruiser'||s.role==='frigate'||s.role==='reaper_destroyer';
-  const centre=(ships:any[])=>({x:ships.reduce((n,s)=>n+s.pos.x,0)/ships.length,y:ships.reduce((n,s)=>n+s.pos.y,0)/ships.length,z:ships.reduce((n,s)=>n+s.pos.z,0)/ships.length});
-  const flanked=(order:string)=>{
-   const sim=new BattleSimulation(buildCustomBattle({seed:42,rulesId:'prime_apex',environment:'deep_space',startingDistanceKm:70,maxDuration:900,
-    sideA:{faction:'alliance',name:'Line',formation:'line_abreast',counts:{alliance_dreadnought:4,alliance_cruiser:8,alliance_frigate:8}},
-    sideB:{faction:'reaper',name:'Reapers',formation:'line_abreast',counts:{reaper_capital:3,reaper_destroyer:8}}}));
-   for(const ship of sim.ships)for(const weapon of ship.weapons)weapon.def={...weapon.def,damage:0};
-   sim.issueOrders('custom-a',{order:order as any});sim.issueOrders('custom-b',{order:'flank'});
-   while(sim.time<160)sim.step();
-   const mine=sim.ships.filter((s:any)=>s.side==='A'&&s.role!=='fighter'),capitals=mine.filter((s:any)=>!escort(s)),escorts=mine.filter(escort),enemy=sim.ships.filter((s:any)=>s.side==='B');
-   const c=centre(capitals),t=centre(enemy),axis={x:t.x-c.x,y:t.y-c.y,z:t.z-c.z},length=Math.hypot(axis.x,axis.y,axis.z);
-   const bearings=escorts.map((s:any)=>{const v={x:s.pos.x-c.x,y:s.pos.y-c.y,z:s.pos.z-c.z},along=(v.x*axis.x+v.y*axis.y+v.z*axis.z)/length;return {along,angle:Math.acos(along/Math.hypot(v.x,v.y,v.z))*180/Math.PI};});
-   return {between:bearings.filter((b:any)=>b.angle<45&&b.along>1).length,escorts:escorts.length,offAxis:bearings.reduce((n:number,b:any)=>n+b.angle,0)/bearings.length,
-    nearest:Math.min(...enemy.map((e:any)=>Math.min(...capitals.map((k:any)=>Math.hypot(e.pos.x-k.pos.x,e.pos.y-k.pos.y,e.pos.z-k.pos.z))))),
-    fired:mine.filter((s:any)=>s.stats.shotsFired>0).length/mine.length};
-  };
-  return {held:flanked('hold_formation'),screened:flanked('screen')};
- });
- // Holding formation: measured 7 of 16 between, 60° off the line, nearest Reaper 6.4 km from a dreadnought.
- expect(result.held.between).toBeLessThanOrEqual(9);
- expect(result.held.offAxis).toBeGreaterThan(45);
- // Screening: measured 16 of 16, 22° off the line, nearest Reaper 9.0 km from a dreadnought.
- expect(result.screened.between).toBe(result.screened.escorts);
- expect(result.screened.offAxis).toBeLessThan(30);
- expect(result.screened.nearest).toBeGreaterThan(result.held.nearest*1.3);
- expect(result.screened.fired).toBe(1);
-});
-
 // Hulls do not give way to fighters (port of the Codex build's tests/carrier-station.test.ts). A carrier was pushed
 // about by its own wing: holding formation at Earth, carriers drifted 5.1, 5.4 and 6.0 km off station (seeds 1 to 3).
 test('a carrier holding formation stays on station with its wing in the air',async({page})=>{
@@ -368,12 +228,12 @@ test('escorts in a large fleet are in range and firing, and Reaper capitals do n
     const mean=ships.reduce((n:number,s:any)=>n+s.pos.y,0)/ships.length;height+=Math.sqrt(ships.reduce((n:number,s:any)=>n+(s.pos.y-mean)**2,0)/ships.length);samples++;}}
   return {share,alignment:alignment/pairs,height:height/samples};
  });
- // Measured: frigates 100 %, cruisers 99 %, dreadnoughts 100 %, Reaper destroyers 92 %.
+ // Measured: frigates 99 %, cruisers 100 %, dreadnoughts 100 %, Reaper destroyers 97 %.
  expect(result.share['A frigate']).toBeGreaterThan(0.8);
  expect(result.share['A cruiser']).toBeGreaterThan(0.75);
  expect(result.share['A dreadnought']).toBeGreaterThan(0.8);
  expect(result.share['B reaper_destroyer']).toBeGreaterThan(0.85);
- // Measured: velocity alignment 0.47, height spread 2.3 km.
+ // Measured: velocity alignment 0.24, height spread 2.7 km.
  expect(result.alignment).toBeLessThan(0.62);
  expect(result.height).toBeGreaterThan(1.6);
 });

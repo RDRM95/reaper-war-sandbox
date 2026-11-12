@@ -19,15 +19,20 @@ export function advanceMotion(ship: ShipState, goal: MovementGoal, dt: number): 
     return;
   }
   const engine = 0.25 + 0.75 * health;
-  const maxSpeed = ship.maxSpeed * engine * Math.max(0, Math.min(1, goal.speedFraction));
-  const acceleration = ship.acceleration * engine;
+  // A closing sprint raises both the speed limit and the thrust; everything below works in those terms.
+  // A hull that is steering clear of a neighbour eases off: the clearance rules are tuned for combat speed, and at
+  // twice that two frigates sprinting side by side touched before they could part.
+  const avoiding = goal.avoidanceAcceleration ? length(goal.avoidanceAcceleration) / Math.max(1e-9, ship.acceleration) : 0;
+  const sprint = 1 + (Math.max(1, goal.sprint ?? 1) - 1) * Math.max(0, 1 - avoiding * 2);
+  const maxSpeed = ship.maxSpeed * engine * Math.max(0, Math.min(1, goal.speedFraction)) * sprint;
+  const acceleration = ship.acceleration * engine * sprint;
   const error = sub(goal.position, ship.pos);
   const dist = length(error);
 
   // A full-speed hull needs v/a seconds to stop. Choose damping on that
   // timescale and retain a small numerical settling zone, not a hull-size dead
   // zone that can put short-range guns permanently outside firing range.
-  const response = Math.max(0.4, ship.maxSpeed * engine / acceleration);
+  const response = Math.max(0.4, ship.maxSpeed * engine * sprint / acceleration);
   const omega = 2 / response;
   let force: Vec3 = sub(scale(error, omega * omega), scale(ship.vel, 2 * omega));
   const forceLength = length(force);
