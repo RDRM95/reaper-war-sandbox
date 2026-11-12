@@ -1221,8 +1221,12 @@ export class BattleSimulation implements AiContext {
   private checkEnd(): void {
     const a = this.sidePoints('A');
     const b = this.sidePoints('B');
-    const aAlive = this.ships.some((s) => s.side === 'A' && s.alive && !s.escaped && s.role !== 'fighter');
-    const bAlive = this.ships.some((s) => s.side === 'B' && s.alive && !s.escaped && s.role !== 'fighter');
+    // A side with a fleet still on its way is still in the battle. Without this a side that destroyed the first
+    // wave before the second was due had won: the Final Battle of Earth under prime_apex ended at 60 to 78 s in
+    // every seed, and its Reaper reinforcement, due at 90 s, never arrived.
+    const toArrive = (side: Side): boolean => this.pendingFleets.some((f) => f.side === side);
+    const aAlive = toArrive('A') || this.ships.some((s) => s.side === 'A' && s.alive && !s.escaped && s.role !== 'fighter');
+    const bAlive = toArrive('B') || this.ships.some((s) => s.side === 'B' && s.alive && !s.escaped && s.role !== 'fighter');
     if (!aAlive && !bAlive) return this.end('draw', 'Mutual annihilation');
     if (!aAlive) return this.end('B', a.remaining === 0 ? 'Side A fleet destroyed' : 'Side A fleet withdrew from the battlespace');
     if (!bAlive) return this.end('A', b.remaining === 0 ? 'Side B fleet destroyed' : 'Side B fleet withdrew from the battlespace');
