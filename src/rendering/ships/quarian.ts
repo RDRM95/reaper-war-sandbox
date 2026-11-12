@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { at, taperedBox, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
-import { buildFighter, type FighterSpec } from './fighterKit';
+import { buildFighter, finPanel, mirrorX, spindle, wingPanel, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -47,28 +47,43 @@ export function buildQuarianLiveship(): BuiltShip {
   return assemble(parts, 'quarian', [new THREE.Vector3(1, 0.6, z0), new THREE.Vector3(-1, 0.6, z0), new THREE.Vector3(1, -0.6, z0), new THREE.Vector3(-1, -0.6, z0)], L, undefined, GLOW);
 }
 
-/** Heavy Fleet warship: freighter hull rebuilt around a spinal gun. */
+/**
+ * Heavy Fleet warship: a freighter rebuilt around a spinal gun. A fat, rounded cargo hull with the gun run through
+ * it and out of the bow to the muzzle, clamped by a collar where it leaves, its breech in a fairing on the back; the fleet's bolted-on modules down both flanks; stub wings
+ * carrying sensor pods; a bridge blister off the centre line; three drives. Original procedural geometry. It
+ * replaces a tapered box with boxes on it. Length, muzzle and engine nodes are those of the model it replaces.
+ */
 export function buildQuarianHeavy(): BuiltShip {
   const L = 8.2;
   const parts = newParts();
-  parts.hull.push(taperedBox(1.4, 1.1, L * 0.7, 0.9, 1).translate(0, 0, -L * 0.03));
-  parts.hullDark.push(at(zCylinder(0.22, 0.26, L * 0.45, 12), 0, 0.1, L * 0.3));
-  parts.accent.push(at(zCylinder(0.34, 0.34, 1.2, 12), 0, 0.1, L * 0.12));
-  parts.hull.push(at(taperedBox(0.9, 0.7, 1.6, 0.7, 1), 0, 0.3, L * 0.22));
-  modules(parts, 5, 0.9, 0.6, -L * 0.3, 1.1, 0.5);
-  modules(parts, 5, -0.9, 0.5, -L * 0.28, 1.1, 0.5);
-  parts.hull.push(at(new THREE.BoxGeometry(0.5, 0.5, 1.2), -0.3, 0.75, -1.5));
-  parts.windows.push(at(new THREE.BoxGeometry(0.52, 0.05, 0.6), -0.3, 0.98, -1.4));
-  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) parts.hullDark.push(at(new THREE.BoxGeometry(0.2, 0.12, 0.26), s * 0.7, 0.55, -2 + i * 1.2));
-  const eng = newParts();
-  engineBlock(1.6, 1.1, 1.6, [
-    { x: 0.45, y: 0.25, r: 0.22 },
-    { x: -0.45, y: 0.25, r: 0.22 },
-    { x: 0, y: -0.3, r: 0.28 },
-  ], eng);
-  for (const k of Object.keys(eng) as (keyof Parts)[]) parts[k].push(...eng[k].map((g) => g.translate(0, 0, -L * 0.5 + 0.9)));
+  // Cargo hull: eight-sided, fullest amidships, blunt at both ends.
+  parts.hull.push(spindle([{ z: -3.5, r: 0 }, { z: -3.5, r: 0.5 }, { z: -2.6, r: 0.74 }, { z: -0.4, r: 0.8 }, { z: 1.6, r: 0.7 }, { z: 2.7, r: 0.46 }, { z: 3.1, r: 0 }], 8, 0.82));
+  // Spinal gun: it runs through the hull and out of the bow to the muzzle, clamped where it leaves, with its breech
+  // housed in a fairing on the back.
+  const muzzleZ = L * 0.52, emerges = 1.4;
+  parts.hullDark.push(at(zCylinder(0.2, 0.26, muzzleZ - emerges, 12), 0, 0.1, (muzzleZ + emerges) / 2));
+  parts.accent.push(at(zCylinder(0.36, 0.36, 0.7, 12), 0, 0.1, 3.0));
+  parts.hull.push(at(spindle([{ z: -1.1, r: 0 }, { z: -0.8, r: 0.34 }, { z: 0.5, r: 0.38 }, { z: 1.0, r: 0 }], 8, 0.8), 0, 0.5, -1.0));
+  // Bolted-on modules down both flanks, as on every hull of the fleet.
+  modules(parts, 5, 0.86, 0.12, -L * 0.3, 1.05, 0.44);
+  modules(parts, 5, -0.86, 0.02, -L * 0.28, 1.05, 0.44);
+  // Stub wings with sensor pods.
+  const wing = at(wingPanel(0.9, 1.3, 0.8, 0.25, 0.1, -0.04), 0.7, -0.2, 0.9);
+  parts.hull.push(wing, mirrorX(wing));
+  for (const side of [-1, 1]) parts.hullDark.push(at(zCylinder(0.09, 0.13, 1.1, 8), side * 1.6, -0.24, 0.2));
+  // Bridge blister to port of the centre line, with one lit band.
+  parts.hull.push(at(spindle([{ z: -0.7, r: 0 }, { z: -0.45, r: 0.24 }, { z: 0.3, r: 0.26 }, { z: 0.6, r: 0 }], 8, 0.85), -0.34, 0.62, -2.0));
+  parts.windows.push(at(new THREE.BoxGeometry(0.3, 0.035, 0.03), -0.34, 0.68, -1.45));
+  // Keel fin and three drives.
+  parts.hullDark.push(at(finPanel(0.5, 1.8, 0.6, 1.0, 0.1, 0, true), 0, -0.6, -1.0));
   const z0 = -L * 0.5 + 0.9 - 1.6 * 0.7;
-  return assemble(parts, 'quarian', [new THREE.Vector3(0.45, 0.25, z0), new THREE.Vector3(-0.45, 0.25, z0), new THREE.Vector3(0, -0.3, z0)], L, new THREE.Vector3(0, 0.1, L * 0.52), GLOW);
+  const nodes = [new THREE.Vector3(0.45, 0.25, z0), new THREE.Vector3(-0.45, 0.25, z0), new THREE.Vector3(0, -0.3, z0)];
+  for (const [i, node] of nodes.entries()) {
+    const r = i === 2 ? 0.28 : 0.22;
+    parts.hullDark.push(at(zCylinder(r, r * 1.2, 1.3, 12), node.x, node.y, node.z + 0.68));
+    parts.engine.push(at(zCylinder(r * 0.8, r * 0.62, 0.06, 12), node.x, node.y, node.z + 0.03));
+  }
+  return assemble(parts, 'quarian', nodes, L, new THREE.Vector3(0, 0.1, L * 0.52), GLOW);
 }
 
 export function buildQuarianCruiser(): BuiltShip {
