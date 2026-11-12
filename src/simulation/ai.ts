@@ -226,11 +226,46 @@ export function scoreTarget(ctx: AiContext, shooter: ShipState, fleet: FleetStat
  *  - a hull keeps its target for a few seconds and changes only for a clearly better one, so it does not dither.
  * Fighters are no reason for a warship to stop: they count as in range only for other fighters.
  */
+/** Fighters fly in wings of this many. */
+export const WING_SIZE = 4;
+const wingOf = new WeakMap<ShipState, { prefix: string; first: number } | null>();
+
+/**
+ * The fighter that leads this one's wing: the lowest-numbered craft of its block of WING_SIZE consecutive hull
+ * numbers that is alive, present and not on its way home to rearm. Fighters are numbered as they launch, so a
+ * block is a wing that left its carrier together. No state is kept: the answer follows from the ids.
+ */
+export function wingLeader(ctx: AiContext, ship: ShipState): ShipState | undefined {
+  let wing = wingOf.get(ship);
+  if (wing === undefined) {
+    const dash = ship.id.lastIndexOf('-'), n = Number(ship.id.slice(dash + 1));
+    wing = dash > 0 && Number.isInteger(n) && n > 0 ? { prefix: ship.id.slice(0, dash + 1), first: Math.floor((n - 1) / WING_SIZE) * WING_SIZE + 1 } : null;
+    wingOf.set(ship, wing);
+  }
+  if (!wing) return undefined;
+  for (let k = 0; k < WING_SIZE; k++) {
+    const mate = ctx.getShip(wing.prefix + (wing.first + k));
+    if (mate && mate.alive && !mate.escaped && !mate.rearming && mate.role === 'fighter') return mate;
+  }
+  return undefined;
+}
+
 export function chooseTarget(ctx: AiContext, ship: ShipState, fleet: FleetState): string | undefined {
   if (ship.forcedTargetId) {
     const forced = ctx.getShip(ship.forcedTargetId);
     if (validEnemy(ship, forced)) return forced.id;
     ship.forcedTargetId = undefined;
+  }
+  // A wing attacks one target: every fighter but the leader takes the leader's.
+  if (ship.role === 'fighter' && !ship.rearming) {
+    const leader = wingLeader(ctx, ship);
+    if (leader && leader !== ship) {
+      const theirs = leader.targetId ? ctx.getShip(leader.targetId) : undefined;
+      if (validEnemy(ship, theirs)) {
+        if (theirs.id !== ship.targetId) ship.targetLockUntil = ctx.time + 5;
+        return theirs.id;
+      }
+    }
   }
   const current = ship.targetId ? ctx.getShip(ship.targetId) : undefined;
   const range = shipEngagementRange(ship);

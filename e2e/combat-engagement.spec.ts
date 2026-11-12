@@ -41,8 +41,8 @@ test('a fleet spreads its fire, cruisers fight on the beam, and most hull-time i
  });
  // Measured: the busiest Reaper has 27 % of the 89 Alliance hulls on it and all ten are targeted (before: every hull
  // on one). The cruiser holds its target 79 degrees off the bow and fires its broadside 160 times in 150 s (never,
- // before). In the long battle 83 % of hull-time is spent firing and 1 % chasing or idle; dreadnoughts and cruisers
- // fire 63 shots a hull-minute each (32 and 51 before, in the Codex build) and the carrier fires at all.
+ // before). In the long battle 84 % of hull-time is spent firing and 1 % chasing or idle; dreadnoughts fire 72
+ // shots a hull-minute and cruisers 62 (32 and 51 before, in the Codex build) and the carrier fires at all.
  expect(result.busiest).toBeLessThan(0.45);
  expect(result.targeted).toBeGreaterThanOrEqual(8);
  expect(result.aspects).toEqual({alliance_cruiser:'beam',alliance_carrier:'beam',alliance_dreadnought:'bow',alliance_frigate:'bow',reaper_capital:'bow'});
@@ -59,4 +59,51 @@ test('a fleet spreads its fire, cruisers fight on the beam, and most hull-time i
  expect(result.dreadnoughtShots).toBeGreaterThan(50);
  expect(result.cruiserShots).toBeGreaterThan(55);
  expect(result.carrierShots).toBeGreaterThan(0);
+});
+
+// Fighters attack in wings and keep attacking (port of the Codex build's tests/fighter-wings.test.ts). Before, each
+// fighter chose its own target, and an Alliance fighter facing Reapers without Oculus had two torpedoes a sortie
+// and nothing else to fire: its gun engaged only small craft and missiles.
+test('fighters fly in wings that share a target and strafe the hull they attack',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation}=await import('/src/simulation/battle.ts');
+  const {buildScenario,buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const {wingLeader,WING_SIZE}=await import('/src/simulation/ai.ts');
+  const {measureActivity}=await import('/src/simulation/combatActivity.ts');
+  const number=(id:string)=>Number(id.slice(id.lastIndexOf('-')+1));
+  // Wings at 20 s, before any has turned for home to rearm; then how often a wing-mate is on its leader's target.
+  const sim=new BattleSimulation(buildScenario('battle_of_earth','prime_apex',1));
+  while(!sim.finished&&sim.time<20)sim.step();
+  const flying=sim.ships.filter((s:any)=>s.role==='fighter'&&s.alive&&!s.rearming);
+  const wingsRight=flying.every((f:any)=>{const l=wingLeader(sim,f);return !!l&&l.role==='fighter'&&Math.floor((number(l.id)-1)/WING_SIZE)===Math.floor((number(f.id)-1)/WING_SIZE)&&number(l.id)<=number(f.id);});
+  let together=0,looks=0,next=30;
+  while(!sim.finished&&sim.time<120){sim.step();if(sim.time<next)continue;next+=5;
+   for(const f of sim.ships){if(f.role!=='fighter'||!f.alive||f.escaped||f.rearming||f.side!=='A')continue;const l=wingLeader(sim,f);if(!l||l===f||!l.targetId)continue;looks++;if(f.targetId===l.targetId)together++;}}
+  // Eight fighters against one destroyer that cannot be hurt or hurt them; a frigate that holds its fire keeps
+  // their side in the battle.
+  const duel=new BattleSimulation(buildCustomBattle({seed:3,rulesId:'canon_me3',environment:'deep_space',startingDistanceKm:30,maxDuration:200,
+   sideA:{faction:'alliance',name:'A',formation:'fighter_screen',counts:{alliance_frigate:1,alliance_fighter:8}},sideB:{faction:'reaper',name:'B',formation:'line_abreast',counts:{reaper_destroyer:1}}} as any));
+  const destroyer=duel.ships.find((s:any)=>s.role==='reaper_destroyer')!;destroyer.maxHull=destroyer.hull=1e12;
+  for(const s of duel.ships)if(s.side==='B'||s.role==='frigate')for(const w of s.weapons)w.def={...w.def,damage:0,range:s.role==='frigate'?0:w.def.range};
+  while(!duel.finished&&duel.time<90)duel.step();
+  const fired=(id:string)=>duel.events.filter((e:any)=>e.type==='weapon_fired'&&e.targetId===destroyer.id&&e.weaponId===id).length;
+  const row=measureActivity(new BattleSimulation(buildScenario('battle_of_earth','canon_me3',1)),300).rows.get('A fighter')!;
+  return {flying:flying.length,wingsRight,together,looks,duelTime:duel.time,torpedoes:fired('fighter_torpedo'),guns:fired('fighter_gun'),
+   firing:row.seconds.firing/row.hullSeconds,idle:row.seconds.idle/row.hullSeconds,runs:row.runs/(row.hullSeconds/60)};
+ });
+ // Measured: all 48 fighters in wings at 20 s; a wing-mate is on its leader's target in 189 of 208 looks; the eight
+ // fighters fire 16 torpedoes and 4,694 gun rounds in 90 s (16 torpedoes and nothing else, before); in the canon
+ // Battle of Earth fighters are firing 37 % of the time (20 % before) and make 3.5 attack runs a minute each.
+ expect(result.flying).toBe(48);
+ expect(result.wingsRight).toBe(true);
+ expect(result.looks).toBeGreaterThan(100);
+ expect(result.together/result.looks).toBeGreaterThan(0.85);
+ expect(result.duelTime).toBeGreaterThan(89);
+ expect(result.torpedoes).toBe(16);
+ expect(result.guns).toBeGreaterThan(3000);
+ expect(result.firing).toBeGreaterThan(0.3);
+ expect(result.idle).toBeLessThan(0.05);
+ expect(result.runs).toBeGreaterThan(3);
 });

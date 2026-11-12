@@ -854,7 +854,9 @@ export class BattleSimulation implements AiContext {
           }
         }
       }
-      if (!missile && !target && (def.kind === 'gardian' || def.id === 'oculus_beam')) {
+      // A fighter with no small craft or missile to shoot at strafes the hull it is attacking: without this an
+      // Alliance fighter facing Reapers without Oculus had two torpedoes a sortie and nothing else to do.
+      if (!missile && !target && (def.kind === 'gardian' || def.id === 'oculus_beam' || ship.role === 'fighter')) {
         // GARDIAN lasers can scorch nearby hulls (bypassing barriers) — low priority.
         for (const e of this.enemiesNear(ship.side, origin, def.range)) {
           if (!e.alive || e.escaped) continue;
