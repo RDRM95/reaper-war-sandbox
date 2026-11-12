@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { at, latheBody, taperedBox, taperedTube, zCylinder } from '../geometry';
 import { assemble, newParts, type Parts } from './alliance';
+import { buildFighter, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -90,15 +91,16 @@ function sensorBlisters(parts: Parts, L: number, R: number, n: number): void {
 }
 
 /** Union interceptor: ~18 m. */
+/** Salarian scout fighter: a slender dart with short wings and a V tail around one large drive. */
+export const SALARIAN_FIGHTER: FighterSpec = {
+  faction: 'salarian', length: 0.36, glowColor: GLOW,
+  body: { width: 0.1, height: 0.08, sides: 8 },
+  wing: { span: 0.22, root: 0.24, tip: 0.06, sweep: 0.16, z: -0.08, rise: 0.02 },
+  engines: { count: 1, x: 0, radius: 0.07, length: 0.24 },
+  fins: { count: 2, height: 0.1, root: 0.12, tip: 0.04, sweep: 0.08, x: 0.03, z: -0.28, cant: 0.6 },
+};
 export function buildSalarianFighter(): BuiltShip {
-  const L = 0.36;
-  const parts = newParts();
-  parts.hull.push(taperedBox(0.05, 0.035, L, 0.2, 0.7));
-  parts.hullDark.push(at(taperedBox(0.11, 0.012, L * 0.5, 0.3, 1), 0, 0, -L * 0.1));
-  parts.hullDark.push(at(zCylinder(0.014, 0.022, L * 0.28, 8, true), 0, 0, -L * 0.42));
-  parts.engine.push(at(zCylinder(0.012, 0.01, 0.015, 8), 0, 0, -L * 0.56));
-  parts.windows.push(at(new THREE.BoxGeometry(0.02, 0.008, 0.05), 0, 0.016, L * 0.1));
-  return assemble(parts, 'salarian', [new THREE.Vector3(0, 0, -L * 0.56)], L, new THREE.Vector3(0, 0, L * 0.5), GLOW);
+  return buildFighter(SALARIAN_FIGHTER);
 }
 
 /** STG stealth frigate: ~150 m, drive pods tucked close. */

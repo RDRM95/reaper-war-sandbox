@@ -1,4 +1,4 @@
-import { pointDefenceBrightness, tracerSize } from './visualWeight';
+import { explosionSize, explosionSmoke, impactSize, impactSparks, pointDefenceBrightness, tracerSize } from './visualWeight';
 import * as THREE from 'three';
 import { Rng } from '@/core/rng';
 import { KM } from './geometry';
@@ -196,13 +196,13 @@ export class EffectsSystem {
         barrierDamage>hullDamage?0x86c7ff:0xe8a876);
       return;
     }
-    const size = Math.min(8, 0.4 + Math.sqrt(total) * 0.09);
+    const size = impactSize(total);
     if (barrierDamage > hullDamage && barrierDamage > 3) {
       this.spark(pos, new THREE.Vector3(), 0.2, size * 0.6, size * 1.4, this.blueTex, 0x9fd0ff);
     } else if (total > 0) {
       const tex = damageType === 'reaper_beam' ? this.redTex : this.fireTex;
       this.spark(pos, new THREE.Vector3(), 0.25, size * 0.7, size * 1.6, tex, 0xffffff);
-      const n = Math.min(10, 2 + Math.floor(hullDamage / 120));
+      const n = impactSparks(hullDamage);
       for (let i = 0; i < n; i++) {
         const v = new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 2.5);
         this.spark(pos, v, 0.5 + this.rng.next() * 0.5, size * 0.25, size * 0.04, this.fireTex, 0xffb060);
@@ -235,7 +235,7 @@ export class EffectsSystem {
 
   /** Explosion scaled to the ship. Returns duration in seconds. */
   explosion(pos: THREE.Vector3, lengthUnits: number, reaper: boolean, pieces: THREE.Object3D[] = [], velocity = new THREE.Vector3()): number {
-    const size = Math.max(1.5, lengthUnits * 0.6);
+    const size = explosionSize(lengthUnits);
     const big = size > 4;
     const n = big ? 30 : size > 1.5 ? 14 : 6;
     for (let i = 0; i < n; i++) {
@@ -248,7 +248,7 @@ export class EffectsSystem {
     // Core flash.
     this.spark(pos, velocity.clone(), 0.35, size * 0.8, size * 2.2, this.flashTex, 0xffffff);
     // Smoke / debris cloud.
-    for (let i = 0; i < (big ? 10 : 4); i++) {
+    for (let i = 0; i < explosionSmoke(size); i++) {
       const v = new THREE.Vector3(this.rng.gaussian(0, 1), this.rng.gaussian(0, 1), this.rng.gaussian(0, 1)).multiplyScalar(size * 0.5).add(velocity);
       this.spark(pos, v, 4 + this.rng.next() * 4, size * 0.4, size * 2.2, this.smokeTex, 0x9a9a9a);
     }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { at, taperedBox, wedge, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
+import { buildFighter, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -72,16 +73,16 @@ export function buildCerberusFrigate(): BuiltShip {
   return assemble(parts, 'cerberus', [new THREE.Vector3(0.72, -0.05, -0.75), new THREE.Vector3(-0.72, -0.05, -0.75)], L, new THREE.Vector3(0, 0, L * 0.5), GLOW);
 }
 
+/** Cerberus strike fighter: a faceted delta with a diamond-section fuselage and outward-canted fins. */
+export const CERBERUS_FIGHTER: FighterSpec = {
+  faction: 'cerberus', length: 0.34, glowColor: GLOW,
+  body: { width: 0.14, height: 0.09, sides: 4 },
+  wing: { span: 0.34, root: 0.44, tip: 0.1, sweep: 0.3, z: 0.14, stripe: true },
+  engines: { count: 2, x: 0.07, radius: 0.045, length: 0.18 },
+  fins: { count: 2, height: 0.12, root: 0.16, tip: 0.05, sweep: 0.1, x: 0.12, z: -0.24, cant: 0.45 },
+};
 export function buildCerberusFighter(): BuiltShip {
-  const k = 2;
-  const L = 0.17 * k;
-  const parts = newParts();
-  parts.hull.push(taperedBox(0.05 * k, 0.03 * k, L, 0.3, 0.9));
-  parts.hull.push(at(taperedBox(0.18 * k, 0.008 * k, 0.07 * k, 0.5, 1), 0, 0, -0.03 * k));
-  parts.hullDark.push(at(wedge(0.02 * k, 0.04 * k, 0.05 * k, 0.4), 0, 0.02 * k, -0.06 * k));
-  parts.accent.push(at(new THREE.BoxGeometry(0.1 * k, 0.012 * k, 0.015 * k), 0, 0, -0.02 * k));
-  parts.engine.push(at(zCylinder(0.012 * k, 0.01 * k, 0.01 * k, 6), 0, 0, -0.09 * k));
-  return assemble(parts, 'cerberus', [new THREE.Vector3(0, 0, -0.09 * k)], L, undefined, GLOW);
+  return buildFighter(CERBERUS_FIGHTER);
 }
 
 /** AU-only Cerberus dreadnought (Black Fleet): long white hull, orange spine. */

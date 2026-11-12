@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { at, taperedBox, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
+import { buildFighter, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -118,13 +119,15 @@ export function buildQuarianCruiser(): BuiltShip {
   return assemble(parts, 'quarian', [new THREE.Vector3(0.26, 0, z0), new THREE.Vector3(-0.26, 0, z0)], L, new THREE.Vector3(0, 0.02, L * 0.5), GLOW);
 }
 
+/** Quarian patrol craft: a stubby converted hull with straight wings, tip pods and one oversized drive. */
+export const QUARIAN_FIGHTER: FighterSpec = {
+  faction: 'quarian', length: 0.36, glowColor: GLOW,
+  body: { width: 0.2, height: 0.16, sides: 8 },
+  wing: { span: 0.26, root: 0.2, tip: 0.14, sweep: 0.04, z: -0.02 },
+  tipPods: { radius: 0.03, length: 0.22 },
+  engines: { count: 1, x: 0, radius: 0.075, length: 0.2 },
+  fins: { count: 1, height: 0.1, root: 0.14, tip: 0.08, sweep: 0.05, x: 0, z: -0.26 },
+};
 export function buildQuarianFighter(): BuiltShip {
-  const k = 2;
-  const L = 0.18 * k;
-  const parts = newParts();
-  parts.hull.push(taperedBox(0.05 * k, 0.04 * k, L, 0.5, 0.9));
-  parts.hull.push(at(taperedBox(0.17 * k, 0.01 * k, 0.07 * k, 0.6, 1), 0, 0, -0.02 * k));
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.03 * k, 0.03 * k, 0.05 * k), 0.02 * k, 0.025 * k, -0.04 * k));
-  parts.engine.push(at(zCylinder(0.014 * k, 0.012 * k, 0.01 * k, 6), 0, 0, -L * 0.5));
-  return assemble(parts, 'quarian', [new THREE.Vector3(0, 0, -L * 0.5)], L, undefined, GLOW);
+  return buildFighter(QUARIAN_FIGHTER);
 }

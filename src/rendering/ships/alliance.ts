@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { at, merge, plateStrip, rot, taperedBox, wedge, zCylinder } from '../geometry';
 import { paletteFor } from '../materials';
+import { buildFighter, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 import { populateNormandySR2 } from './normandySR2Geometry';
 
@@ -292,37 +293,67 @@ export const buildAllianceAegis = (): BuiltShip => {
 };
 
 
-/** Alliance carrier: dreadnought-sized hull with a flight deck and hangar mouths. */
+/**
+ * Alliance carrier. A dreadnought-sized hull in the same layered armour as the line hulls, with its own outline:
+ * the deck runs forward into two launch prongs either side of an open channel, dark flight strips with blue guide
+ * lines run the length of each prong, long hangar mouths open in both flanks, and the bridge is an island on the
+ * starboard deck edge. Original procedural geometry. It replaces a model of a dozen boxes whose hangars were lit
+ * slabs a quarter of the hull long. Three drives; the hull is its stated length from prong tips to exhaust (the
+ * old model was 9.82 units long for a stated 9).
+ */
 export function buildAllianceCarrier(): BuiltShip {
   const L = 9.0;
   const parts = newParts();
-  parts.hull.push(taperedBox(1.4, 0.7, L * 0.8, 0.75, 1, { frontHeight: 0.7 }));
-  // Flight deck slab.
-  parts.hull.push(at(taperedBox(2.3, 0.22, L * 0.62, 0.8, 1), 0, 0.4, 0.2));
-  parts.hullDark.push(at(new THREE.BoxGeometry(2.1, 0.03, L * 0.55), 0, 0.52, 0.2));
-  parts.accent.push(at(new THREE.BoxGeometry(0.06, 0.04, L * 0.5), 0.5, 0.54, 0.2));
-  parts.accent.push(at(new THREE.BoxGeometry(0.06, 0.04, L * 0.5), -0.5, 0.54, 0.2));
-  // Hangar openings (recessed, lit).
-  for (const s of [-1, 1]) {
-    parts.hullDark.push(at(new THREE.BoxGeometry(0.1, 0.42, 2.6), s * 1.2, 0.0, 0.4));
-    parts.windows.push(at(new THREE.BoxGeometry(0.04, 0.3, 2.4), s * 1.24, 0.0, 0.4));
-    parts.hull.push(at(taperedBox(0.5, 0.5, 3.6, 0.7, 0.9), s * 1.0, -0.25, -0.8));
+  // Main deck: full beam to past amidships, then two prongs with the launch channel between them.
+  // The prong tips are chiselled: the deck's upper face falls away over the last twelfth of the hull.
+  parts.hull.push(slopeBow(deckPlate([[0.10, -0.455], [0.15, -0.42], [0.15, 0.10], [0.137, 0.30], [0.126, 0.42], [0.122, 0.47], [0.09, 0.5], [0.064, 0.47], [0.061, 0.42], [0.052, 0.20], [0, 0.20]], 0.018, 0.04, L),
+    L * 0.01, L * 0.42, L * 0.5, L * 0.026));
+  // Raised flight deck tier.
+  parts.hull.push(deckPlate([[0.085, -0.40], [0.125, -0.37], [0.125, 0.10], [0.115, 0.30], [0.107, 0.40], [0.094, 0.418], [0.08, 0.40], [0.066, 0.17], [0, 0.17]], 0.03, 0.014, L));
+  // Dark ventral tier and keel under the pale deck.
+  parts.hullDark.push(deckPlate([[0.11, -0.465], [0.16, -0.43], [0.16, 0.06], [0.145, 0.27], [0.126, 0.43], [0.09, 0.455], [0.07, 0.43], [0.058, 0.15], [0, 0.15]], -0.022, 0.024, L));
+  parts.hullDark.push(at(taperedBox(L * 0.06, L * 0.016, L * 0.62, 0.6, 1), 0, -L * 0.054, -L * 0.14));
+  // Recovery deck across the head of the launch channel.
+  parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.1, L * 0.004, L * 0.05), 0, -L * 0.004, L * 0.176));
+  for (const side of [-1, 1]) {
+    // Flight strip along each prong: a dark landing surface with two blue guide lines.
+    const strip = plate([[side * 0.07, -0.26], [side * 0.112, -0.26], [side * 0.112, 0.10], [side * 0.101, 0.39], [side * 0.084, 0.39], [side * 0.07, 0.16]].map(([x, z]) => [x, z] as const), 0.0316, 0.0016, L);
+    parts.hullDark.push(strip);
+    for (const x of [0.082, 0.1]) parts.accent.push(at(new THREE.BoxGeometry(L * 0.0022, L * 0.0012, L * 0.34), side * L * x, L * 0.0322, -L * 0.08));
+    // Hangar mouth in the flank: a long dark opening under the deck edge with a thin strip of light inside it.
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.004, L * 0.024, L * 0.26), side * L * 0.1505, -L * 0.004, -L * 0.1));
+    parts.windows.push(at(new THREE.BoxGeometry(L * 0.0012, L * 0.003, L * 0.24), side * L * 0.1528, L * 0.004, -L * 0.1));
+    // Launch channel: dark inner face of each prong, lit by a row of ports.
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.004, L * 0.022, L * 0.25), side * L * 0.056, -L * 0.004, L * 0.33));
+    portRow(parts, [side * 0.0528, -0.002, 0.22], [side * 0.0605, -0.002, 0.41], 8, L);
+    // Lit ports along the flanks, aft of the hangar and along the prong.
+    portRow(parts, [side * 0.1508, -0.002, -0.40], [side * 0.1508, -0.002, -0.25], 8, L);
+    portRow(parts, [side * 0.1493, -0.002, 0.11], [side * 0.1378, -0.002, 0.29], 9, L);
+    portRow(parts, [side * 0.1363, -0.002, 0.31], [side * 0.1268, -0.002, 0.41], 6, L);
+    // Deck-edge point-defence blisters.
+    for (const z of [-0.33, 0.02, 0.36]) parts.hullDark.push(at(new THREE.SphereGeometry(L * 0.006, 8, 6), side * L * (z > 0.3 ? 0.113 : 0.134), L * (z > 0.3 ? 0.031 : 0.033), L * z));
+    // Panel line in the flight deck.
+    parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.0016, L * 0.0016, L * 0.1), side * L * 0.045, L * 0.0304, -L * 0.33));
   }
-  // Island / bridge.
-  parts.hull.push(at(new THREE.BoxGeometry(0.5, 0.5, 1.4), 0.6, 0.85, -1.6));
-  parts.windows.push(at(new THREE.BoxGeometry(0.52, 0.06, 1.0), 0.6, 1.0, -1.6));
-  // Bow.
-  parts.hull.push(at(wedge(1.3, 0.6, 1.6, 0.35), 0, 0, L * 0.4 + 0.6));
-  // Engines.
-  const engParts = newParts();
-  engineBlock(2.0, 1.0, 1.8, [
-    { x: 0.6, y: 0.2, r: 0.24 },
-    { x: -0.6, y: 0.2, r: 0.24 },
-    { x: 0, y: -0.25, r: 0.28 },
-  ], engParts);
-  for (const k of Object.keys(engParts) as (keyof Parts)[]) parts[k].push(...engParts[k].map((g) => g.translate(0, 0, -L * 0.5 + 1.0)));
-  const z0 = -L * 0.5 + 1.0 - 1.8 * 0.7;
-  return assemble(parts, 'alliance', [new THREE.Vector3(0.6, 0.2, z0), new THREE.Vector3(-0.6, 0.2, z0), new THREE.Vector3(0, -0.25, z0)], L);
+  for (const z of [-0.3, 0.12]) parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.13, L * 0.0016, L * 0.0016), 0, L * 0.0304, L * z));
+  // Island on the starboard deck edge: two stepped tiers, a bridge window band facing forward and a sensor mast.
+  parts.hull.push(at(taperedBox(L * 0.044, L * 0.03, L * 0.17, 0.75, 0.9), L * 0.128, L * 0.045, -L * 0.2));
+  parts.hull.push(at(taperedBox(L * 0.032, L * 0.02, L * 0.09, 0.75, 0.95), L * 0.128, L * 0.07, -L * 0.21));
+  parts.hullDark.push(at(taperedBox(L * 0.02, L * 0.01, L * 0.04, 0.8, 1), L * 0.128, L * 0.085, -L * 0.215));
+  parts.windows.push(at(new THREE.BoxGeometry(L * 0.02, L * 0.004, L * 0.003), L * 0.128, L * 0.072, -L * 0.1635));
+  parts.hullDark.push(at(new THREE.BoxGeometry(L * 0.003, L * 0.03, L * 0.003), L * 0.128, L * 0.105, -L * 0.235));
+  parts.accent.push(at(new THREE.BoxGeometry(L * 0.03, L * 0.002, L * 0.02), L * 0.128, L * 0.0605, -L * 0.265));
+  // Low deck house to port, balancing the island.
+  parts.hull.push(at(taperedBox(L * 0.04, L * 0.012, L * 0.14, 0.7, 1), -L * 0.115, L * 0.036, -L * 0.3));
+  // Drive block and three drives.
+  parts.hullDark.push(at(taperedBox(L * 0.2, L * 0.06, L * 0.085, 1, 0.9), 0, -L * 0.006, -L * 0.45));
+  const engineNodes: THREE.Vector3[] = [];
+  for (const [x, y, r] of [[0.067, 0.02, 0.027], [-0.067, 0.02, 0.027], [0, -0.03, 0.031]] as const) {
+    parts.hullDark.push(at(zCylinder(L * r * 1.25, L * r, L * 0.05, 12, true), L * x, L * y, -L * 0.47));
+    parts.engine.push(at(zCylinder(L * r * 0.86, L * r * 0.75, L * 0.008, 12), L * x, L * y, -L * 0.495));
+    engineNodes.push(new THREE.Vector3(L * x, L * y, -L * 0.5));
+  }
+  return assemble(parts, 'alliance', engineNodes, L);
 }
 
 /**
@@ -415,20 +446,18 @@ export function buildAllianceFrigate(normandy = false): BuiltShip {
   return assemble(parts, 'alliance', engineNodes, L, new THREE.Vector3(0, -0.02, L * 0.5));
 }
 
-/** F-61 Trident fighter (rendered ×2 for visibility; see KNOWN_ISSUES). */
+/** F-61 Trident fighter (rendered ×2 for visibility; see KNOWN_ISSUES): needle fuselage, cranked wings carrying
+ * two forward gun booms, twin drives under canted fins. */
+export const ALLIANCE_FIGHTER: FighterSpec = {
+  faction: 'alliance', length: 0.36,
+  body: { width: 0.15, height: 0.105, sides: 8 },
+  wing: { span: 0.33, root: 0.38, tip: 0.12, sweep: 0.2, z: 0.08, rise: -0.015, stripe: true },
+  prongs: { x: 0.3, from: -0.12, to: 0.24, radius: 0.016 },
+  engines: { count: 2, x: 0.085, radius: 0.05, length: 0.22 },
+  fins: { count: 2, height: 0.13, root: 0.16, tip: 0.07, sweep: 0.09, x: 0.085, z: -0.26, cant: 0.3 },
+};
 export function buildAllianceFighter(): BuiltShip {
-  const scale = 2;
-  const L = 0.18 * scale;
-  const parts = newParts();
-  parts.hull.push(taperedBox(0.05 * scale, 0.035 * scale, L, 0.3, 0.9));
-  const wing = taperedBox(0.2 * scale, 0.01 * scale, 0.08 * scale, 0.4, 1);
-  parts.hull.push(at(wing, 0, 0, -0.02 * scale));
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.03 * scale, 0.02 * scale, 0.06 * scale), 0.03 * scale, 0, -0.07 * scale));
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.03 * scale, 0.02 * scale, 0.06 * scale), -0.03 * scale, 0, -0.07 * scale));
-  parts.engine.push(at(zCylinder(0.012 * scale, 0.01 * scale, 0.01 * scale, 6), 0.03 * scale, 0, -0.1 * scale));
-  parts.engine.push(at(zCylinder(0.012 * scale, 0.01 * scale, 0.01 * scale, 6), -0.03 * scale, 0, -0.1 * scale));
-  parts.windows.push(at(new THREE.BoxGeometry(0.02 * scale, 0.012 * scale, 0.03 * scale), 0, 0.02 * scale, 0.02 * scale));
-  return assemble(parts, 'alliance', [new THREE.Vector3(0.03 * scale, 0, -0.1 * scale), new THREE.Vector3(-0.03 * scale, 0, -0.1 * scale)], L);
+  return buildFighter(ALLIANCE_FIGHTER);
 }
 
 /** Apex-only experimental hull. Original geometry, distinct from Omaha's
