@@ -18,6 +18,21 @@ export function tracerSize(calibre: number): { width: number; length: number } {
   return { width: 0.08 + 0.2 * weight, length: 0.22 + 0.3 * weight };
 }
 
+/** Damage per round under which a gun is a rapid-fire light cannon, drawn as a belt of tracer. */
+export const BELT_CALIBRE = 20;
+/** One round in this many of a light cannon's is a tracer. */
+export const BELT_INTERVAL = 4;
+
+/**
+ * Whether a round is drawn at all. A fighter's cannon fires four rounds a second, and since fighters strafe the
+ * hull they attack and stay over it, there are several hundred of those rounds in the air at once: drawn one for
+ * one, they were up to a fifth of everything tracers cover. They are drawn as a belt of tracer ammunition is
+ * loaded, one round in four. Every round still flies and hits in the simulation; `serial` is the round's id.
+ */
+export function tracerShown(calibre: number, serial: number): boolean {
+  return calibre >= BELT_CALIBRE || serial % BELT_INTERVAL === 0;
+}
+
 /** Brightness of a point-defence laser line. GARDIAN lasers are infrared: a faint trace, not a searchlight. */
 export const pointDefenceBrightness = (reaper: boolean): number => (reaper ? 0.45 : 0.28);
 

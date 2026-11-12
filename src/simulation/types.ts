@@ -211,6 +211,8 @@ export interface ShipState {
   rearming?: boolean;
   /** Seconds of hangar time left before a rearming fighter relaunches. */
   rearmTimer?: number;
+  /** Fighter out of torpedoes: seconds it stays to strafe before it turns for its carrier. */
+  stationTimer?: number;
   aiTimer: number;
   stats: ShipStats;
   /** Carrier: fighters not yet launched. */
