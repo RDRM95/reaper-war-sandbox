@@ -388,6 +388,36 @@ export function closingSprint(ship: ShipState, gap: number, range: number): numb
   return 1 + (CLOSING_SPRINT - 1) * Math.min(1, (gap / range - 1) / (SPRINT_FULL_AT - 1));
 }
 
+/** The classes that form a fleet's line, in the order `formationCore` falls back through them. */
+const lineKind = (s: ShipState): 0 | 1 | 2 =>
+  s.role === 'dreadnought' || s.role === 'reaper_capital' ? 0 : s.role === 'cruiser' || s.role === 'reaper_destroyer' ? 1 : 2;
+const fullLines = new WeakMap<FleetState, (Vec3 | undefined)[]>();
+
+/**
+ * How far the middle of the places of the hulls still in a fleet's line has moved from the middle of the places of
+ * every hull that line started with, in formation coordinates. Zero while the line is whole.
+ */
+function lineShift(ctx: AiContext, fleet: FleetState, core: ShipState[]): Vec3 {
+  // The core is all capitals, or all cruisers, or (neither left) every hull.
+  const kind = core.every(s => lineKind(s) === 0) ? 0 : core.every(s => lineKind(s) === 1) ? 1 : 2;
+  let cached = fullLines.get(fleet);
+  if (!cached) { cached = []; fullLines.set(fleet, cached); }
+  let full = cached[kind];
+  if (!full) {
+    // Every hull the fleet deployed with, lost or not. Fighters launch later and are not part of a line.
+    let sum = v3(), n = 0;
+    for (const s of ctx.ships) {
+      if (s.fleetId !== fleet.spec.id || s.role === 'fighter' || (kind !== 2 && lineKind(s) !== kind)) continue;
+      sum = add(sum, s.slot); n++;
+    }
+    full = n ? scale(sum, 1 / n) : v3();
+    cached[kind] = full;
+  }
+  let now = v3();
+  for (const s of core) now = add(now, s.slot);
+  return sub(scale(now, 1 / core.length), full);
+}
+
 /** Stable fleet fire control and formation translation. Tactical observations
  * are shared; individual movement never rebuilds a global enemy centroid. */
 export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): void {
@@ -424,6 +454,12 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
   const focus = fleet.focusTargetId ? ctx.getShip(fleet.focusTargetId) : undefined;
   const enemyPosition = validEnemy(representative, focus) ? focus.pos : fleet.enemyCentre;
   const myCentre = centroid(core) ?? fleet.anchor;
+  // Where the line stands. At full strength that is the anchor, the point the formation was laid out round. As
+  // the line loses hulls it is the anchor moved by as much as the middle of the places still filled has moved
+  // from the middle of all of them: a fleet reduced to a few hulls on one wing has its line a long way from the
+  // anchor. Such a fleet used to judge its distance to the enemy, and steer, from the anchor: its survivors,
+  // already in range, were marched sideways after a target that was manoeuvring round them, for minutes.
+  const line = add(fleet.anchor, slotToWorld(v3(), fleet.heading, lineShift(ctx, fleet, core)));
   const range = fleet.engagementRange ?? fleetEngagementRange(mine);
   const preferredFactor = core.reduce((sum, s) => sum + engagementBand(s).preferred / shipEngagementRange(s), 0) / core.length;
   // Protect the dreadnought gun line even under Advance/Intercept. Those orders
@@ -437,7 +473,7 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
   if (attackOrder(fleet) || (noRetreat && (o.order === 'withdraw' || o.order === 'retreat'))) {
     const enemy = o.order === 'intercept' && validEnemy(representative, commanded) ? commanded.pos : enemyPosition;
     if (enemy) {
-      const delta = sub(enemy, fleet.anchor);
+      const delta = sub(enemy, line);
       const dist = Math.sqrt(lengthSq(delta));
       const resumeRange = desiredRange + range * 0.07;
       // A Reaper fleet can win by establishing a firing line. Once contact
@@ -497,7 +533,7 @@ export function fleetDecision(ctx: AiContext, fleet: FleetState, dt: number): vo
   // Once the line is on station, freeze its basis. Individual hulls still
   // track targets; rotating a world-space line every tick causes orbital pursuit.
   const canTurn = withdrawing || fleet.engagementMode === 'approach' || o.order === 'escort';
-  const faceDir = withdrawing && desired ? sub(desired, fleet.anchor) : enemyPosition ? sub(enemyPosition, fleet.anchor) : undefined;
+  const faceDir = withdrawing && desired ? sub(desired, fleet.anchor) : enemyPosition ? sub(enemyPosition, line) : undefined;
   if (canTurn && faceDir && faceDir.x * faceDir.x + faceDir.z * faceDir.z > 1e-6) {
     const target = normalize(v3(faceDir.x, 0, faceDir.z));
     const cur = fleet.heading;
