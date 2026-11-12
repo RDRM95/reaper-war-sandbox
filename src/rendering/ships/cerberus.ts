@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { at, taperedBox, wedge, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
-import { buildFighter, type FighterSpec } from './fighterKit';
+import { buildFighter, cornerSolid, finPanel, mirrorX, spindle, wingPanel, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -53,23 +53,43 @@ export function buildCerberusCruiser(): BuiltShip {
   return assemble(parts, 'cerberus', [new THREE.Vector3(0.3, 0, z0), new THREE.Vector3(-0.3, 0, z0)], L, new THREE.Vector3(0, -0.02, L * 0.5), GLOW);
 }
 
-/** Cerberus frigate: ~180 m, raked forward hull. */
+/**
+ * Cerberus frigate: 180 m, raked and experimental. A flattened six-sided hull drawn to a point at the muzzle, a
+ * dark raised bridge, twin forward booms, swept wings with black root panels and orange stripes, and the drives in
+ * nacelles on the wing tips under canted fins. Original procedural geometry in this file's language. It replaces a
+ * model of a few boxes with two flat plates for wings. Length, muzzle and engine nodes are those of the model it
+ * replaces.
+ */
 export function buildCerberusFrigate(): BuiltShip {
   const L = 1.8;
   const parts = newParts();
-  parts.hull.push(taperedBox(0.3, 0.2, L * 0.7, 0.4, 0.9, { frontHeight: 0.5 }).translate(0, 0.02, L * 0.08));
-  parts.hull.push(at(taperedBox(0.2, 0.13, 0.5, 0.7, 1), 0, 0.12, L * 0.26));
-  parts.windows.push(at(new THREE.BoxGeometry(0.16, 0.03, 0.14), 0, 0.2, L * 0.34));
-  for (const s of [-1, 1]) {
-    const wing = taperedBox(0.7, 0.05, 0.45, 0.5, 1);
-    wing.rotateY(s * -0.5);
-    parts.hull.push(at(wing, s * 0.4, -0.02, -0.2));
-    parts.hullDark.push(at(zCylinder(0.07, 0.08, 0.6, 10), s * 0.72, -0.05, -0.4));
-    parts.engine.push(at(zCylinder(0.05, 0.04, 0.05, 10), s * 0.72, -0.05, -0.72));
-    parts.accent.push(at(new THREE.BoxGeometry(0.14, 0.03, 0.2), s * 0.5, 0.02, -0.15));
+  parts.hull.push(spindle([{ z: -0.86, r: 0 }, { z: -0.86, r: 0.07 }, { z: -0.55, r: 0.14 }, { z: -0.1, r: 0.15 }, { z: 0.4, r: 0.1 }, { z: 0.75, r: 0.04 }, { z: 0.9, r: 0 }], 6, 0.7));
+  // Raised bridge: dark glass with a thin lit band at its front.
+  parts.hullDark.push(at(spindle([{ z: -0.2, r: 0 }, { z: -0.12, r: 0.055 }, { z: 0.1, r: 0.06 }, { z: 0.24, r: 0 }], 6, 0.8), 0, 0.085, 0.2));
+  parts.windows.push(at(new THREE.BoxGeometry(0.07, 0.008, 0.01), 0, 0.1, 0.415));
+  const wing = at(wingPanel(0.58, 0.6, 0.22, 0.34, 0.04, -0.03), 0.12, -0.02, 0.1);
+  parts.hull.push(wing, mirrorX(wing));
+  // Black panel across each wing root and an orange stripe outboard of it.
+  const panel = at(wingPanel(0.16, 0.5, 0.42, 0.094, 0.046, -0.008), 0.16, -0.022, 0.03);
+  parts.hullDark.push(panel, mirrorX(panel));
+  const stripe = at(wingPanel(0.05, 0.36, 0.33, 0.03, 0.046, -0.003), 0.43, -0.036, -0.12);
+  parts.accent.push(stripe, mirrorX(stripe));
+  // Twin forward booms from the wing roots, each tipped with a gun.
+  const boom = cornerSolid([
+    [0.17, -0.04, 0.0], [0.19, -0.012, 0.62], [0.17, 0.02, 0.0], [0.19, 0.004, 0.62],
+    [0.23, -0.04, 0.0], [0.212, -0.012, 0.62], [0.23, 0.02, 0.0], [0.212, 0.004, 0.62],
+  ]);
+  parts.hull.push(boom, mirrorX(boom));
+  for (const side of [-1, 1]) {
+    parts.hullDark.push(at(zCylinder(0.008, 0.011, 0.1, 6), side * 0.201, -0.004, 0.66));
+    // Drive nacelle on the wing tip, with a dark intake band, under a canted fin.
+    parts.hull.push(at(zCylinder(0.062, 0.078, 0.56, 10), side * 0.72, -0.05, -0.46));
+    parts.hullDark.push(at(zCylinder(0.081, 0.081, 0.07, 10), side * 0.72, -0.05, -0.3));
+    parts.engine.push(at(zCylinder(0.05, 0.04, 0.012, 10), side * 0.72, -0.05, -0.745));
+    const fin = at(finPanel(0.16, 0.26, 0.1, 0.14, 0.03, 0.3), 0.72, 0.0, -0.36);
+    parts.hull.push(side > 0 ? fin : mirrorX(fin));
   }
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.31, 0.21, 0.3), 0, 0.02, -0.5));
-  stripes(parts, -0.07, 0.13, 0.1, 0.8);
+  stripes(parts, -0.07, 0.107, -0.25, 0.5);
   return assemble(parts, 'cerberus', [new THREE.Vector3(0.72, -0.05, -0.75), new THREE.Vector3(-0.72, -0.05, -0.75)], L, new THREE.Vector3(0, 0, L * 0.5), GLOW);
 }
 
