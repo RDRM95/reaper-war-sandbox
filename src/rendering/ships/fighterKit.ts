@@ -133,11 +133,7 @@ export function buildFighter(spec: FighterSpec): BuiltShip {
 
   if (fins) {
     const fin = (side: number, down: boolean): THREE.BufferGeometry => {
-      // A fin is a wing panel stood on end, canted outward by `cant`.
-      const g = wingPanel(fins.height * L, fins.root * L, fins.tip * L, fins.sweep * L, thickness * 0.9);
-      g.rotateZ(Math.PI / 2 - (fins.cant ?? 0));
-      if (down) g.scale(1, -1, 1);
-      const placed = at(down ? flip(g) : g, fins.x * L, (down ? -1 : 1) * height * 0.3, fins.z * L);
+      const placed = at(finPanel(fins.height * L, fins.root * L, fins.tip * L, fins.sweep * L, thickness * 0.9, fins.cant ?? 0, down), fins.x * L, (down ? -1 : 1) * height * 0.3, fins.z * L);
       return side < 0 ? mirrorX(placed) : placed;
     };
     for (const side of fins.count === 1 ? [1] : [-1, 1]) {
@@ -146,6 +142,18 @@ export function buildFighter(spec: FighterSpec): BuiltShip {
     }
   }
   return assemble(parts, spec.faction, nodes, L, new THREE.Vector3(0, 0, L * 0.5), spec.glowColor);
+}
+
+/**
+ * A fin: a wing panel stood on end with its root at the origin and its leading edge at z = 0, canted toward +x by
+ * `cant` radians; `down` hangs it below instead.
+ */
+export function finPanel(height: number, root: number, tip: number, sweep: number, thickness: number, cant = 0, down = false): THREE.BufferGeometry {
+  const g = wingPanel(height, root, tip, sweep, thickness);
+  g.rotateZ(Math.PI / 2 - cant);
+  if (!down) return g;
+  g.scale(1, -1, 1);
+  return flip(g);
 }
 
 /** Reverse the winding of a flat-shaded, non-indexed geometry (after a mirroring scale). */
