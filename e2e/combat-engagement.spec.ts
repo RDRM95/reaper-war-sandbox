@@ -186,3 +186,54 @@ test('a fleet whose last two dreadnoughts are on the far wing stops and fights i
  expect(result.modeAt100).toBe('hold');
  for(const shots of result.shots)expect(shots).toBeGreaterThan(300);
 });
+
+// Ports of the Codex build's tests/battle-end.test.ts and of its sprint-thrust cases (motion.test.ts and
+// collision-avoidance.test.ts). Two defects found while measuring battles:
+// a battle ended when one side had no hulls present, although it had a fleet still on its way; and a sprinting hull
+// that began to give way lost half its thrust with the eased speed limit while it still carried twice its speed.
+test('a battle goes on until reinforcements have arrived, and sprinting frigates do not graze each other',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation,SIM_DT}=await import('/src/simulation/battle.ts');
+  const {buildScenario,buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const {advanceMotion}=await import('/src/simulation/motion.ts');
+  const hulls=(sim:any,side:string)=>sim.ships.filter((s:any)=>s.side===side&&s.role!=='fighter');
+  // The Final Battle of Earth under prime_apex: its Reaper reinforcement is due at 90 s.
+  const config=buildScenario('final_battle_of_earth','prime_apex',3);
+  const due=Math.max(...config.fleets.filter((f:any)=>f.side==='B').map((f:any)=>f.arrivalTime??0));
+  const final=new BattleSimulation(config);let firstWaveGoneAt=-1;
+  while(!final.finished&&final.time<400){final.step();if(firstWaveGoneAt<0&&final.time<due&&!hulls(final,'B').some((s:any)=>s.alive&&!s.escaped))firstWaveGoneAt=final.time;}
+  // The Battle of Earth at seed 25, every tick to 100 s: pairs of hulls closer than the sum of their radii.
+  const earth=new BattleSimulation(buildScenario('battle_of_earth','prime_apex',25));let pairTicks=0,deepest=0;
+  while(!earth.finished&&earth.time<100){earth.step();const ships=earth.ships.filter((s:any)=>s.alive&&!s.escaped&&s.role!=='fighter');
+   for(let i=0;i<ships.length;i++){const a:any=ships[i];for(let j=0;j<i;j++){const b:any=ships[j],reach=a.radiusKm+b.radiusKm,dx=a.pos.x-b.pos.x;if(dx>reach||dx<-reach)continue;
+    const gap=Math.hypot(dx,a.pos.y-b.pos.y,a.pos.z-b.pos.z);if(gap>=reach)continue;pairTicks++;deepest=Math.max(deepest,(reach-gap)/reach);}}}
+  // A frigate above its combat speed, told to sprint on, with a neighbour to avoid that asks for all its thrust.
+  const braking=(factor:number)=>{const ship:any=new BattleSimulation(buildCustomBattle({seed:19,rulesId:'canon_me3',environment:'deep_space',startingDistanceKm:60,maxDuration:600,
+    sideA:{faction:'alliance',name:'A',formation:'line_abreast',counts:{alliance_frigate:1}},sideB:{faction:'reaper',name:'B',formation:'line_abreast',counts:{reaper_capital:1}}} as any)).ships[0];
+   ship.pos={x:0,y:0,z:0};ship.vel={x:0,y:0,z:ship.maxSpeed*factor};const before={...ship.vel};
+   advanceMotion(ship,{position:{x:0,y:0,z:40},speedFraction:1,sprint:2,avoidanceAcceleration:{x:0,y:0,z:-ship.acceleration*4}},SIM_DT);
+   return Math.hypot(ship.vel.x-before.x,ship.vel.y-before.y,ship.vel.z-before.z)/(ship.acceleration*SIM_DT);};
+  return {due,firstWaveGoneAt,finalTime:final.time,finalFinished:final.finished,reaperHulls:hulls(final,'B').length,reapersLeft:hulls(final,'B').filter((s:any)=>s.alive).length,winner:final.result?.winner,
+   earthTime:earth.time,pairTicks,deepest,braking:[2,1.5,1,0.5].map(braking)};
+ });
+ // Measured here: the first wave is gone at 61 s, where the battle used to end with 21 Reaper hulls; now 144 s, all
+ // 32 Reaper hulls arrived and destroyed. Seed 25 of the Battle of Earth: no contact (42 pair-ticks before, the
+ // deepest 57 % of the two radii). Thrust available while giving way at 2, 1.5, 1 and 0.5 times combat speed: 2,
+ // 1.5, 1 and 1 times combat thrust (it was 1 throughout).
+ expect(result.due).toBe(90);
+ expect(result.firstWaveGoneAt).toBeGreaterThan(40);
+ expect(result.firstWaveGoneAt).toBeLessThan(result.due);
+ expect(result.finalFinished).toBe(true);
+ expect(result.finalTime).toBeGreaterThan(result.due);
+ expect(result.reaperHulls).toBe(32);
+ expect(result.reapersLeft).toBe(0);
+ expect(result.winner).toBe('A');
+ expect(result.earthTime).toBeGreaterThan(75);
+ expect(result.pairTicks).toBe(0);
+ expect(result.braking[0]).toBeCloseTo(2,6);
+ expect(result.braking[1]).toBeCloseTo(1.5,6);
+ expect(result.braking[2]).toBeCloseTo(1,6);
+ expect(result.braking[3]).toBeCloseTo(1,6);
+});
