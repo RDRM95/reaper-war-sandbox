@@ -146,3 +146,43 @@ test('a fighter out of torpedoes stays over its target with its guns before it t
  expect(result.firing).toBeGreaterThan(0.42);
  expect(result.runs).toBeGreaterThan(4.5);
 });
+
+// Port of the Codex build's tests/depleted-fleet.test.ts. A fleet judged its distance to the enemy, and steered,
+// from the middle of the formation it started with. Reduced to a few hulls on one wing, already in range, it went
+// on "approaching" and marched them round a target that was manoeuvring round them, for the rest of the battle.
+test('a fleet whose last two dreadnoughts are on the far wing stops and fights instead of circling its target',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation}=await import('/src/simulation/battle.ts');
+  const {buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const {shipEngagementRange}=await import('/src/simulation/ai.ts');
+  const sim=new BattleSimulation(buildCustomBattle({seed:5,rulesId:'canon_me3',environment:'deep_space',theatreLayout:'three_dimensional',startingDistanceKm:60,maxDuration:400,
+   sideA:{faction:'alliance',name:'A',formation:'line_abreast',counts:{alliance_dreadnought:8,alliance_carrier:1,alliance_cruiser:16,alliance_frigate:30,alliance_frigate_thanix:1}},
+   sideB:{faction:'reaper',name:'B',formation:'line_abreast',counts:{reaper_destroyer:1}}} as any));
+  // Only the two dreadnoughts on one end of the line are left of the whole fleet. Nothing can be destroyed.
+  const line=sim.ships.filter((s:any)=>s.side==='A'&&s.role==='dreadnought').sort((a:any,b:any)=>a.slot.x-b.slot.x),left=line.slice(6);
+  for(const s of sim.ships as any[])if(s.side==='A'&&!left.includes(s)){s.alive=false;s.destroyedAt=0;if(s.hangar)s.hangar.remaining=0;}
+  const destroyer:any=sim.ships.find((s:any)=>s.side==='B')!,fleet:any=sim.fleets.get(left[0].fleetId)!;
+  destroyer.maxHull=destroyer.hull=1e12;for(const s of left as any[])s.maxHull=s.hull=1e12;
+  let firstInRange=-1,flown=0,moving=0,ticks=0,modeAt100='';const previous=left.map((s:any)=>({...s.pos}));
+  while(!sim.finished&&sim.time<300){sim.step();
+   const gap=Math.min(...left.map((s:any)=>Math.hypot(destroyer.pos.x-s.pos.x,destroyer.pos.y-s.pos.y,destroyer.pos.z-s.pos.z)));
+   if(firstInRange<0&&gap<=shipEngagementRange(left[0])*0.93)firstInRange=sim.time;
+   left.forEach((s:any,i:number)=>{if(firstInRange>=0)flown+=Math.hypot(s.pos.x-previous[i].x,s.pos.y-previous[i].y,s.pos.z-previous[i].z);previous[i]={...s.pos};});
+   if(firstInRange>=0){ticks++;if(left.some((s:any)=>Math.hypot(s.vel.x,s.vel.y,s.vel.z)>s.maxSpeed*0.3))moving++;}
+   if(!modeAt100&&sim.time>=100)modeAt100=fleet.engagementMode;}
+  return {across:Math.abs(left[0].slot.x),range:shipEngagementRange(left[0]),firstInRange,flown,moving:moving/ticks,modeAt100,shots:left.map((s:any)=>s.stats.shotsFired)};
+ });
+ // Measured here: their places are 18.9 units (47 km) across from the middle of the formation, against a range of
+ // 12.8; in range at 22 s; from then the two hulls fly 14.1 units between them (18 km each) and are under way 12 %
+ // of the time; the fleet is holding at 100 s; 380 and 381 shots. Before: 139.9 units (175 km each), under way the
+ // whole time, the fleet "approaching" throughout, 384 and 379 shots.
+ expect(result.across).toBeGreaterThan(result.range);
+ expect(result.firstInRange).toBeGreaterThan(0);
+ expect(result.firstInRange).toBeLessThan(40);
+ expect(result.flown).toBeLessThan(20);
+ expect(result.moving).toBeLessThan(0.2);
+ expect(result.modeAt100).toBe('hold');
+ for(const shots of result.shots)expect(shots).toBeGreaterThan(300);
+});
