@@ -25,6 +25,7 @@ import { assertLoreCompatible } from '@/timelines/lore';
 import { fleetDecision, movementGoal, shipDecision, type AiContext } from './ai';
 import { hardcoreReaperBeamDamage } from './reaperHardcore';
 import { applyDamage, applyProjectileDamage, hitProbability } from './damage';
+import { defenseTransplantFor } from './techTransplants';
 import { assignSlots } from './formations';
 import { summarise } from './results';
 import { BATTLESPACE_SCALE as S } from './constants';
@@ -314,6 +315,7 @@ export class BattleSimulation implements AiContext {
       maxHull: stats.hull,
       armour: stats.armour,
       maxArmour: stats.armour,
+      defenseTransplant: defenseTransplantFor(this.config.techTransplants, cls.faction, spec.side),
       barriers: stats.barriers,
       maxBarriers: stats.barriers,
       barrierRegen: stats.barrierRegen,

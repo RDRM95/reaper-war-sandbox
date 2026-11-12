@@ -32,12 +32,15 @@ export function isHardcoreReaperMainGun(
 export function hardcoreReaperBeamDamage(
   rules: Pick<RuleSet,'special'>,
   shooter: Pick<ShipState,'faction'|'role'>,
-  target: Pick<ShipState,'classId'|'faction'|'maxHull'|'maxBarriers'|'armour'>,
+  target: Pick<ShipState,'classId'|'faction'|'maxHull'|'maxBarriers'|'armour'|'defenseTransplant'>,
   weapon: Pick<EffectiveWeapon,'kind'|'id'>,
   normalDamage: number,
 ): number {
   // Reapers fighting other Reapers still use their real barrier and armour model.
   if (!isHardcoreReaperMainGun(rules, shooter, weapon) || target.faction === 'reaper') return normalDamage;
+  // An explicit sci-fi hull transplant supersedes the conventional one-hit
+  // vulnerability assumed by the Hardcore preset, but keeps normal beam damage.
+  if (target.defenseTransplant) return normalDamage;
   if (isProtectedAuHull(target)) {
     return Math.min(normalDamage * 2.5,
       Math.max(1, (target.maxHull + target.maxBarriers) * 0.018));
