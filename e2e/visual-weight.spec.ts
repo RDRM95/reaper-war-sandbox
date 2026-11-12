@@ -107,9 +107,10 @@ test('in the Battle of Earth main guns make most of the muzzle flash, and light 
  expect(result.shareBefore).toBeLessThan(0.5);
  expect(result.shareNow).toBeGreaterThan(0.8);
  expect(result.light).toBeLessThan(0.1);
- // Measured (51 main shots, 5,509 lighter, most of them fighters strafing): main guns 19 % of muzzle-flash area
- // before, 86 % now; light guns' flashes cover 4 % of what they did; hits under 100 damage 51 %, and they threw 940
- // sparks and now throw none. Before fighters strafed there were 1,866 lighter shots and main guns had 90 %.
+ // Measured (53 main shots, 9,792 lighter, most of them fighters strafing): main guns 12 % of muzzle-flash area
+ // before, 83 % now; light guns' flashes cover 3 % of what they did; hits under 100 damage 39 %, and they threw
+ // 1,028 sparks and now throw none. Before fighters strafed there were 1,866 lighter shots and main guns had 90 %;
+ // when fighters strafed but went home with their last torpedo, 5,509 and 86 %.
  expect(result.hits).toBeLessThan(0.75);
  expect(result.sparksBefore).toBeGreaterThan(300);
  expect(result.sparksNow).toBeLessThan(result.sparksBefore*0.2);

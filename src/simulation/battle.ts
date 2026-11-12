@@ -42,6 +42,11 @@ import {
 
 /** Hangar time for a fighter to reload torpedoes alongside its carrier. */
 const REARM_SECONDS = 12;
+/**
+ * Seconds a fighter stays over its target with its guns after its last torpedo has gone, before it turns for its
+ * carrier. It used to turn at once, and spent more of a battle flying to and from the hangar than fighting.
+ */
+export const STATION_SECONDS = 15;
 /** Seconds between rebuilds of the table of how much fire is aimed at each ship. */
 const TARGET_LOAD_REFRESH = 0.5;
 import type {
@@ -755,7 +760,15 @@ export class BattleSimulation implements AiContext {
     }
     // Rearming: fighters that have spent their torpedoes reload alongside the carrier.
     for (const f of this.carrierFighters.get(ship.id) ?? []) {
-      if (f.carrierId !== ship.id || !f.rearming || !f.alive || f.escaped) continue;
+      if (f.carrierId !== ship.id || !f.alive || f.escaped) continue;
+      if (f.stationTimer !== undefined && !f.rearming) {
+        // Out of torpedoes but not of ammunition: it strafes until its time on station is up.
+        f.stationTimer -= dt;
+        if (f.stationTimer > 0) continue;
+        f.stationTimer = undefined;
+        f.rearming = true;
+      }
+      if (!f.rearming) continue;
       if (distance(f.pos, ship.pos) > ship.lengthKm * 1.5) continue;
       f.rearmTimer = (f.rearmTimer ?? REARM_SECONDS) - dt;
       if (f.rearmTimer > 0) continue;
@@ -897,7 +910,7 @@ export class BattleSimulation implements AiContext {
       w.ammo--;
       if (w.ammo <= 0 && !ship.weapons.some((o) => o.def.id === def.id && (o.ammo ?? 1) > 0)) {
         this.emit({ t: this.time, type: 'ammunition_depleted', shipId: ship.id, weaponId: def.id });
-        if (ship.role === 'fighter' && ship.carrierId) ship.rearming = true;
+        if (ship.role === 'fighter' && ship.carrierId) ship.stationTimer = STATION_SECONDS;
       }
     }
     if (ship.firstShotAt === undefined) {

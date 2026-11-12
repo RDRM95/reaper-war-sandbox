@@ -93,9 +93,10 @@ test('fighters fly in wings that share a target and strafe the hull they attack'
   return {flying:flying.length,wingsRight,together,looks,duelTime:duel.time,torpedoes:fired('fighter_torpedo'),guns:fired('fighter_gun'),
    firing:row.seconds.firing/row.hullSeconds,idle:row.seconds.idle/row.hullSeconds,runs:row.runs/(row.hullSeconds/60)};
  });
- // Measured: all 48 fighters in wings at 20 s; a wing-mate is on its leader's target in 189 of 208 looks; the eight
- // fighters fire 16 torpedoes and 4,694 gun rounds in 90 s (16 torpedoes and nothing else, before); in the canon
- // Battle of Earth fighters are firing 37 % of the time (20 % before) and make 3.5 attack runs a minute each.
+ // Measured: all 48 fighters in wings at 20 s; a wing-mate is on its leader's target in 257 of 262 looks (189 of
+ // 208 when fighters went home with their last torpedo); the eight fighters fire 16 torpedoes and 4,694 gun rounds
+ // in 90 s (16 torpedoes and nothing else, before); in the canon Battle of Earth fighters are firing 49 % of the
+ // time (20 % before they strafed) and make 5.9 attack runs a minute each.
  expect(result.flying).toBe(48);
  expect(result.wingsRight).toBe(true);
  expect(result.looks).toBeGreaterThan(100);
@@ -106,4 +107,42 @@ test('fighters fly in wings that share a target and strafe the hull they attack'
  expect(result.firing).toBeGreaterThan(0.3);
  expect(result.idle).toBeLessThan(0.05);
  expect(result.runs).toBeGreaterThan(3);
+});
+
+// Port of the Codex build's station-time case (tests/fighter-wings.test.ts). A fighter turned for its carrier in the
+// tick its last torpedo left, though its gun needs no reloading, and spent more of a battle flying to and from the
+// hangar than fighting.
+test('a fighter out of torpedoes stays over its target with its guns before it turns for its carrier',async({page})=>{
+ test.slow();
+ await page.goto('/');
+ const result=await page.evaluate(async()=>{
+  const {BattleSimulation,STATION_SECONDS}=await import('/src/simulation/battle.ts');
+  const {buildScenario,buildCustomBattle}=await import('/src/scenarios/index.ts');
+  const {measureActivity}=await import('/src/simulation/combatActivity.ts');
+  // One carrier's wings against a destroyer that cannot be hurt and does no damage; the carrier holds its fire.
+  const sim=new BattleSimulation(buildCustomBattle({seed:3,rulesId:'canon_me3',environment:'deep_space',startingDistanceKm:40,maxDuration:200,
+   sideA:{faction:'alliance',name:'A',formation:'line_abreast',counts:{alliance_carrier:1}},sideB:{faction:'reaper',name:'B',formation:'line_abreast',counts:{reaper_destroyer:1}}} as any));
+  const destroyer=sim.ships.find((s:any)=>s.role==='reaper_destroyer')!;destroyer.maxHull=destroyer.hull=1e12;
+  for(const s of sim.ships)if(s.side==='B'||s.role==='carrier')for(const w of s.weapons)w.def={...w.def,damage:0,range:s.role==='carrier'?0:w.def.range};
+  const spent=new Map<string,number>(),turned=new Map<string,number>();let seen=0;
+  while(!sim.finished&&sim.time<150){sim.step();
+   for(;seen<sim.events.length;seen++){const e:any=sim.events[seen];if(e.type==='ammunition_depleted'&&!spent.has(e.shipId)&&sim.getShip(e.shipId)?.role==='fighter')spent.set(e.shipId,e.t);}
+   for(const f of sim.ships)if(f.role==='fighter'&&f.rearming&&!turned.has(f.id))turned.set(f.id,sim.time);}
+  const waits=[...turned].map(([id,t])=>t-(spent.get(id)??-1e9));
+  let rounds=0;for(const e of sim.events as any[])if(e.type==='weapon_fired'&&e.weaponId==='fighter_gun'&&spent.has(e.shipId)&&e.t>spent.get(e.shipId)!&&e.t<=(turned.get(e.shipId)??-1))rounds++;
+  const row=measureActivity(new BattleSimulation(buildScenario('battle_of_earth','canon_me3',1)),300).rows.get('A fighter')!;
+  return {station:STATION_SECONDS,spent:spent.size,turned:turned.size,shortest:Math.min(...waits),longest:Math.max(...waits),rounds,
+   reloads:sim.events.filter((e:any)=>e.type==='fighter_rearmed').length,firing:row.seconds.firing/row.hullSeconds,runs:row.runs/(row.hullSeconds/60)};
+ });
+ // Measured: all 24 fighters spend their torpedoes and each turns for the carrier 15.00 s later, having fired 2,049
+ // gun rounds between them meanwhile; 72 reloads in 150 s; fighters firing 49 % of the canon Battle of Earth with
+ // 5.9 attack runs a minute each (37 % and 3.5 when they went home with their last torpedo).
+ expect(result.spent).toBe(24);
+ expect(result.turned).toBe(24);
+ expect(result.shortest).toBeGreaterThan(result.station-0.1);
+ expect(result.longest).toBeLessThan(result.station+0.1);
+ expect(result.rounds).toBeGreaterThan(1500);
+ expect(result.reloads).toBeGreaterThanOrEqual(48);
+ expect(result.firing).toBeGreaterThan(0.42);
+ expect(result.runs).toBeGreaterThan(4.5);
 });
