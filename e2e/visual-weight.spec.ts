@@ -24,9 +24,9 @@ test('in the Battle of Earth the main guns take most of the tracer picture inste
     if(calibre>=MAIN_CALIBRE){mainBefore+=was;mainNow+=now;mainRounds++;}else lightRounds++;}}
   return {mainRounds,lightRounds,shareBefore:mainBefore/allBefore,shareNow:mainNow/allNow,total:allNow/allBefore,mainUnchanged:Math.abs(mainNow-mainBefore),fighterGun:WEAPONS.fighter_gun.damage};
  });
- // Measured (10 main rounds and 450 lighter ones over the looks): main guns were 17 % of the area tracers cover and
- // are 65 %; all tracers together cover 27 % of what they did. (Before hulls closed to gun range, with fewer light
- // guns firing, the same battle measured 22 % and 70 %.)
+ // Measured (6 main rounds and 201 lighter ones over the looks): main guns were 22 % of the area tracers cover and
+ // are 69 %; all tracers together cover 31 % of what they did. (The count of rounds in the air at these looks moves
+ // with every change to how battles go: it was 10 and 450 before hulls spread their fire.)
  expect(result.mainRounds).toBeGreaterThan(0);
  expect(result.shareBefore).toBeLessThan(0.3);
  expect(result.shareNow).toBeGreaterThan(0.55);
@@ -107,8 +107,8 @@ test('in the Battle of Earth main guns make most of the muzzle flash, and light 
  expect(result.shareBefore).toBeLessThan(0.5);
  expect(result.shareNow).toBeGreaterThan(0.85);
  expect(result.light).toBeLessThan(0.1);
- // Measured (58 main shots, 2,708 lighter): main guns 35.5 % of muzzle-flash area before, 90.8 % now; light guns'
- // flashes cover 5.6 % of what they did; hits under 100 damage 60 %, and they threw 494 sparks and now throw none.
+ // Measured (39 main shots, 1,866 lighter): main guns 35 % of muzzle-flash area before, 90 % now; light guns'
+ // flashes cover 6 % of what they did; hits under 100 damage 57 %, and they threw 672 sparks and now throw none.
  expect(result.hits).toBeLessThan(0.75);
  expect(result.sparksBefore).toBeGreaterThan(300);
  expect(result.sparksNow).toBeLessThan(result.sparksBefore*0.2);
