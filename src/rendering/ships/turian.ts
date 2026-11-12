@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { at, rot, taperedBox, wedge, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
-import { buildFighter, type FighterSpec } from './fighterKit';
+import { buildFighter, cornerSolid, finPanel, mirrorX, spindle, wingPanel, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -104,22 +104,42 @@ export function buildTurianCruiser(): BuiltShip {
   return assemble(parts, 'turian', [new THREE.Vector3(0.28, 0, z0), new THREE.Vector3(-0.28, 0, z0)], L, new THREE.Vector3(0, -0.03, L * 0.5 + 0.3), GLOW);
 }
 
-/** Turian frigate: ~160 m dart with forward-swept blades. */
+/**
+ * Turian frigate: a 160 m blade. A tall, narrow faceted hull drawn to a split pincer bow around the spinal gun;
+ * broad wings swept hard back and angled down; a tall fin above and a shorter one below; two drives. Original
+ * procedural geometry in the turian language of this file. It replaces a model of a handful of boxes whose wings
+ * were two flat plates. Length, muzzle and engine nodes are those of the model it replaces.
+ */
 export function buildTurianFrigate(): BuiltShip {
   const L = 1.6;
   const parts = newParts();
-  parts.hull.push(taperedBox(0.22, 0.26, L * 0.75, 0.3, 0.9, { frontHeight: 0.4 }).translate(0, 0, L * 0.06));
-  parts.hullDark.push(at(wedge(0.12, 0.3, 0.5, 0.3), 0, 0.2, -0.2));
-  for (const s of [-1, 1]) {
-    const blade = taperedBox(0.6, 0.05, 0.4, 0.4, 1);
-    blade.rotateY(s * 0.35);
-    blade.rotateZ(s * -0.2);
-    parts.hull.push(at(blade, s * 0.35, -0.02, 0.05));
-    parts.engine.push(at(zCylinder(0.045, 0.035, 0.05, 8), s * 0.09, -0.02, -L * 0.5 + 0.02));
-    parts.windows.push(at(new THREE.BoxGeometry(0.03, 0.03, 0.2), s * 0.12, 0.08, 0.1));
+  // Hull: six-sided, a quarter taller than wide, fullest abaft the middle.
+  parts.hull.push(spindle([{ z: -0.74, r: 0 }, { z: -0.74, r: 0.09 }, { z: -0.5, r: 0.13 }, { z: -0.1, r: 0.13 }, { z: 0.3, r: 0.085 }, { z: 0.56, r: 0.05 }, { z: 0.62, r: 0 }], 6, 1.25));
+  // Pincer bow: two blades either side of the gun, out to the muzzle.
+  const blade = cornerSolid([
+    [0.036, -0.07, 0.28], [0.05, -0.014, 0.8], [0.036, 0.07, 0.28], [0.05, 0.014, 0.8],
+    [0.078, -0.07, 0.28], [0.064, -0.014, 0.8], [0.078, 0.07, 0.28], [0.064, 0.014, 0.8],
+  ]);
+  parts.hull.push(blade, mirrorX(blade));
+  parts.hullDark.push(at(zCylinder(0.014, 0.02, 0.42, 6), 0, 0, 0.56));
+  // Wings: swept hard back from the shoulder and angled down, with a cyan stripe a third of the way out.
+  const wing = at(wingPanel(0.62, 0.62, 0.12, 0.5, 0.036, -0.17), 0.09, -0.02, 0.14);
+  parts.hull.push(wing, mirrorX(wing));
+  const stripe = at(wingPanel(0.07, 0.4, 0.34, 0.056, 0.042, -0.019), 0.3, -0.077, -0.03);
+  parts.accent.push(stripe, mirrorX(stripe));
+  // Dark wing roots, where the drives sit.
+  for (const side of [-1, 1]) {
+    parts.hullDark.push(at(zCylinder(0.05, 0.062, 0.34, 8), side * 0.09, -0.02, -0.63));
+    parts.engine.push(at(zCylinder(0.042, 0.034, 0.012, 8), side * 0.09, -0.02, -0.795));
+    // A short row of lit ports along the hull above the wing.
+    for (let i = 0; i < 5; i++) parts.windows.push(at(new THREE.BoxGeometry(0.006, 0.012, 0.024), side * 0.116, 0.07, -0.36 + i * 0.09));
   }
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.3, 0.18, 0.3), 0, -0.02, -L * 0.42));
-  parts.accent.push(at(new THREE.BoxGeometry(0.24, 0.02, 0.3), 0, 0.14, 0.2));
+  // Fins: a tall swept blade above, a shorter one below.
+  parts.hullDark.push(at(finPanel(0.3, 0.52, 0.12, 0.36, 0.032), 0, 0.14, -0.04));
+  parts.hullDark.push(at(finPanel(0.16, 0.32, 0.08, 0.2, 0.03, 0, true), 0, -0.14, -0.2));
+  // Spine stripe and bridge windows.
+  parts.accent.push(at(new THREE.BoxGeometry(0.022, 0.008, 0.3), 0, 0.136, 0.18));
+  parts.windows.push(at(new THREE.BoxGeometry(0.05, 0.01, 0.012), 0, 0.1, 0.36));
   return assemble(parts, 'turian', [new THREE.Vector3(0.09, -0.02, -L * 0.5), new THREE.Vector3(-0.09, -0.02, -L * 0.5)], L, new THREE.Vector3(0, 0, L * 0.5), GLOW);
 }
 
