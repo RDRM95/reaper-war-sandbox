@@ -228,12 +228,12 @@ test('escorts in a large fleet are in range and firing, and Reaper capitals do n
     const mean=ships.reduce((n:number,s:any)=>n+s.pos.y,0)/ships.length;height+=Math.sqrt(ships.reduce((n:number,s:any)=>n+(s.pos.y-mean)**2,0)/ships.length);samples++;}}
   return {share,alignment:alignment/pairs,height:height/samples};
  });
- // Measured: frigates 99 %, cruisers 100 %, dreadnoughts 100 %, Reaper destroyers 97 %.
+ // Measured: frigates 100 %, cruisers 100 %, dreadnoughts 100 %, Reaper destroyers 98 %.
  expect(result.share['A frigate']).toBeGreaterThan(0.8);
  expect(result.share['A cruiser']).toBeGreaterThan(0.75);
  expect(result.share['A dreadnought']).toBeGreaterThan(0.8);
  expect(result.share['B reaper_destroyer']).toBeGreaterThan(0.85);
- // Measured: velocity alignment 0.24, height spread 2.7 km.
+ // Measured: velocity alignment 0.37, height spread 2.3 km.
  expect(result.alignment).toBeLessThan(0.62);
  expect(result.height).toBeGreaterThan(1.6);
 });

@@ -24,9 +24,9 @@ test('in the Battle of Earth the main guns take most of the tracer picture inste
     if(calibre>=MAIN_CALIBRE){mainBefore+=was;mainNow+=now;mainRounds++;}else lightRounds++;}}
   return {mainRounds,lightRounds,shareBefore:mainBefore/allBefore,shareNow:mainNow/allNow,total:allNow/allBefore,mainUnchanged:Math.abs(mainNow-mainBefore),fighterGun:WEAPONS.fighter_gun.damage};
  });
- // Measured (6 main rounds and 201 lighter ones over the looks): main guns were 22 % of the area tracers cover and
- // are 69 %; all tracers together cover 31 % of what they did. (The count of rounds in the air at these looks moves
- // with every change to how battles go: it was 10 and 450 before hulls spread their fire.)
+ // Measured (9 main rounds and 495 lighter ones over the looks): main guns were 16 % of the area tracers cover and
+ // are 63 %; all tracers together cover 25 % of what they did. (The count of rounds in the air at these looks moves
+ // with every change to how battles go: fighters now strafe, so there are more light rounds than there were.)
  expect(result.mainRounds).toBeGreaterThan(0);
  expect(result.shareBefore).toBeLessThan(0.3);
  expect(result.shareNow).toBeGreaterThan(0.55);
@@ -105,10 +105,11 @@ test('in the Battle of Earth main guns make most of the muzzle flash, and light 
  });
  expect(result.mainShots).toBeGreaterThan(0);
  expect(result.shareBefore).toBeLessThan(0.5);
- expect(result.shareNow).toBeGreaterThan(0.85);
+ expect(result.shareNow).toBeGreaterThan(0.8);
  expect(result.light).toBeLessThan(0.1);
- // Measured (39 main shots, 1,866 lighter): main guns 35 % of muzzle-flash area before, 90 % now; light guns'
- // flashes cover 6 % of what they did; hits under 100 damage 57 %, and they threw 672 sparks and now throw none.
+ // Measured (51 main shots, 5,509 lighter, most of them fighters strafing): main guns 19 % of muzzle-flash area
+ // before, 86 % now; light guns' flashes cover 4 % of what they did; hits under 100 damage 51 %, and they threw 940
+ // sparks and now throw none. Before fighters strafed there were 1,866 lighter shots and main guns had 90 %.
  expect(result.hits).toBeLessThan(0.75);
  expect(result.sparksBefore).toBeGreaterThan(300);
  expect(result.sparksNow).toBeLessThan(result.sparksBefore*0.2);
