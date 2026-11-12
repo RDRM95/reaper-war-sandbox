@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { at, taperedBox, zCylinder } from '../geometry';
 import { assemble, engineBlock, newParts, type Parts } from './alliance';
-import { buildFighter, type FighterSpec } from './fighterKit';
+import { buildFighter, finPanel, mirrorX, spindle, wingPanel, type FighterSpec } from './fighterKit';
 import type { BuiltShip } from './types';
 
 /**
@@ -91,17 +91,32 @@ export function buildGethCruiser(): BuiltShip {
   return assemble(parts, 'geth', [new THREE.Vector3(0.26, 0, z0), new THREE.Vector3(-0.26, 0, z0)], L, new THREE.Vector3(0, 0, L * 0.3 + 1.2), GLOW);
 }
 
+/**
+ * Geth frigate: a 150 m synthetic. A rounded, segmented body carrying the family's hooded head and single optic
+ * between two forward-swept mandibles that reach the muzzle; a short lattice of lit struts along its back; a keel
+ * fin; two drives. Original procedural geometry. It replaces a model that was a box with a head on it. Length,
+ * muzzle and engine nodes are those of the model it replaces.
+ */
 export function buildGethFrigate(): BuiltShip {
   const L = 1.5;
   const parts = newParts();
-  parts.hull.push(taperedBox(0.22, 0.2, L * 0.6, 0.8, 1).translate(0, 0, -0.05));
-  gethHead(parts, 0.12, L * 0.3);
-  for (const s of [-1, 1]) {
-    parts.hullDark.push(at(new THREE.BoxGeometry(0.05, 0.12, 0.5), s * 0.15, 0.05, -0.1));
-    parts.windows.push(at(new THREE.BoxGeometry(0.02, 0.02, 0.3), s * 0.15, 0.13, -0.1));
-    parts.engine.push(at(zCylinder(0.045, 0.035, 0.05, 8), s * 0.07, 0, -L * 0.5 + 0.02));
+  parts.hull.push(spindle([{ z: -0.72, r: 0 }, { z: -0.72, r: 0.07 }, { z: -0.5, r: 0.115 }, { z: -0.1, r: 0.13 }, { z: 0.22, r: 0.105 }, { z: 0.4, r: 0.075 }, { z: 0.4, r: 0 }], 8, 0.85));
+  gethHead(parts, 0.09, 0.44);
+  // Segment collars round the body.
+  for (const [z, r] of [[-0.46, 0.124], [-0.26, 0.134], [-0.06, 0.138]] as const) {
+    const collar = zCylinder(r, r, 0.045, 8);
+    collar.scale(1, 0.87, 1);
+    parts.accent.push(at(collar, 0, 0, z));
   }
-  parts.hullDark.push(at(new THREE.BoxGeometry(0.26, 0.16, 0.3), 0, 0, -L * 0.42));
+  // Mandibles: swept forward from the shoulders to either side of the muzzle.
+  const mandible = at(wingPanel(0.27, 0.34, 0.05, -0.55, 0.03, -0.035), 0.1, 0, 0.2);
+  parts.hullDark.push(mandible, mirrorX(mandible));
+  lattice(parts, 0, 0.105, -0.44, 0.02, 4, 0.026);
+  parts.hullDark.push(at(finPanel(0.13, 0.3, 0.08, 0.18, 0.024, 0, true), 0, -0.095, -0.12));
+  for (const side of [-1, 1]) {
+    parts.hullDark.push(at(zCylinder(0.045, 0.056, 0.28, 8), side * 0.07, 0, -0.6));
+    parts.engine.push(at(zCylinder(0.038, 0.03, 0.012, 8), side * 0.07, 0, -0.745));
+  }
   return assemble(parts, 'geth', [new THREE.Vector3(0.07, 0, -L * 0.5), new THREE.Vector3(-0.07, 0, -L * 0.5)], L, new THREE.Vector3(0, 0, L * 0.5), GLOW);
 }
 
